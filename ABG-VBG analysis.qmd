@@ -1,0 +1,42 @@
+---
+title: "ABG-VBG Analysis"
+author: "Brian Locke, Anila Mehta"
+format: html
+editor: visual
+---
+
+This is a Quarto notebook - which is helpful for explainable programming - see here (basically, showing your work with statistical programming)
+
+## Data Pre-processing
+
+This code pulls in the master database (a STATA file) and does some initial cleaning - this will only need to be run once, and then the data can be accessed in the usual way.
+
+```{r}
+# Install necessary packages (if not already installed)
+install.packages("haven")
+install.packages("labelled")
+
+# Load libraries
+library(haven)
+library(labelled)
+
+# Read Stata dataset - skip this if already needed
+stata_data <- read_dta("/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/TriNetX Code/Data/full_db.dta")
+
+# Check variable labels
+var_label(stata_data)
+
+# Check value labels
+sapply(stata_data, function(x) if(is.labelled(x)) val_labels(x))
+
+# Save the dataset in RData format
+save(stata_data, file = "full_trinetx.rdata")
+```
+
+Execute the below code if data must be converted from STATA to rdata
+
+```{r}
+load("full_trinetx.rdata")
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
