@@ -5,7 +5,9 @@ format: html
 editor: visual
 ---
 
-This is a Quarto notebook - which is helpful for explainable programming - see here (basically, showing your work with statistical programming)
+This is a Quarto notebook - which is helpful for 'literate programming' - see here (basically, showing your work with statistical programming)
+
+Here's some tips/tricks for quarto - <https://www.productive-r-workflow.com/quarto-tricks>
 
 ## Data Pre-processing
 
@@ -13,30 +15,221 @@ This code pulls in the master database (a STATA file) and does some initial clea
 
 ```{r}
 # Install necessary packages (if not already installed)
-install.packages("haven")
-install.packages("labelled")
+if (!requireNamespace("haven", quietly = TRUE)) install.packages("haven")
+if (!requireNamespace("labelled", quietly = TRUE)) install.packages("labelled")
+if (!requireNamespace("codebookr", quietly = TRUE)) install.packages("codebookr")
 
 # Load libraries
 library(haven)
 library(labelled)
-
-# Read Stata dataset - skip this if already needed
-stata_data <- read_dta("/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/TriNetX Code/Data/full_db.dta")
-
-# Check variable labels
-var_label(stata_data)
-
-# Check value labels
-sapply(stata_data, function(x) if(is.labelled(x)) val_labels(x))
-
-# Save the dataset in RData format
-save(stata_data, file = "full_trinetx.rdata")
+library(codebookr)
 ```
 
-Execute the below code if data must be converted from STATA to rdata
+This code converts the data from a STATA format to rdata if the rdata file does not exist. If it does already exist, it just loads that.
 
 ```{r}
-load("full_trinetx.rdata")
+# Define file paths
+data_dir_name <- "data"
+rdata_file <- file.path(data_dir_name, "full_trinetx.rdata")
+stata_file <- file.path(data_dir_name, "full_db.dta")
+
+# Ensure the directory exists
+if (!dir.exists(data_dir_name)) {
+  dir.create(data_dir_name)
+  message("Directory 'data' created.")
+} else {
+  message("Directory 'data' already exists.")
+}
+
+# Check if the RData file exists
+if (file.exists(rdata_file)) {
+  # Load the existing RData file
+  load(rdata_file)
+  message("Loaded existing dataset from 'full_trinetx.rdata'.")
+} else {
+  # Read Stata dataset
+  message("RData file not found. Reading Stata dataset...")
+  stata_data <- read_dta(stata_file)
+  
+  # Check variable labels
+  message("Extracting variable labels...")
+  var_label(stata_data)
+
+  # Check value labels
+  message("Extracting value labels...")
+  sapply(stata_data, function(x) if (is.labelled(x)) val_labels(x))
+
+  # Save the dataset in RData format
+  save(stata_data, file = rdata_file)
+  message("Dataset saved as 'full_trinetx.rdata'.")
+
+  # Load the newly created RData file
+  load(rdata_file)
+  message("Loaded newly saved dataset from 'full_trinetx.rdata'.")
+}
+
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+```{r}
+# Generate the codebook for the dataset
+message("Generating codebook for the dataset...")
+study_codebook <- codebookr::codebook(
+  stata_data,
+  title = "Full TrinetX",
+  subtitle = "Dataset Documentation",
+  description = "This dataset contains patient-level records from the TrinetX database. 
+                 It has been processed and converted from the original Stata file."
+)
+
+# Save the codebook as a Word document
+codebook_file <- file.path(data_dir_name, "codebookr.docx")
+print(study_codebook, codebook_file)
+message("Codebook saved as 'codebookr.docx' in the data directory.")
+
+```
+
+Here are a few references that might be helpful for learning R:
+
+University of Utah Resource <https://uofudelphi-r-23-08-21.netlify.app/>
+
+More in depth resource/book <https://r4ds.hadley.nz/>
+
+and slightly more advanced: <https://rap4mads.eu/03-functional-programming.html>
+
+style guide for how to name things <https://style.tidyverse.org/syntax.html>
+
+**Some example data visualizations**
+
+Summary Statistics:
+
+```{r}
+# Use base R's summary() function
+summary(stata_data)
+```
+
+Raw Data
+
+```{r}
+# Install necessary package if not already installed
+if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr")
+
+# Load the dplyr package
+library(dplyr)
+
+# Analyze the dataset structure using glimpse()
+glimpse(stata_data)
+
+```
+
+More detailed - separated by character, date, and numeric datatypes
+
+```{r}
+# Install necessary package if not already installed
+if (!requireNamespace("skimr", quietly = TRUE)) install.packages("skimr")
+
+# Load the skimr package
+library(skimr)
+
+# Generate a detailed summary using skim()
+skim(stata_data)
+```
+
+More in depth - interactive HTML
+
+```{r}
+# Install necessary package if not already installed
+if (!requireNamespace("summarytools", quietly = TRUE)) install.packages("summarytools")
+
+# Load the summarytools package
+library(summarytools)
+
+# Generate a data frame summary report
+dfSummary(stata_data)
+```
+
+Some regression stuff:
+
+```{r}
+# Install necessary packages if not installed
+if (!requireNamespace("tidyverse", quietly = TRUE)) install.packages("tidyverse")
+if (!requireNamespace("performance", quietly = TRUE)) install.packages("performance")
+if (!requireNamespace("ggeffects", quietly = TRUE)) install.packages("ggeffects")
+if (!requireNamespace("sjPlot", quietly = TRUE)) install.packages("sjPlot")
+if (!requireNamespace("gtsummary", quietly = TRUE)) install.packages("gtsummary")
+if (!requireNamespace("vip", quietly = TRUE)) install.packages("vip")
+
+# Load required libraries
+library(tidyverse)      # Data manipulation & visualization
+library(performance)    # Model assumption checks
+library(ggeffects)      # Effect visualization
+library(sjPlot)         # Grid plotting for ggplots
+library(gtsummary)      # Regression table
+library(vip)            # Variable importance
+
+# Set theme for plots
+theme_set(theme_bw())
+
+# Get & Prepare Data 
+# Assuming `stata_data_df` is the cleaned dataset
+bmi_data <- stata_data_df |> 
+  filter(!is.na(bmi), !is.na(age_at_encounter), !is.na(sex)) |>  # Remove missing values
+  mutate(
+    sex = as.factor(sex),                 # Convert sex to categorical
+    age_at_encounter = as.numeric(age_at_encounter), 
+    bmi = as.numeric(bmi)                 # Ensure BMI is numeric
+  )
+
+# Build the Model
+bmi_model <- lm(bmi ~ sex + age_at_encounter, data = bmi_data)
+
+# Check all model assumptions visually
+bmi_model |> performance::check_model()
+
+# Visualize predictions
+bmi_model |> 
+  ggeffects::ggpredict() |> 
+  plot() |> 
+  sjPlot::plot_grid()
+
+# Get regression table with p-values
+bmi_model |> 
+  gtsummary::tbl_regression(exponentiate = FALSE, add_pairwise_contrasts = TRUE)
+
+# Get variable importance
+bmi_model |> vip::vip()
+
+# Check model quality
+bmi_model |> performance::performance()
+```
+
+```{r}
+# Install necessary packages if not installed
+if (!requireNamespace("performance", quietly = TRUE)) install.packages("performance")
+
+# Load required packages
+library(performance)
+
+# Assuming `stata_data_df` is your cleaned dataset
+# Ensure variables are in the correct format
+stata_data_df$sex <- as.factor(stata_data_df$sex)  # Convert sex to categorical variable
+stata_data_df$age_at_encounter <- as.numeric(stata_data_df$age_at_encounter)  # Ensure age is numeric
+stata_data_df$bmi <- as.numeric(stata_data_df$bmi)  # Ensure BMI is numeric
+
+# Fit the linear regression model
+bmi_model <- lm(curr_bmi ~ sex + age_at_encounter, data = stata_data_df)
+
+# Check model assumptions
+check_model(bmi_model)
+```
+
+Here are a few references that might be helpful for visualizations:
+
+[https://grantmcdermott.com/tinyplot/](https://grantmcdermott.com/tinyplot/?utm_campaign=Data_Elixir&utm_source=Data_Elixir_522)
+
+```{r}
+
+```
+
+Here are a few references that might be helpful for regressions
+
+tbl_regression() function from gtsummary
