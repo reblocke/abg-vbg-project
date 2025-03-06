@@ -41,33 +41,39 @@ if (!dir.exists(data_dir_name)) {
   message("Directory 'data' already exists.")
 }
 
-# Check if the RData file exists
 if (file.exists(rdata_file)) {
-  # Load the existing RData file
+  # 1) Load the existing RData file
   load(rdata_file)
-  message("Loaded existing dataset from 'full_trinetx.rdata'.")
-} else {
-  # Read Stata dataset
-  message("RData file not found. Reading Stata dataset...")
-  stata_data <- read_dta(stata_file)
+  message("Loaded existing dataset from '", rdata_file, "'.")
   
-  # Check variable labels
-  message("Extracting variable labels...")
-  var_label(stata_data)
+} else if (file.exists(stata_file)) {
+  # 2) RData file not found, but the Stata file is available
+  message("RData file not found. Reading Stata dataset...")
+  stata_data <- haven::read_dta(stata_file)
 
-  # Check value labels
+  # Inspect variable labels (optional)
+  message("Extracting variable labels...")
+  # var_label(stata_data)  # if you want to just look at them, remove the # comment
+
+  # Inspect value labels (optional)
   message("Extracting value labels...")
-  sapply(stata_data, function(x) if (is.labelled(x)) val_labels(x))
+  # sapply(stata_data, function(x) if (haven::is.labelled(x)) haven::val_labels(x))
 
   # Save the dataset in RData format
   save(stata_data, file = rdata_file)
-  message("Dataset saved as 'full_trinetx.rdata'.")
+  message("Dataset saved as '", rdata_file, "'.")
 
   # Load the newly created RData file
   load(rdata_file)
-  message("Loaded newly saved dataset from 'full_trinetx.rdata'.")
-}
+  message("Loaded newly saved dataset from '", rdata_file, "'.")
 
+} else {
+  # 3) Neither the Stata file nor the RData file exists
+  stop(
+    "Neither the specified RData file (", rdata_file, 
+    ") nor the Stata file (", stata_file, ") could be found."
+  )
+}
 ```
 
 ```{r}
@@ -148,14 +154,25 @@ if (!requireNamespace("summarytools", quietly = TRUE)) install.packages("summary
 # Load the summarytools package
 library(summarytools)
 
+stata_data <- stata_data |> 
+  mutate(
+    across(
+      .cols = where(haven::is.labelled),  # find columns with haven_labelled class
+      .fns  = haven::as_factor           # convert them to factors
+    )
+  )
+
 # Generate a data frame summary report
 dfSummary(stata_data)
 ```
 
 Some regression stuff:
 
-```{r}# Convert tibble "stata_data" to a base R data frame}
+```{r}
+# Convert tibble "stata_data" to a base R data frame
 stata_data_df <- as.data.frame(stata_data)
+
+
 ```
 
 ```{r}
@@ -199,7 +216,7 @@ bmi_data <- stata_data_df |>
 bmi_model <- lm(bmi ~ sex + age_at_encounter, data = bmi_data)
 
 # Check all model assumptions visually
-# bmi_model |> performance::check_model()
+ bmi_model |> performance::check_model()
 
 # Visualize predictions
 bmi_model |> 
