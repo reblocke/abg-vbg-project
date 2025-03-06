@@ -107,6 +107,11 @@ Summary Statistics:
 summary(stata_data)
 ```
 
+```{r}
+# If your data frame is called stata_data, do:
+summary(stata_data[, c("los", "curr_bmi")])
+```
+
 Raw Data
 
 ```{r}
@@ -149,6 +154,10 @@ dfSummary(stata_data)
 
 Some regression stuff:
 
+```{r}# Convert tibble "stata_data" to a base R data frame}
+stata_data_df <- as.data.frame(stata_data)
+```
+
 ```{r}
 # Install necessary packages if not installed
 if (!requireNamespace("tidyverse", quietly = TRUE)) install.packages("tidyverse")
@@ -171,19 +180,26 @@ theme_set(theme_bw())
 
 # Get & Prepare Data 
 # Assuming `stata_data_df` is the cleaned dataset
-bmi_data <- stata_data_df |> 
-  filter(!is.na(bmi), !is.na(age_at_encounter), !is.na(sex)) |>  # Remove missing values
+library(dplyr)
+library(haven)
+
+bmi_data <- stata_data_df |>  
+  filter(
+    !is.na(bmi), 
+    !is.na(age_at_encounter), 
+    !is.na(sex)
+  ) |>  
   mutate(
-    sex = as.factor(sex),                 # Convert sex to categorical
-    age_at_encounter = as.numeric(age_at_encounter), 
-    bmi = as.numeric(bmi)                 # Ensure BMI is numeric
+    sex = haven::as_factor(sex),                # Convert haven_labelled -> factor
+    age_at_encounter = as.numeric(age_at_encounter),  
+    bmi = as.numeric(bmi)                      
   )
 
 # Build the Model
 bmi_model <- lm(bmi ~ sex + age_at_encounter, data = bmi_data)
 
 # Check all model assumptions visually
-bmi_model |> performance::check_model()
+# bmi_model |> performance::check_model()
 
 # Visualize predictions
 bmi_model |> 
@@ -224,12 +240,87 @@ check_model(bmi_model)
 
 Here are a few references that might be helpful for visualizations:
 
-[https://grantmcdermott.com/tinyplot/](https://grantmcdermott.com/tinyplot/?utm_campaign=Data_Elixir&utm_source=Data_Elixir_522)
+Tiny plot = simple graphics [https://grantmcdermott.com/tinyplot/](https://grantmcdermott.com/tinyplot/?utm_campaign=Data_Elixir&utm_source=Data_Elixir_522)
+
+Ggcoef stats for regression model coefficients <https://x.com/joachimschork/status/1858273162720325758?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
+
+Gg4x another way to do simple plotting <https://x.com/joachimschork/status/1856461224718012719?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
+
+Ggbetween comparisons between groups <https://x.com/joachimschork/status/1855374059887882410?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
 
 ```{r}
+# Install ggstatsplot if not already
+install.packages("ggstatsplot")
 
+library(dplyr)
+library(haven)
+library(ggstatsplot)
+
+# Prepare data: convert to factor, remove missing values
+stata_data_df_clean <- stata_data_df %>%
+  filter(!is.na(curr_bmi), !is.na(sex)) %>%
+  mutate(sex = haven::as_factor(sex))  # or `sex = factor(sex)` if numeric
+
+# Visualize difference in curr_bmi between groups (sex=0/1)
+ggbetweenstats(
+  data       = stata_data_df_clean,
+  x          = sex,       # grouping variable
+  y          = curr_bmi,  # outcome
+  title      = "Difference in Current BMI by Sex Group",
+  ggtheme    = ggplot2::theme_bw()
+)
 ```
 
-Here are a few references that might be helpful for regressions
+Ggpubplot. - shortcuts to make some nice looking plots <https://x.com/joachimschork/status/1853388159721066737?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
 
-tbl_regression() function from gtsummary
+ggside - https://cran.r-project.org/web/packages/ggside/vignettes/ggside_basic_usage.html
+
+Upset plot <https://x.com/mdancho84/status/1848690432210870695?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
+
+<https://x.com/mdancho84/status/1849772573845836032?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
+
+Best packages for Viz <https://r-graph-gallery.com/best-dataviz-packages.html>
+
+Raincloud plots (medium) <https://x.com/rmarkdown/status/1831633403248095678?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
+
+Correlation visualization: <https://x.com/yuzar___/status/1836800841941983377?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
+
+Saving vectorized Figs <https://x.com/leonardojo/status/1828773827134062967?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
+
+tiny table - https://vincentarelbundock.github.io/tinytable/ 
+
+Workflow for propensity matched, imputed analysis: <https://solomonkurz.netlify.app/blog/2025-02-02-matching-missing-data-a-quasi-experiment-and-causal-inference-oh-my/> 
+
+GIF animations <https://gist.github.com/carlislerainey/b87600c3314e1829a10b43d0c4617762> 
+
+Visualize nested variables <https://x.com/rfunctionaday/status/1418069470195724288?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
+
+\- nice forest plot in R <https://x.com/arthur_alb1/status/1750126021985091716?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg> 
+
+\- Shiny guide - <https://www.business-science.io/code-tools/2023/04/02/chatgpt-shiny-app.html> 
+
+More Shiny - <https://sites.google.com/view/ben-prytherch-shiny-apps/shiny-apps> (is the code for these available?) 
+
+Venn <https://x.com/strnr/status/1744288923411513429?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg> 
+
+\[ \] tables <https://x.com/vincentab/status/1774405541822910875?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
+
+\[ \] more tables - <https://luisdva.github.io/rstats/clean-merged/> 
+
+gt_plot_summary Viz <https://x.com/rappa753/status/1695106452485263672?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
+
+Gt extra: <https://jthomasmock.github.io/gtExtras/articles/plotting-with-gtExtras.html> and Gt <https://gt.rstudio.com/> 
+
+Df summary <https://x.com/rappa753/status/1695709747289415801?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg> 
+
+Modifiable tables <https://x.com/rappa753/status/1697610322818015556?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
+
+Beginners guide to Data visualization <https://x.com/parajulisaroj16/status/1694909563739205860?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
+
+Naniar - visualization of missing data  <https://cran.r-project.org/web/packages/naniar/vignettes/getting-started-w-naniar.html> 
+
+Making consort diagrams: <https://x.com/_Riinu_/status/1754479220175114271?s=20> 
+
+Violin plot 
+
+<https://x.com/joachimschork/status/1851648860432507086?s=46&t=5eJ6uoTQrbbYTlHIOnRYRg>
