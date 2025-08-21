@@ -1212,7 +1212,7 @@ ggplot(
   theme(plot.caption = element_text(hjust = 0))
 ```
 
----------
+------------------------------------------------------------------------
 
 Below is still in progress trying to do diagnostics for propensity scores - will keep working on it
 
@@ -1240,20 +1240,54 @@ w_vbg_calc <- weightit(
 
 # 2.  Diagnostics ------------------------------------------------------
 library(cobalt)
-bal.tab(w, thresholds = c(m = .05))       # SMD target 0.05
-love.plot(w)
 
-# Positivity check
-histogram(~ w$ps | dat$treat)             # lattice or ggplot2
+bal <- bal.tab(
+  w_vbg_calc,
+  un          = TRUE,
+  m.threshold = 0.05,
+  binary      = "std"     # <— standardize binary covariates
+)
+
+love.plot(
+  bal,
+  abs          = TRUE,
+  var.order    = "unadjusted",
+  thresholds   = c(m = 0.05),
+  sample.names = c("Raw","IPW")
+)
+
+ps_df <- data.frame(ps = w_vbg_calc$ps,
+                    treat = factor(subset_data$has_vbg_co2_o2_sat))
+lattice::histogram(~ ps | treat, data = ps_df)
+
+ps_df <- data.frame(
+  ps    = w_vbg_calc$ps,                         # from WeightIt (gbm)
+  treat = factor(subset_data$has_vbg_co2_o2_sat)
+)
+
+lattice::histogram(~ ps | treat, data = ps_df)
 
 # 3.  Outcome analysis -------------------------------------------------
 library(survey)
-dsgn <- svydesign(ids = ~1, weights = ~w$weights, data = dat)
-fit  <- svyglm(outcome ~ treat, family = quasibinomial(), design = dsgn)
-summary(fit)
+dsgn <- svydesign(ids = ~1, weights = ~w_vbg_calc, data = subset_data)
+fit_imv   <- svyglm(imv_proc              ~ has_vbg_co2_o2_sat, design = dsgn, family = quasibinomial())
+fit_niv   <- svyglm(niv_proc              ~ has_vbg_co2_o2_sat, design = dsgn, family = quasibinomial())
+fit_death <- svyglm(death_60d             ~ has_vbg_co2_o2_sat, design = dsgn, family = quasibinomial())
+fit_hcrf  <- svyglm(hypercap_resp_failure ~ has_vbg_co2_o2_sat, design = dsgn, family = quasibinomial())
 
-# 4.  Sensitivity ------------------------------------------------------
-library(sensitivitymw)
-senmw(outcome, treat, data = dat, gamma = 1.5)
+summary(fit_imv)
+summary(fit_niv)
+summary(fit_death)
+summary(fit_hcrf)
+
+
+# Sensitivity 
+# ... code to build m_pairs, md_pairs, and Y_imv (as above) ...
+#library(sensitivitymw)
+#senmw(Y_imv, gamma = 1.5, method = "p")
+
+# 4.  Sensitivity for matched pairs (IMV)------------------------------------------------------
+#library(sensitivitymw)
+#senmw(outcome, treat, data = dat, gamma = 1.5)
 
 ```
