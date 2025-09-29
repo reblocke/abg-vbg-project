@@ -9,8 +9,6 @@ editor: visual
 
 This code pulls in the master database (a STATA file) and does some initial cleaning - this will only need to be run once, and then the data can be accessed in the usual way.
 
-**BL 7/26/25** - new: I augmented this code block to check for all needed packages, and important everything up front
-
 ```{r}
 # Consolidated package management ------------------------------------------------
 required_pkgs <- c(
@@ -70,7 +68,7 @@ Creating subset_data
 
 ```{r}
 set.seed(123)
-rows_to_keep <- round(nrow(stata_data) * 1.0)
+rows_to_keep <- round(nrow(stata_data) * 0.05)
 subset_data <- stata_data[sample(nrow(stata_data), rows_to_keep), ]
 dim(subset_data)
 ```
@@ -148,13 +146,17 @@ prop.table(table(subset_data$death_60d, useNA = "ifany"))
 summary(subset_data$death_60d)
 ```
 
+Cutting out ambulatory encounters
+
+```{r}
+subset_data <- subset_data %>%
+  filter(encounter_type != 1)
+
+table(subset_data$encounter_type)
+
+```
+
 Table 1A and 1B:
-
-adjusted version of the same table
-
--   [x] TODO: I'd use race_ethnicity rather than just race. I updated this in the regression and IPW but haven't yet in the table.
-
--   [x] TODO: need to add location (= region in the US) to this.
 
 ```{r}
 # ---------------------------------------------------------------------------
@@ -269,6 +271,125 @@ doc <- read_docx() %>%
 
 print(doc, target = "Table1_ABG_VBG.docx")
 
+```
+
+Making NEW Table 1
+
+```{r}
+# Status factors (column labels are taken from factor levels)
+subset_data <- subset_data %>%
+  mutate(
+    abg_status = factor(has_abg, levels = c(0, 1),
+                        labels = c("Did not get ABG", "Did get ABG")),
+    vbg_status = factor(has_vbg, levels = c(0, 1),
+                        labels = c("Did not get VBG", "Did get VBG"))
+  )
+
+# ABG table with "Everyone" column first
+tbl1_abg <- subset_data %>%
+  select(all_of(vars), abg_status) %>%
+  gtsummary::tbl_summary(
+    by = abg_status,
+    type = list(sex_label ~ "categorical"),
+    statistic = list(
+      gtsummary::all_continuous()  ~ "{mean} ± {sd}; {N_miss}/{N_obs} missing ({p_miss}%)",
+      gtsummary::all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits   = list(gtsummary::all_continuous() ~ 1),
+    missing  = "no"
+  ) %>%
+  gtsummary::add_overall(last = FALSE, col_label = "Everyone") %>%
+  gtsummary::modify_header(label = "**Variable**")
+
+# VBG table (no "Everyone" here)
+tbl1_vbg <- subset_data %>%
+  select(all_of(vars), vbg_status) %>%
+  gtsummary::tbl_summary(
+    by = vbg_status,
+    type = list(sex_label ~ "categorical"),
+    statistic = list(
+      gtsummary::all_continuous()  ~ "{mean} ± {sd}; {N_miss}/{N_obs} missing ({p_miss}%)",
+      gtsummary::all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits   = list(gtsummary::all_continuous() ~ 1),
+    missing  = "no"
+  ) %>%
+  gtsummary::modify_header(label = "**Variable**")
+
+library(gtsummary)
+
+tbl1 <- tbl_merge(
+  tbls = list(tbl1_abg, tbl1_vbg)
+) %>%
+  modify_caption("**Table 1. Baseline summary: Everyone, ABG status, and VBG status**")
+
+tbl1
+```
+
+NEW Table 2
+
+```{r}
+# Hypercapnia factors within measured cohorts
+subset_data <- subset_data %>%
+  mutate(
+    hyper_abg = factor(hypercap_on_abg, levels = c(1, 0),
+                       labels = c("Got ABG & Hypercapnia", "Got ABG & No hypercapnia")),
+    hyper_vbg = factor(hypercap_on_vbg, levels = c(1, 0),
+                       labels = c("Got VBG & Hypercapnia", "Got VBG & No hypercapnia"))
+  )
+
+# ABG cohort (has_abg == 1)
+tbl2_abg <- subset_data %>%
+  filter(has_abg == 1) %>%
+  select(all_of(vars), hyper_abg) %>%
+  gtsummary::tbl_summary(
+    by = hyper_abg,
+    type = list(sex_label ~ "categorical"),
+    statistic = list(
+      gtsummary::all_continuous()  ~ "{mean} ± {sd}; {N_miss}/{N_obs} missing ({p_miss}%)",
+      gtsummary::all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits   = list(gtsummary::all_continuous() ~ 1),
+    missing  = "no"
+  ) %>%
+  gtsummary::modify_header(
+    list(
+      label  ~ "**Variable**",
+      stat_1 ~ "**Got ABG & Hypercapnia**",
+      stat_2 ~ "**Got ABG & No hypercapnia**"
+    )
+  )
+
+# VBG cohort (has_vbg == 1)
+tbl2_vbg <- subset_data %>%
+  filter(has_vbg == 1) %>%
+  select(all_of(vars), hyper_vbg) %>%
+  gtsummary::tbl_summary(
+    by = hyper_vbg,
+    type = list(sex_label ~ "categorical"),
+    statistic = list(
+      gtsummary::all_continuous()  ~ "{mean} ± {sd}; {N_miss}/{N_obs} missing ({p_miss}%)",
+      gtsummary::all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits   = list(gtsummary::all_continuous() ~ 1),
+    missing  = "no"
+  ) %>%
+  gtsummary::modify_header(
+    list(
+      label  ~ "**Variable**",
+      stat_1 ~ "**Got VBG & Hypercapnia**",
+      stat_2 ~ "**Got VBG & No hypercapnia**"
+    )
+  )
+
+# Merge side-by-side (no spanners; 4 requested columns)
+table2 <- gtsummary::tbl_merge(
+  tbls = list(tbl2_abg, tbl2_vbg),
+  tab_spanner = c(NULL, NULL)
+) %>%
+  gtsummary::modify_caption("**Table B. Baseline summary by hypercapnia within ABG and VBG cohorts**")
+
+table2
 ```
 
 **Unweighted, Hypercapnia (binary yes/no) Simple (1 predictor) Regressions:**
@@ -474,8 +595,6 @@ combined_or_df <- bind_rows(
 )
 ```
 
-**BL 7/16/2025** - Note[: new version below]{.underline}. For this, I changed the title, made the x-axis logarithmic (always logarithmic scale when the variable is a ratio, like an odds ratio or risk ratio), and added the clarification about denominators.
-
 ```{r}
 ggplot(combined_or_df, aes(x = outcome, y = estimate, ymin = conf.low, ymax = conf.high, color = group)) +
   geom_pointrange(position = position_dodge(width = 0.5), size = 0.6) +
@@ -662,22 +781,23 @@ ggplot(
 
 **Restricted Cubic Spline Regressions**
 
+Fixed error in block below
+
 ```{r}
-subset_data_clean <- subset_data %>%
-  select(paco2, vbg_co2, imv_proc, niv_proc, death_60d, hypercap_resp_failure)
+# ABG spline dataset
+subset_data_abg <- subset_data %>%
+  select(paco2, imv_proc, niv_proc, death_60d, hypercap_resp_failure) %>%
+  filter(!is.na(paco2))
 
-subset_data_clean <- subset_data_clean %>%
-  filter(complete.cases(.))
-
-dd <- datadist(subset_data_clean)
-options(datadist = "dd")
+dd_abg <- datadist(subset_data_abg)
+options(datadist = "dd_abg")
 
 ```
 
 Unweighted, Restricted Cubic Spline Regression - ABG by PaCO2
 
 ```{r}
-fit_imv <- lrm(imv_proc ~ rcs(paco2, 4), data = subset_data_clean)
+fit_imv <- lrm(imv_proc ~ rcs(paco2, 4), data = subset_data_abg)
 pred_imv <- as.data.frame(Predict(fit_imv, paco2, fun = plogis))
 
 plot_imv <- ggplot(pred_imv, aes(x = paco2, y = yhat)) +
@@ -687,7 +807,7 @@ plot_imv <- ggplot(pred_imv, aes(x = paco2, y = yhat)) +
        x = "PaCO₂ (mmHg)", y = "Predicted Probability") +
   theme_minimal()
 
-fit_niv <- lrm(niv_proc ~ rcs(paco2, 4), data = subset_data_clean)
+fit_niv <- lrm(niv_proc ~ rcs(paco2, 4), data = subset_data_abg)
 pred_niv <- as.data.frame(Predict(fit_niv, paco2, fun = plogis))
 
 plot_niv <- ggplot(pred_niv, aes(x = paco2, y = yhat)) +
@@ -697,7 +817,7 @@ plot_niv <- ggplot(pred_niv, aes(x = paco2, y = yhat)) +
        x = "PaCO₂ (mmHg)", y = "Predicted Probability") +
   theme_minimal()
 
-fit_death <- lrm(death_60d ~ rcs(paco2, 4), data = subset_data_clean)
+fit_death <- lrm(death_60d ~ rcs(paco2, 4), data = subset_data_abg)
 pred_death <- as.data.frame(Predict(fit_death, paco2, fun = plogis))
 
 plot_death <- ggplot(pred_death, aes(x = paco2, y = yhat)) +
@@ -707,7 +827,7 @@ plot_death <- ggplot(pred_death, aes(x = paco2, y = yhat)) +
        x = "PaCO₂ (mmHg)", y = "Predicted Probability") +
   theme_minimal()
 
-fit_hcrf <- lrm(hypercap_resp_failure ~ rcs(paco2, 4), data = subset_data_clean)
+fit_hcrf <- lrm(hypercap_resp_failure ~ rcs(paco2, 4), data = subset_data_abg)
 pred_hcrf <- as.data.frame(Predict(fit_hcrf, paco2, fun = plogis))
 
 plot_hcrf <- ggplot(pred_hcrf, aes(x = paco2, y = yhat)) +
@@ -722,6 +842,17 @@ plot_hcrf <- ggplot(pred_hcrf, aes(x = paco2, y = yhat)) +
 ```
 
 Unweighted, Restricted Cubic Spline - VBG
+
+```{r}
+# --- VBG dataset ---
+subset_data_vbg <- subset_data %>%
+  select(vbg_co2, imv_proc, niv_proc, death_60d, hypercap_resp_failure, w_vbg) %>%
+  filter(!is.na(vbg_co2))
+
+dd_vbg <- datadist(subset_data_vbg)   # create datadist for VBG
+# activate when doing VBG models:
+options(datadist = "dd_vbg")
+```
 
 ```{r}
 subset_data_vbg <- subset_data %>%
@@ -774,17 +905,17 @@ plot_hcrf_vbg <- ggplot(pred_hcrf_vbg, aes(x = vbg_co2, y = yhat)) +
 Unweighted, Restricted Cubic Spline Logistic Regressio - Calculated VBG to ABG (Farkas VBG Adjustment)
 
 ```{r}
-subset_data_abg <- subset_data %>%
+subset_data_calc <- subset_data %>%
   select(calc_abg, imv_proc, niv_proc, death_60d, hypercap_resp_failure) %>%
   filter(!is.na(calc_abg) & complete.cases(.))
 
-dd <- datadist(subset_data_abg)
+dd <- datadist(subset_data_calc)
 options(datadist = "dd")
 
-fit_imv_abg   <- lrm(imv_proc ~ rcs(calc_abg, 4), data = subset_data_abg)
-fit_niv_abg   <- lrm(niv_proc ~ rcs(calc_abg, 4), data = subset_data_abg)
-fit_death_abg  <- lrm(death_60d ~ rcs(calc_abg, 4), data = subset_data_abg)
-fit_hcrf_abg   <- lrm(hypercap_resp_failure ~ rcs(calc_abg, 4), data = subset_data_abg)
+fit_imv_abg   <- lrm(imv_proc ~ rcs(calc_abg, 4), data = subset_data_calc)
+fit_niv_abg   <- lrm(niv_proc ~ rcs(calc_abg, 4), data = subset_data_calc)
+fit_death_abg  <- lrm(death_60d ~ rcs(calc_abg, 4), data = subset_data_calc)
+fit_hcrf_abg   <- lrm(hypercap_resp_failure ~ rcs(calc_abg, 4), data = subset_data_calc)
 
 pred_imv_abg   <- as.data.frame(Predict(fit_imv_abg, calc_abg, fun = plogis))
 pred_niv_abg   <- as.data.frame(Predict(fit_niv_abg, calc_abg, fun = plogis))
@@ -839,11 +970,19 @@ Note: for all these, I suggested new GBM adjustments that accomplish the followi
 5.  Deterministic seed ensures result replication.
 
 ```{r}
+subset_data$encounter_type <- factor(subset_data$encounter_type,
+                                     levels = c(2, 3),
+                                     labels = c("Emergency", "Inpatient"))
+```
+
+Added encounter type to weights
+
+```{r}
 # ── 1. fit GBM propensity model, ABG ───────────────────────────────────────────────
 set.seed(42)
 
 weight_model <- weightit(
-  has_abg ~ age_at_encounter + sex + factor(race_ethnicity) + curr_bmi + copd + asthma + osa + chf + acute_nmd + phtn + ckd + dm + factor(location) + temp_new + sbp + dbp + hr + spo2 + sodium + serum_cr + serum_hco3 + serum_cl + serum_lac + serum_k + wbc + plt + bnp + serum_phos + serum_ca,
+  has_abg ~ age_at_encounter + sex + factor(race_ethnicity) + curr_bmi + copd + asthma + osa + chf + acute_nmd + phtn + ckd + dm + factor(location) + factor (encounter_type) + temp_new + sbp + dbp + hr + spo2 + sodium + serum_cr + serum_hco3 + serum_cl + serum_lac + serum_k + wbc + plt + bnp + serum_phos + serum_ca,
   data        = subset_data,
   method      = "gbm",
   estimand    = "ATE",
@@ -892,8 +1031,6 @@ lapply(list(IMV = fit_imv, NIV = fit_niv, Death = fit_death, ICD = fit_icd), fun
     LCL = exp(confint(m)[2,1]),
     UCL = exp(confint(m)[2,2]))
 })
-
-
 ```
 
 **Inverse Propensity-Weighted Logistic Regressions with CO2 predictor represented as a restricted cubic spline.**
@@ -924,10 +1061,10 @@ fitfun <- function(formula)
     family = quasibinomial()
   )
 
-fit_imv   <- fitfun(imv_proc              ~ rcs(paco2, 4))
-fit_niv   <- fitfun(niv_proc              ~ rcs(paco2, 4))
-fit_death <- fitfun(death_60d                  ~ rcs(paco2, 4))
-fit_hcrf  <- fitfun(hypercap_resp_failure ~ rcs(paco2, 4))
+fit_imv_abg   <- fitfun(imv_proc              ~ rcs(paco2, 4))
+fit_niv_abg   <- fitfun(niv_proc              ~ rcs(paco2, 4))
+fit_death_abg <- fitfun(death_60d                  ~ rcs(paco2, 4))
+fit_hcrf_abg  <- fitfun(hypercap_resp_failure ~ rcs(paco2, 4))
 
 # ── 4. prediction helper ─────────────────────────────────────────────────────
 mkpred <- function(fit, data_ref) {
@@ -956,10 +1093,10 @@ mkpred <- function(fit, data_ref) {
   )
 }
 
-pred_imv   <- mkpred(fit_imv,   subset_data_abg)
-pred_niv   <- mkpred(fit_niv,   subset_data_abg)
-pred_death <- mkpred(fit_death, subset_data_abg)
-pred_hcrf  <- mkpred(fit_hcrf,  subset_data_abg)
+pred_imv_abg   <- mkpred(fit_imv_abg,   subset_data_abg)
+pred_niv_abg   <- mkpred(fit_niv_abg,   subset_data_abg)
+pred_death_abg <- mkpred(fit_death_abg, subset_data_abg)
+pred_hcrf_abg  <- mkpred(fit_hcrf_abg,  subset_data_abg)
 
 # ── 5. plotting ──────────────────────────────────────────────────────────────
 xlab <- expression(paste("ABG CO"[2], " (mmHg)"))
@@ -973,10 +1110,10 @@ plt <- function(dat, title)
     theme_minimal()
 
 (patchwork::wrap_plots(
-    plt(pred_imv,   "IMV"),
-    plt(pred_niv,   "NIV"),
-    plt(pred_death, "Death"),
-    plt(pred_hcrf,  "Hypercapnic RF"),
+    plt(pred_imv_abg,   "IMV"),
+    plt(pred_niv_abg,   "NIV"),
+    plt(pred_death_abg, "Death"),
+    plt(pred_hcrf_abg,  "Hypercapnic RF"),
     ncol = 2
   )
 ) +
@@ -990,16 +1127,21 @@ plt <- function(dat, title)
 
 VBG
 
+**\-\-\-\--Fixed error below----**
+
 ```{r}
-#  Inverse‑propensity weighting & outcome modelling for **VBG** cohort
-#    – mirrored 1‑to‑1 to the validated ABG workflow
+#  Inverse-propensity weighting & outcome modelling for **VBG** cohort
+#    – mirrored 1-to-1 to the validated ABG workflow
 
-set.seed(42)   # identical seed for direct comparability
+set.seed(42)
 
-# 1. Inverse‑probability weights for receiving a VBG ---------------------------
-
+# 1. IPW for VBG ---------------------------------------------------------------
 w_vbg <- weightit(
-  has_vbg ~ age_at_encounter + sex + factor(race_ethnicity) + curr_bmi + copd + asthma + osa + chf + acute_nmd + phtn + ckd + dm + factor(location) + temp_new + sbp + dbp + hr + spo2 + sodium + serum_cr + serum_hco3 + serum_cl + serum_lac + serum_k + wbc + plt + bnp + serum_phos + serum_ca,
+  has_vbg ~ age_at_encounter + sex + factor(race_ethnicity) + curr_bmi +
+    copd + asthma + osa + chf + acute_nmd + phtn + ckd + dm +
+    factor(location) + factor(encounter_type) + temp_new + sbp + dbp + hr + spo2 +
+    sodium + serum_cr + serum_hco3 + serum_cl + serum_lac +
+    serum_k + wbc + plt + bnp + serum_phos + serum_ca,
   data        = subset_data,
   method      = "gbm",
   estimand    = "ATE",
@@ -1013,28 +1155,28 @@ w_vbg <- weightit(
   n.cores     = parallel::detectCores()
 )
 
-# ── 2. Winsorise / stabilise weights (two‑sided) ─────────────────────────────
-w <- w_vbg$weights            # original GBM weights
-w <- w / mean(w)                     # stabilise
+# Stabilise & winsorise weights
+w <- w_vbg$weights
+w <- w / mean(w)
 cut <- quantile(w, c(0.01, 0.99), na.rm = TRUE)
-w   <- pmin(pmax(w, cut[1]), cut[2]) # two‑tail Winsorisation
-w <- w / mean(w)                     # re‑stabilise so E[w]=1
+w   <- pmin(pmax(w, cut[1]), cut[2])
+w <- w / mean(w)
 
-# overwrite inside the object and attach to data
-w_vbg$weights <- w
-subset_data$w_vbg    <- w
+w_vbg$weights   <- w
+subset_data$w_vbg <- w
 
-bal.tab(w_vbg, un = TRUE, m.threshold = 0.1)      # inspect balance
+bal.tab(w_vbg, un = TRUE, m.threshold = 0.1)
 
-# 2. Analysis sample: rows with measured VBG CO₂ --------------------------------
+# 2. Analysis set (VBG only) ---------------------------------------------------
 subset_data_vbg <- subset_data %>%
-  filter(!is.na(vbg_co2)) %>%                     # implies has_vbg == 1
+  filter(!is.na(vbg_co2)) %>%
   select(vbg_co2, imv_proc, niv_proc, death_60d, 
          hypercap_resp_failure, w_vbg) %>%
   filter(complete.cases(.))
 
-# 3. Weighted logistic spline models with robust SEs ---------------------------
-dd <- datadist(subset_data_vbg); options(datadist = "dd")
+# 3. Weighted spline models ----------------------------------------------------
+dd_vbg <- datadist(subset_data_vbg)
+options(datadist = "dd_vbg")
 
 fitfun <- function(formula)
   svyglm(
@@ -1045,10 +1187,10 @@ fitfun <- function(formula)
 
 fit_imv_vbg   <- fitfun(imv_proc              ~ rcs(vbg_co2, 4))
 fit_niv_vbg   <- fitfun(niv_proc              ~ rcs(vbg_co2, 4))
-fit_death_vbg <- fitfun(death_60d                 ~ rcs(vbg_co2, 4))
+fit_death_vbg <- fitfun(death_60d             ~ rcs(vbg_co2, 4))
 fit_hcrf_vbg  <- fitfun(hypercap_resp_failure ~ rcs(vbg_co2, 4))
 
-# 4. Prediction helper (robust to predict() quirks) ----------------------------
+# 4. Prediction helper ---------------------------------------------------------
 mkpred <- function(fit, data_ref) {
   newd <- data.frame(
     vbg_co2 = seq(min(data_ref$vbg_co2, na.rm = TRUE),
@@ -1072,14 +1214,14 @@ pred_niv_vbg   <- mkpred(fit_niv_vbg,   subset_data_vbg)
 pred_death_vbg <- mkpred(fit_death_vbg, subset_data_vbg)
 pred_hcrf_vbg  <- mkpred(fit_hcrf_vbg,  subset_data_vbg)
 
-# 5. Plotting -------------------------------------------------------------------
+# 5. Plotting (gray scheme) ----------------------------------------------------
 xlab <- expression(paste("VBG CO"[2], " (mmHg)"))
 
 plt <- function(dat, title)
   ggplot(dat, aes(vbg_co2, yhat)) +
     geom_line() +
     geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2) +
-    scale_y_continuous(limits = c(0, 1), labels = percent_format(accuracy = 1))  +
+    scale_y_continuous(limits = c(0, 1), labels = percent_format(accuracy = 1)) +
     labs(title = title, x = xlab, y = "Predicted probability") +
     theme_minimal()
 
@@ -1097,6 +1239,7 @@ plt <- function(dat, title)
             " (restricted cubic spline)")
     )
 )
+
 ```
 
 Calculated VBG to ABG / Farkas
@@ -1122,7 +1265,7 @@ subset_data <- subset_data %>%
 set.seed(42)
 
 w_vbg_calc <- weightit(
-  has_vbg_co2_o2_sat ~ age_at_encounter + sex + factor(race_ethnicity) + curr_bmi + copd + asthma + osa + chf + acute_nmd + phtn + ckd + dm + factor(location) + temp_new + sbp + dbp + hr + spo2 + sodium + serum_cr + serum_hco3 + serum_cl + serum_lac + serum_k + wbc + plt + bnp + serum_phos + serum_ca,
+  has_vbg_co2_o2_sat ~ age_at_encounter + sex + factor(race_ethnicity) + curr_bmi + copd + asthma + osa + chf + acute_nmd + phtn + ckd + dm + factor(location) + factor(encounter_type) + temp_new + sbp + dbp + hr + spo2 + sodium + serum_cr + serum_hco3 + serum_cl + serum_lac + serum_k + wbc + plt + bnp + serum_phos + serum_ca,
   data        = subset_data,
   method      = "gbm",
   estimand    = "ATE",
@@ -1222,6 +1365,252 @@ plt <- function(dat, title)
             " (restricted cubic spline)")
     )
 )
+```
+
+Superimposing ABG and VBG weighted restricted cubic splines
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(scales)
+
+# Helper to make predictions with standardized x-axis "co2"
+mkpred <- function(fit, data_ref, var, group) {
+  newd <- data.frame(
+    xvar = seq(min(data_ref[[var]], na.rm = TRUE),
+               max(data_ref[[var]], na.rm = TRUE),
+               length.out = 200)
+  )
+  names(newd) <- var   # rename back to match the model
+
+  mm   <- model.matrix(delete.response(terms(fit)), newd)
+  eta  <- mm %*% coef(fit)
+  vcov <- vcov(fit)
+  se   <- sqrt(rowSums((mm %*% vcov) * mm))
+
+  out <- transform(
+    newd,
+    yhat  = plogis(eta),
+    lower = plogis(eta - 1.96 * se),
+    upper = plogis(eta + 1.96 * se)
+  )
+
+  out$group <- group
+  out$co2   <- out[[var]]   # standard x-axis name
+  out
+}
+
+# ── Generate predictions ───────────────────────────────────────────────
+# VBG
+pred_imv_vbg   <- mkpred(fit_imv_vbg,   subset_data_vbg, "vbg_co2", "VBG")
+pred_niv_vbg   <- mkpred(fit_niv_vbg,   subset_data_vbg, "vbg_co2", "VBG")
+pred_death_vbg <- mkpred(fit_death_vbg, subset_data_vbg, "vbg_co2", "VBG")
+pred_hcrf_vbg  <- mkpred(fit_hcrf_vbg,  subset_data_vbg, "vbg_co2", "VBG")
+
+# ABG
+pred_imv_abg   <- mkpred(fit_imv,   subset_data_abg, "paco2", "ABG")
+pred_niv_abg   <- mkpred(fit_niv,   subset_data_abg, "paco2", "ABG")
+pred_death_abg <- mkpred(fit_death, subset_data_abg, "paco2", "ABG")
+pred_hcrf_abg  <- mkpred(fit_hcrf,  subset_data_abg, "paco2", "ABG")
+
+# Combine
+pred_imv   <- bind_rows(pred_imv_vbg,   pred_imv_abg)
+pred_niv   <- bind_rows(pred_niv_vbg,   pred_niv_abg)
+pred_death <- bind_rows(pred_death_vbg, pred_death_abg)
+pred_hcrf  <- bind_rows(pred_hcrf_vbg,  pred_hcrf_abg)
+
+# ── Plotting function in grayscale with distinguishable ribbons ─────────────
+plt_gray <- function(dat, title) {
+  ggplot(dat, aes(x = co2, y = yhat, linetype = group)) +
+    geom_line(color = "black", linewidth = 1) +
+    geom_ribbon(aes(ymin = lower, ymax = upper, fill = group),
+                alpha = 0.3, color = NA) +
+    scale_fill_manual(values = c("ABG" = "gray90", "VBG" = "gray20")) +  # different gray shades
+    scale_linetype_manual(values = c("ABG" = "solid", "VBG" = "dashed")) +
+    scale_y_continuous(limits = c(0, 1),
+                       labels = scales::percent_format(accuracy = 1)) +
+    labs(title = title,
+         x = expression(CO[2]~"(mmHg)"),
+         y = "Predicted probability",
+         fill = "Group",
+         linetype = "Group") +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+}
+
+# ── Patchwork layout with gray shades ──────────────────────────────────────
+(patchwork::wrap_plots(
+    plt_gray(pred_imv,   "IMV"),
+    plt_gray(pred_niv,   "NIV"),
+    plt_gray(pred_death, "Death"),
+    plt_gray(pred_hcrf,  "Hypercapnic RF"),
+    ncol = 2
+  )
+) +
+  plot_annotation(
+    title = expression(
+      paste("Propensity-weighted predicted probability by ABG vs VBG CO"[2],
+            " (restricted cubic splines, gray scheme)")
+    )
+  )
+
+
+```
+
+Feature importance Weights
+
+```{r}
+install.packages("fastshap")
+```
+
+```{r}
+
+library(gbm)
+library(dplyr)
+library(ggplot2)
+library(cobalt)
+library(fastshap)
+
+# -----------------------------
+# 1) Extract GBM variable importance
+# -----------------------------
+extract_gbm_importance <- function(W, top_n = 20) {
+  # Robustly find the GBM object inside WeightIt
+  gbm_fit <- NULL
+  if (!is.null(W$obj)) {
+    gbm_fit <- W$obj
+  } else if (!is.null(W$info$obj)) {
+    gbm_fit <- W$info$obj
+  } else if (!is.null(W$info$model.obj)) {
+    gbm_fit <- W$info$model.obj
+  }
+  
+  stopifnot(!is.null(gbm_fit), inherits(gbm_fit, "gbm"))
+  
+  # Determine best number of trees
+  best_tree <- if (!is.null(W$info$best.tree)) W$info$best.tree else gbm_fit$n.trees
+  
+  # Compute variable importance
+  imp <- as.data.frame(summary(gbm_fit, n.trees = best_tree, plotit = FALSE))
+  imp %>% arrange(desc(rel.inf)) %>% slice_head(n = top_n)
+}
+
+# -----------------------------
+# 2) Plot GBM importance
+# -----------------------------
+plot_gbm_importance <- function(imp_df, title = "GBM variable importance (relative influence)") {
+  ggplot(imp_df, aes(x = rel.inf, y = reorder(var, rel.inf))) +
+    geom_col() +
+    labs(x = "Relative influence (sum = 100)", y = NULL, title = title) +
+    theme_minimal(base_size = 11)
+}
+
+# -----------------------------
+# 3) Reconstruct design matrix for SHAP
+# -----------------------------
+prep_design <- function(W) {
+  stopifnot(!is.null(W$covs))
+  
+  # Convert factors to dummy variables
+  X <- cobalt::splitfactor(W$covs, replace = TRUE, drop.levels = TRUE)
+  
+  # Add missingness indicators + median impute (WeightIt 'missing="ind"')
+  na_cols <- names(X)[colSums(is.na(X)) > 0]
+  if (length(na_cols)) {
+    for (v in na_cols) {
+      X[[paste0(v, "_NA")]] <- as.integer(is.na(X[[v]]))
+      X[[v]][is.na(X[[v]])] <- stats::median(X[[v]], na.rm = TRUE)
+    }
+  }
+  
+  X <- as.data.frame(X)
+  
+  # Find GBM object robustly
+  gbm_fit <- NULL
+  if (!is.null(W$obj)) {
+    gbm_fit <- W$obj
+  } else if (!is.null(W$info$obj)) {
+    gbm_fit <- W$info$obj
+  } else if (!is.null(W$info$model.obj)) {
+    gbm_fit <- W$info$model.obj
+  }
+  stopifnot(!is.null(gbm_fit), inherits(gbm_fit, "gbm"))
+  
+  best_tree <- if (!is.null(W$info$best.tree)) W$info$best.tree else gbm_fit$n.trees
+  
+  # Align columns to GBM model
+  X <- X[, intersect(colnames(X), gbm_fit$var.names), drop = FALSE]
+  X <- X[, gbm_fit$var.names, drop = FALSE]
+  
+  list(X = X, gbm_fit = gbm_fit, best_tree = best_tree)
+}
+
+# -----------------------------
+# 4) Compute SHAP values
+# -----------------------------
+compute_shap <- function(W, nsim = 100, frac_rows = 1.0) {
+  mats <- prep_design(W)
+  X <- mats$X; gbm_fit <- mats$gbm_fit; best_tree <- mats$best_tree
+  
+  if (frac_rows < 1.0) {
+    set.seed(1)
+    X <- X[sample(nrow(X), max(2000, round(frac_rows * nrow(X)))), , drop = FALSE]
+  }
+  
+  pfun <- function(object, newdata) {
+    predict(object, newdata = newdata, n.trees = best_tree, type = "response")
+  }
+  
+  set.seed(123)
+  shap <- fastshap::explain(gbm_fit, X = X, pred_wrapper = pfun, nsim = nsim, adjust = TRUE)
+  list(shap = shap, X = X)
+}
+
+# -----------------------------
+# 5) Plot SHAP importance
+# -----------------------------
+plot_shap_importance <- function(shap_list, top_n = 20, title = "SHAP global importance") {
+  shap <- shap_list$shap
+  imp <- data.frame(
+    feature = colnames(shap),
+    mean_abs_shap = colMeans(abs(as.matrix(shap)), na.rm = TRUE)
+  ) %>% arrange(desc(mean_abs_shap)) %>% slice_head(n = top_n)
+  
+  ggplot(imp, aes(x = mean_abs_shap, y = reorder(feature, mean_abs_shap))) +
+    geom_col() +
+    labs(x = "Mean |SHAP| (contribution to logit‑PS scale)", y = NULL, title = title) +
+    theme_minimal(base_size = 11)
+}
+
+```
+
+```{r}
+# -----------------------------
+# 1) Extract GBM variable importance for ABG
+# -----------------------------
+imp_abg <- extract_gbm_importance(w_abg, top_n = 25)  # top 25 features
+print(imp_abg)  # shows the relative influence table in the console
+
+# -----------------------------
+# 2) Plot GBM importance
+# -----------------------------
+plot_gbm_importance(imp_abg, title = "ABG selection model – variable importance")
+
+# -----------------------------
+# 3) Compute SHAP values
+# -----------------------------
+# nsim = number of Monte Carlo repetitions, frac_rows = subsample of rows for speed
+sh_abg <- compute_shap(w_abg, nsim = 100, frac_rows = 0.5)  # subsample 50% of rows
+
+# Optional: inspect the SHAP values
+head(sh_abg$shap)
+
+# -----------------------------
+# 4) Plot SHAP importance
+# -----------------------------
+plot_shap_importance(sh_abg, top_n = 25, title = "ABG selection model – SHAP importance")
+
 ```
 
 **New** weighted binary regression figures.
