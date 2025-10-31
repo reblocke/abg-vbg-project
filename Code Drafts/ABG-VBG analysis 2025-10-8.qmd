@@ -786,7 +786,7 @@ subset_data <- subset_data %>%
       !is.na(paco2)              ~ "Normal"
     ),
     pco2_cat_vbg = case_when(
-      !is.na(vbg_co2) & vbg_co2 < 35 ~ "Below normal",
+      !is.na(vbg_co2) & vbg_co2 < 40 ~ "Below normal",
       !is.na(vbg_co2) & vbg_co2 > 50 ~ "Above normal",
       !is.na(vbg_co2)                ~ "Normal"
     ),
@@ -2498,8 +2498,8 @@ subset_data <- subset_data %>%
       TRUE ~ NA_character_
     ),
     pco2_cat_vbg = case_when(
-      !is.na(vbg_co2) & vbg_co2 < 35 ~ "Below normal",
-      !is.na(vbg_co2) & vbg_co2 >= 35 & vbg_co2 <= 50 ~ "Normal",
+      !is.na(vbg_co2) & vbg_co2 < 40 ~ "Below normal",
+      !is.na(vbg_co2) & vbg_co2 >= 40 & vbg_co2 <= 50 ~ "Normal",
       !is.na(vbg_co2) & vbg_co2 > 50 ~ "Above normal",
       TRUE ~ NA_character_
     ),
@@ -2596,6 +2596,96 @@ ggplot(
 ```
 
 ------------------------------------------------------------------------
+
+Three groups with weights: Just ABG and VBG
+
+```{r}
+library(dplyr)
+library(survey)
+library(broom)
+library(ggplot2)
+library(scales)
+
+# ── 2. Function: weighted logistic regression & OR extraction ───────────────
+run_weighted_or <- function(data, outcome, cat_var, weight_var, group_name) {
+  dat <- data %>%
+    filter(
+      !is.na(.data[[cat_var]]),
+      !is.na(.data[[outcome]]),
+      !is.na(.data[[weight_var]]),
+      .data[[weight_var]] > 0
+    ) %>%
+    mutate(
+      !!cat_var := factor(.data[[cat_var]],
+                          levels = c("Normal", "Below normal", "Above normal"))
+    ) %>%
+    droplevels()
+
+  design <- svydesign(
+    ids = ~1,
+    weights = as.formula(paste0("~", weight_var)),
+    data = dat
+  )
+
+  fit <- svyglm(as.formula(paste(outcome, "~", cat_var)),
+                design = design, family = quasibinomial())
+
+  tidy(fit, exponentiate = TRUE, conf.int = TRUE) %>%
+    filter(term != "(Intercept)") %>%
+    mutate(
+      group    = group_name,
+      outcome  = outcome,
+      exposure = gsub(paste0(cat_var), "", term) %>%
+                   gsub("`", "", .)
+    )
+}
+
+# ── 3. Run across outcomes & cohorts ────────────────────────────────────────
+outcomes <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
+
+combined_or_df <- bind_rows(
+  lapply(outcomes, function(out)
+    run_weighted_or(subset_data, out, "pco2_cat_abg",  "w_abg",      "ABG")),
+  lapply(outcomes, function(out)
+    run_weighted_or(subset_data, out, "pco2_cat_vbg",  "w_vbg",      "VBG"))
+)
+
+# Ensure nice ordering
+combined_or_df$group    <- factor(combined_or_df$group,
+                                  levels = c("ABG", "VBG"))
+combined_or_df$exposure <- factor(combined_or_df$exposure,
+                                  levels = c("Below normal", "Above normal"))
+
+# ── 4. Plot weighted odds ratios ────────────────────────────────────────────
+ggplot(
+  combined_or_df,
+  aes(
+    x      = outcome,
+    y      = estimate,
+    ymin   = conf.low,
+    ymax   = conf.high,
+    color  = group,
+    shape  = exposure
+  )
+) +
+  geom_pointrange(position = position_dodge(width = 0.7), size = 0.6) +
+  geom_hline(yintercept = 1, linetype = "dashed", colour = "grey40") +
+  scale_y_log10(
+    breaks = c(0.25, 0.5, 1, 2, 4, 8, 16),
+    limits = c(0.25, 16),
+    labels = number_format(accuracy = 0.01)
+  ) +
+  coord_flip() +
+  labs(
+    title  = "Weighted Odds Ratios of Outcomes by PCO₂ Category (ABG, VBG)",
+    x      = "Outcome",
+    y      = "Odds Ratio (log scale, 95% CI)",
+    color  = "Blood-gas type",
+    shape  = "PCO₂ category"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(plot.caption = element_text(hjust = 0))
+```
 
 Plotting propensity scores
 
