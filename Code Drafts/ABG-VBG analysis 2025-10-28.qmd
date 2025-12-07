@@ -164,7 +164,7 @@ Creating subset_data
 
 ```{r}
 set.seed(123)
-rows_to_keep <- round(nrow(stata_data) * 1) #0.1
+rows_to_keep <- round(nrow(stata_data) * 0.01) #1 for real run
 subset_data <- stata_data[sample(nrow(stata_data), rows_to_keep), ]
 
 subset_data <- subset_data %>%
