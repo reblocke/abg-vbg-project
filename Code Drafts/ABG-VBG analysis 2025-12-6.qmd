@@ -7,14 +7,80 @@ format:
     toc: true
     number-sections: true
     pdf-engine: lualatex
+    mainfont: "TeX Gyre Termes"
     geometry: 
       - landscape
-      - margin=1in
+      - margin=0.8in
     fig-width: 11
     fig-height: 7
     df-print: kable
 fontsize: 11pt
 ---
+
+# TODO
+
+-   [ ] Need to finish comment style and labeling throughout the new code.
+
+-   [ ] I'd like to add timestamps (ie. how long execution took of each cell) to the outputs.
+
+-   [ ] **VBG winsorization bug -** In your VBG IPW block you compute cut \<- quantile(w, c(0.01, 1), na.rm = TRUE) and then clamp to \[cut\[1\], cut\[2\]\]. Because cut\[2\] is the *maximum* weight, there is no upper‑tail trimming. This is correct (because it is inverse propensity of sampling weighting - so only those not sampled are up-weighted. This should be fixed.
+
+-   [ ] **Mix of standardized and raw differences in balance plots.** The love plot warns that “Standardized mean differences and raw mean differences are present in the same plot.” This happens when bal.tab uses raw diffs for binary variables and SMD for continuous ones. Set binary = "std" (and, commonly, s.d.denom = "pooled") in your bal.tab() call so *all* displayed metrics are SMDs and the warning disappears. Evidence: the warning text appears right under the love plot code.  Where you compute balance, change:
+
+```         
+cobalt::bal.tab(..., un = TRUE, m.threshold = 0.1)
+```
+
+to:
+
+```         
+cobalt::bal.tab(..., un = TRUE, m.threshold = 0.1,
+                binary = "std", s.d.denom = "pooled")
+```
+
+-   [ ] **Document still contains the “Calculated ABG (Farkas)” section. All the calculated sections should be removed - not being included in the final analysis.** You mentioned removing it; the PDF still shows the section and models. Evidence: heading and code for calc_abg and hypercapnia_calc. 
+
+-   [ ] **High missingness in the 3‑level CO₂ categories.** pco2_cat_abg missing in 1,630/2,491; pco2_cat_vbg in 1,778/2,491; pco2_cat_calc in 2,200/2,491. This drives the complete‑case drop noted above and will also affect any categorical CO₂ models. Evidence: skim table. 
+
+-   [ ] **Table title mismatch.** The gt title says *“Odds Ratios for VBG Hypercapnia (\>45 mmHg)’s association with..”* immediately above the Calculated‑ABG section. That label is misleading (looks like a copy/paste). Evidence: the title right before the calc‑ABG heading. 
+
+-   [ ] The three category PaCO2s in the imputed version earlier should be changed to mirror the ones used earlier - hypocapnia, eucapnia, and hypercapnia
+
+-   [ ] **ABG vs VBG IPW tuning asymmetry - these should be the same. Currently,** The VBG block shows different tuning prose (“changed trees and bag fraction”), implying divergence from the ABG settings; just document so readers don’t infer drift as a bias. Evidence: the VBG section text notes altered tuning. 
+
+    **Unit tests to add for Data hygiene / preprocessing, Propensity (WeightIt + GBM), Outcome modeling (svyglm), Imputation (mice), Explainability (fastshap + shapviz)**
+
+-   [ ] **Type locks** for key fields (sex, encounter_type, race_ethnicity, outcomes). Assert intended classes and ≥2 levels after coercion and *before* MI and modeling.
+
+-   [ ] **Missingness invariants.** Assert the count of non‑missing rows for each endpoint × exposure before/after MI; fail fast if massive drops occur.
+
+-   [ ] **Deterministic sanity pass.** With m=1 and maxit=1, check that predictors/blocks match expectations (no outcomes in predictors; treatment not imputed).
+
+-   [ ] **Weight diagnostics.** Assert: (i) mean(w)=1, (ii) fraction of weights at each winsor cutoff \< 2%, (iii) effective sample size (ESS) \> 20% of N after trimming.
+
+-   [ ] **Balance targets.** Assert max(\|SMD\|) \< 0.1 across imputations; fail with a concise table of offenders if violated. (Use binary="std".)
+
+-   [ ] **Common support.** For each imputation, assert predicted propensity in \[ε, 1−ε\] (e.g., ε=.01) with \<1% violations.
+
+-   [ ] **Coefficient extraction guard.** Your helper already checks for finite coef/vcov. Keep it. Add a check that the treatment column is present and non‑aliased (no 1‑level factor in any imputation).
+
+-   [ ] **Alignment test.** Before running SHAP, verify setequal(colnames(X_used), gbm\$var.names) and that factor levels in X_used are a subset of training levels; stop with a helpful message otherwise.
+
+-   [ ] **Seed escrow.** Echo seeds used for MI, GBM, and SHAP into the PDF.
+
+-   [ ] **Regression calibration checks (new)**
+
+-   [ ] **Rename the gt title** above the calc‑ABG section (or remove the section) to prevent confusion in review copies. 
+
+-   [ ] **Unicode/encoding artifacts.** Headings and labels display “PCO�” and “95�% CI”, indicating the document wasn’t rendered with full Unicode support (or strings contain a non‑standard thin‑space). You can also see this in the y‑axis label text blocks. 
+
+-   [ ] **Plots drop rows because of invalid scale limits or missing values.** Several figures print “Removed … rows …” warnings. In one place the axis is log10 with a **negative lower limit**, which produces NaNs. Fix: never set a log scale minimum ≤ 0.  
+
+-   [ ] I'd like to restructure this workbook thusly, paying attention to make sure that any helper functions or variables are still present when required: Pre-processing, baseline (unimputed tables), unweighted binary regressions ABG and VBG, unweighted three-level regressions ABG and VBG, unweighted spline regressions ABG and VBG, explainability/checks of propensity modeling ABG and VBG, IPSW binary regressions ABG and VBG, IPSW three-level-regressions ABG and VBG, IPSW spline regressions ABG and VBG, explainability/checks of multiple imputation, then MICE+IPSW binary regression ABG and VBG, MICE+IPSW three ctageory regression ABG and VBG, MICE+IPSW spline ABG and VBG
+
+-   [ ] **Shapley plots emit warnings. l**oess near‑singularities and pseudo‑inverse messages (often due to very flat x‑ranges or duplicated x). “aesthetics dropped: colour” (stat layer not using mapped colour), “label cannot be a \<element_blank\> object.”
+
+-   [ ] **High apparent missingness in 3‑level CO₂ categories (complete‑case drop).** The three‑category sections trigger “Removed rows…” and show large sample loss. This is expected if many encounters lack PaCO₂/VBG CO₂ (and you haven’t switched those analyses over to MI or inverse‑probability‑of‑observation). Flag it in the text or impute/weight appropriately.  
 
 ## Data Pre-processing
 
@@ -26,6 +92,7 @@ This code pulls in the master database (a STATA file) and does some initial clea
 if (!requireNamespace("kableExtra", quietly = TRUE)) install.packages("kableExtra")
 library(kableExtra)
 library(gtsummary)
+library(purrr)        # functional programming
 
 # globally tighten gtsummary/gt tables (smaller font + tighter padding)
 gtsummary::theme_gtsummary_compact()
@@ -1989,6 +2056,18 @@ p_imp_abg
 # --- Build shapviz object robustly -------------------------------------------
 library(shapviz)
 
+# Align newdata's factor levels to the GBM's training levels
+align_levels_to_gbm <- function(newdata, gbm_fit) {
+  out <- as.data.frame(newdata, stringsAsFactors = FALSE)
+  if (!is.null(gbm_fit$var.levels)) {
+    for (nm in intersect(names(gbm_fit$var.levels), names(out))) {
+      lev <- unique(as.character(gbm_fit$var.levels[[nm]]))
+      out[[nm]] <- factor(as.character(out[[nm]]), levels = lev)
+    }
+  }
+  out
+}
+
 # fast SHAP on LOGIT scale; prunes zero‑variance features; subsamples rows
 compute_shap_fast <- function(W, top_k = 30, nsim = 64, frac_rows = 0.50,
                               max_rows = 100000, seed = 123) {
@@ -2008,8 +2087,10 @@ compute_shap_fast <- function(W, top_k = 30, nsim = 64, frac_rows = 0.50,
   Xsub <- if (target_n < n) X[sample.int(n, target_n), , drop = FALSE] else X
 
   # SHAP on logit scale for contrast/stability
-  pfun <- function(object, newdata)
-    predict(object, newdata = newdata, n.trees = best_tree, type = "link")
+  pfun <- function(object, newdata) {
+    newd <- align_levels_to_gbm(newdata, object)
+    predict(object, newdata = newd, n.trees = best_tree, type = "link")
+  }
 
   fs_formals <- names(formals(fastshap::explain))
   args <- list(object = gbm_fit, X = Xsub, pred_wrapper = pfun, nsim = nsim, adjust = TRUE)
@@ -2892,4 +2973,1467 @@ ggplot(df_ps, aes(x = ps, fill = treat)) +
   ) +
   theme_minimal(base_size = 12)
 
+```
+
+# Multiple Imputation Analysis
+
+added 12/6/2025
+
+## 1.) Packages and Reproducibility
+
+```{r mi-packages}
+# Core MI + diagnostics
+library(mice)         # chained equations (MICE)
+library(miceadds)     # pooling helpers & utilities
+library(naniar)       # missingness summaries/plots
+library(visdat)       # quick type/missingness viz
+library(skimr)        # data skim for large frames
+
+# Modeling
+library(WeightIt)     # GBM propensity with weights
+library(gbm)          # underlying GBM engine
+library(survey)       # svyglm outcome models
+library(cobalt)       # balance diagnostics
+library(broom)        # tidy model outputs
+library(dplyr)        # data manipulation
+library(ggplot2)
+
+# Pooling and MI bookkeeping
+library(mitools)      # MIcombine for pooling (generic)
+library(parallel)     # basic parallel where helpful
+
+# Parallel + progress setup
+library(future)
+
+# setup
+library(future.apply)
+library(progressr)
+
+workers <- max(1L, future::availableCores() - 1L)
+future::plan(multisession, workers = workers)
+on.exit(future::plan("sequential"), add = TRUE)
+
+# choose a handler, but DO NOT make it global inside a knitted document
+progressr::handlers(progressr::handler_rstudio)   # or handler_txtprogressbar
+options(future.rng.onMisuse = "error")            # safer RNG with futures
+
+set.seed(20251206)
+
+# ensure a writable figure dir + stable device on macOS
+if (!dir.exists("figs")) dir.create("figs", recursive = TRUE, showWarnings = FALSE)
+knitr::opts_chunk$set(fig.path = "figs/", dev = "png", dpi = 144)
+options(bitmapType = "cairo")  # prevents device issues on macOS
+
+```
+
+### **1.1) Missingness audit (what, where, how much)**
+
+```{r mi-missing-audit}
+# High-level profiles
+skimr::skim(subset_data)
+
+# Variable-wise % missing
+naniar::miss_var_summary(subset_data)
+
+# Patterns
+naniar::gg_miss_var(subset_data, facet = encounter_type)
+naniar::gg_miss_upset(subset_data, nsets = 6)
+
+# Types & potential issues
+visdat::vis_dat(subset_data, warn_large_data = FALSE)
+```
+
+## **2) Pre‑imputation data prep (consistent types & predictors)**
+
+**Why**: MI models need coherent types; using exactly the same covariates as the propensity score models avoids model drift.
+
+```{r mi-prep}
+# Ensure intended factor/numeric types for imputation
+# --- Inspect current encounter_type -------------------------------------------
+cat("encounter_type class:", paste(class(subset_data$encounter_type), collapse = ", "), "\n")
+print(utils::head(unique(subset_data$encounter_type), 20))
+
+# Keep a raw copy for debugging if mapping fails
+encounter_type_raw <- subset_data$encounter_type
+
+# --- Helpers ------------------------------------------------------------------
+
+# Map various encodings to strict 0/1 integer (for sex + 0/1 indicators)
+to01 <- function(x) {
+  if (is.logical(x)) return(as.integer(x))
+  if (is.factor(x))  x <- as.character(x)
+
+  out <- rep(NA_integer_, length(x))
+  xs  <- suppressWarnings(as.numeric(x))
+  is_num <- !is.na(xs)
+
+  # numeric 0/1
+  out[is_num & xs %in% c(0, 1)] <- as.integer(xs[is_num & xs %in% c(0, 1)])
+
+  # character encodings (case/space-insensitive)
+  if (any(!is_num)) {
+    s <- trimws(tolower(as.character(x[!is_num])))
+    out[!is_num][s %in% c("0","no","false","female","f")] <- 0L
+    out[!is_num][s %in% c("1","yes","true","male","m")]   <- 1L
+  }
+  out
+}
+
+# Robust normalizer for encounter_type:
+# - accepts numeric 2/3, digit-strings "2", "3", "2 - ED", etc.
+# - accepts common synonyms with word-boundary protection
+normalize_encounter_type <- function(x) {
+  # to character once
+  s_chr <- trimws(tolower(as.character(x)))
+
+  # try to pull numeric code from any digits present
+  num_from_text <- suppressWarnings(as.numeric(gsub("[^0-9]+", "", s_chr)))
+
+  lab <- rep(NA_character_, length(s_chr))
+
+  # numeric path
+  lab[!is.na(num_from_text) & num_from_text == 2] <- "Emergency"
+  lab[!is.na(num_from_text) & num_from_text == 3] <- "Inpatient"
+
+  # synonym path (fill only still-NA)
+  is_na <- is.na(lab)
+
+  # Emergency synonyms: "emergency", "emerg", exact "ed", "a&e", "emergency dept"
+  is_em <- grepl("\\bemerg(?:ency)?\\b", s_chr) |
+           grepl("(^|[^a-z])ed([^a-z]|$)", s_chr) |
+           grepl("\\ba&e\\b", s_chr) |
+           grepl("\\bemergency\\s+dept\\b", s_chr)
+
+  # Inpatient synonyms: "inpatient", "inpt", "inpat", exact "ip"
+  is_ip <- grepl("\\binpatient\\b", s_chr) |
+           grepl("\\binpt\\b",     s_chr) |
+           grepl("\\binpat\\b",    s_chr) |
+           grepl("(^|[^a-z])ip([^a-z]|$)", s_chr)
+
+  lab[is_na & is_em] <- "Emergency"
+  lab[is_na & is_ip] <- "Inpatient"
+
+  factor(lab, levels = c("Emergency", "Inpatient"))
+}
+
+# --- Coerce analysis types (including encounter_type) --------------------------
+subset_data <- subset_data |>
+  mutate(
+    sex               = factor(to01(sex), levels = c(0L, 1L), labels = c("Female", "Male")),
+    race_ethnicity    = if (is.factor(race_ethnicity)) race_ethnicity else factor(race_ethnicity),
+    location          = if (is.factor(location))       location       else factor(location),
+    encounter_type    = normalize_encounter_type(encounter_type),
+    has_abg           = to01(has_abg),
+    has_vbg           = to01(has_vbg),
+    hypercap_on_abg   = to01(hypercap_on_abg),
+    hypercap_on_vbg   = to01(hypercap_on_vbg)
+  )
+
+# immediately drop unused levels and assert exactly two levels in the observed data used by MI
+subset_data$encounter_type <- droplevels(subset_data$encounter_type)
+stopifnot(nlevels(subset_data$encounter_type) == 2L)
+
+# --- Diagnostics for encounter_type -------------------------------------------
+tab_enc <- table(subset_data$encounter_type, useNA = "ifany")
+print(tab_enc)
+
+if (sum(!is.na(subset_data$encounter_type)) == 0) {
+  message("All encounter_type values are NA after normalization. Showing top raw values:")
+  s_raw <- trimws(tolower(as.character(encounter_type_raw)))
+  print(utils::head(sort(table(s_raw), decreasing = TRUE), 20))
+  stop("normalize_encounter_type produced all NA; extend the synonym map to your raw values.")
+}
+
+# Must have at least one observed value and (after droplevels) exactly two levels
+stopifnot(sum(!is.na(subset_data$encounter_type)) > 0)
+stopifnot(nlevels(droplevels(subset_data$encounter_type)) == 2)
+
+# --- Covariate set for GBM propensity models ----------------------------------
+covars_gbm <- c(
+  "age_at_encounter","sex","race_ethnicity","curr_bmi",
+  "copd","asthma","osa","chf","acute_nmd","phtn","ckd","dm",
+  "location","encounter_type","temp_new","sbp","dbp","hr","spo2",
+  "sodium","serum_cr","serum_hco3","serum_cl","serum_lac","serum_k",
+  "wbc","plt","bnp","serum_phos","serum_ca"
+)
+
+# Verify presence
+missing_covars <- setdiff(covars_gbm, names(subset_data))
+if (length(missing_covars)) {
+  warning("These covariates are missing from subset_data: ",
+          paste(missing_covars, collapse = ", "))
+} else {
+  message("All GBM covariates present.")
+}
+```
+
+## **3) Imputation model specification (MICE)**
+
+### **3.1) Predictor matrix & methods. Run MICE (moderate settings for scale)**
+
+```{r mi-exec}
+# --- variables for GBM propensity (kept identical to main analysis) ---
+# ---- MICE setup (Option A: include PaCO2 for ABG + keep VBG CO2/O2Sat) ----
+library(mice)
+library(dplyr)
+
+# --- variables for GBM propensity (kept identical to main analysis) ---
+covars_gbm <- c(
+  "age_at_encounter","sex","race_ethnicity","curr_bmi",
+  "copd","asthma","osa","chf","acute_nmd","phtn","ckd","dm",
+  "location","encounter_type","temp_new","sbp","dbp","hr","spo2",
+  "sodium","serum_cr","serum_hco3","serum_cl","serum_lac","serum_k",
+  "wbc","plt","bnp","serum_phos","serum_ca"
+)
+
+# --- add analysis targets and CO2 measures explicitly -------------------------
+co2_vars <- c("paco2", "vbg_co2", "vbg_o2sat")
+
+mi_vars <- unique(c(
+  covars_gbm,
+  "has_abg","has_vbg",                                  # treatments (NOT imputed)
+  "imv_proc","niv_proc","death_60d","hypercap_resp_failure",  # outcomes (NOT imputed)
+  co2_vars
+))
+
+mi_df <- subset_data[, mi_vars, drop = FALSE]
+
+# Make binary comorbids factors so "logreg" is used (and stays binary)
+bin_covars <- c("copd","asthma","osa","chf","acute_nmd","phtn","ckd","dm")
+mi_df[bin_covars] <- lapply(mi_df[bin_covars], function(z) {
+  if (is.factor(z)) return(droplevels(z))
+  zz <- suppressWarnings(as.integer(z))
+  factor(zz, levels = c(0L,1L), labels = c("0","1"))
+})
+
+# Force CO2 variables to be numeric BEFORE we convert any leftover characters to factor
+coerce_num <- function(x) suppressWarnings(as.numeric(as.character(x)))
+for (nm in intersect(co2_vars, names(mi_df))) mi_df[[nm]] <- coerce_num(mi_df[[nm]])
+
+# For MICE: convert any remaining characters → factors (after CO2 numeric coercion)
+mi_df <- dplyr::mutate(mi_df, across(where(is.character), ~ factor(.x)))
+
+# --- methods & predictor matrix aligned to *mi_df* -----------------------------
+meth <- mice::make.method(mi_df)
+
+is_fac      <- vapply(mi_df, is.factor,  logical(1))
+is_num      <- vapply(mi_df, is.numeric, logical(1))
+is_bin_fac  <- vapply(mi_df, function(x) is.factor(x)  && nlevels(x) == 2, logical(1))
+is_multicat <- vapply(mi_df, function(x) is.factor(x)  && nlevels(x) >  2, logical(1))
+
+# robust defaults
+meth[is_num]      <- "pmm"      # numerics: predictive mean matching
+meth[is_multicat] <- "polyreg"  # unordered multicategory
+meth[is_bin_fac]  <- "logreg"   # binary factors: logistic regression
+
+# never impute treatments or outcomes
+no_imp <- c("has_abg","has_vbg","imv_proc","niv_proc","death_60d","hypercap_resp_failure")
+meth[intersect(names(meth), no_imp)] <- ""
+
+# predictor matrix; forbid treatments/outcomes as predictors
+pred <- mice::quickpred(mi_df, mincor = 0.05, minpuc = 0.25)
+pred[, intersect(colnames(pred), no_imp)] <- 0
+pred[intersect(rownames(pred), no_imp), ] <- 0
+
+# integrity checks
+stopifnot(
+  ncol(pred) == ncol(mi_df),
+  nrow(pred) == ncol(mi_df),
+  length(meth) == ncol(mi_df),
+  identical(names(meth), colnames(mi_df))
+)
+
+# --- run MICE ------------------------------------------------------------------
+set.seed(20251206)
+imp <- mice::mice(
+  data            = mi_df,
+  m               = 5,
+  maxit           = 10,
+  predictorMatrix = pred,
+  method          = meth,
+  printFlag       = TRUE,
+  seed            = 20251206
+)
+saveRDS(imp, file = "mi_abg_vbg_mids.rds")
+
+# quick sanity: these must exist and be numeric in completed data
+dlist <- mice::complete(imp, action = "all")
+stopifnot(all(c("paco2","vbg_co2") %in% names(dlist[[1]])))
+stopifnot(is.numeric(dlist[[1]]$paco2), is.numeric(dlist[[1]]$vbg_co2))
+```
+
+### **3.3) Convergence & plausibility checks**
+
+```{r mi-diagnostics}
+imp <- readRDS("mi_abg_vbg_mids.rds")
+
+plot(imp)                                    # trace plots
+densityplot(imp, ~ curr_bmi + serum_hco3)    # imputed vs observed
+stripplot(imp,  ~ spo2 + hr)                 # distribution overlap
+
+md.pattern(complete(imp, "long"))            # pattern after MI - should be complete
+```
+
+## **4) Refit propensity models within each imputation**
+
+We keep the GBM recipe close to the non‑MI run, but with lighter CV (cv.folds = 3) and slightly fewer trees.
+
+### **4.1) ABG propensity (has_abg)**
+
+```{r}
+# Create completed datasets
+dlist <- mice::complete(imp, action = "all")
+
+# Fit ABG propensity weights in each imputation
+fit_abg_one <- function(d) {
+  w <- weightit(
+    has_abg ~ .,
+    data   = d[, c("has_abg", covars_gbm)],
+    method = "gbm",
+    estimand    = "ATE",
+    include.obj = TRUE,
+    n.trees     = 1000,
+    interaction.depth = 3,
+    shrinkage   = 0.02,
+    bag.fraction= 0.6,
+    cv.folds    = 2,
+    stop.method = "es.mean"
+  )
+  # stabilise + two‑sided Winsorization
+  ww <- w$weights; ww <- ww/mean(ww)
+  cut <- stats::quantile(ww, c(.01,.99), na.rm = TRUE)
+  ww <- pmin(pmax(ww, cut[1]), cut[2]); ww <- ww/mean(ww)
+  w$weights <- ww
+  w
+}
+
+with_progress({
+  p <- progressor(along = seq_along(dlist))
+  W_abg_list <- future_lapply(
+    X = seq_along(dlist),
+    FUN = function(i) {
+      p(sprintf("Fitting ABG on imputation %d", i))
+      set.seed(20251206 + i)           # per‑imputation seed for reproducibility
+      fit_abg_one(dlist[[i]])
+    },
+    future.seed = TRUE                  # reproducible RNG across workers
+  )
+})
+
+saveRDS(W_abg_list, "mi_W_abg_list.rds")
+```
+
+### **4.2) Balance diagnostics across imputations**
+
+```{r}
+# Vars you intended to use (from your earlier code)
+vars0 <- covars_gbm
+
+# Which factors collapse to 1 level AFTER complete-case filtering (per imputation, per arm)?
+find_offenders_post_cc <- function(d, treat_var, vars) {
+  keep <- c(treat_var, vars)
+  dd   <- d[, keep, drop = FALSE]
+  dd   <- dd[stats::complete.cases(dd), , drop = FALSE]  # mimic cobalt's CC
+  if (!nrow(dd)) return(character(0))
+
+  # factor with <2 levels in either arm
+  bad <- vapply(vars, function(v) {
+    x <- dd[[v]]
+    if (!is.factor(x)) return(FALSE)
+    by_arm <- tapply(x, dd[[treat_var]], function(z) nlevels(droplevels(z)))
+    any(is.na(by_arm)) || any(by_arm < 2)
+  }, logical(1))
+
+  names(bad)[bad]
+}
+
+off_by_imp <- lapply(dlist, find_offenders_post_cc, treat_var = "has_abg", vars = vars0)
+to_drop    <- Reduce(union, off_by_imp)  # union across imputations
+message("Offenders (post CC): ", if (length(to_drop)) paste(to_drop, collapse = ", ") else "<none>")
+
+# Keep only variables that never collapse post-CC
+vars_keep2 <- setdiff(vars0, to_drop)
+stopifnot(length(vars_keep2) > 0)
+```
+
+```{r mi-balance-abg}
+# Build a variable set that has ≥2 levels in *every* imputation (prevents contrasts errors)
+vary_ok <- function(z) {
+  nz <- z[!is.na(z)]
+  if (is.factor(nz)) nlevels(droplevels(nz)) > 1 else dplyr::n_distinct(nz) > 1
+}
+vars_keep <- Reduce(intersect, lapply(dlist, function(d) {
+  keep <- vapply(d[, covars_gbm, drop = FALSE], vary_ok, logical(1))
+  names(keep)[keep]
+}))
+
+# Long data for cobalt with weights and imputation id
+make_long_for_cobalt <- function(dlist, W_list, treat_var, covars) {
+  stopifnot(length(dlist) == length(W_list))
+  do.call(rbind, lapply(seq_along(dlist), function(i) {
+    di <- dlist[[i]][, c(treat_var, covars), drop = FALSE]
+    di$.imp <- i
+    di$.w   <- W_list[[i]]$weights
+    di
+  }))
+}
+dlong_abg <- make_long_for_cobalt(dlist, W_abg_list, "has_abg", vars_keep)
+
+# removes empty levels introduced by the per‑imputation slicing and prevents spurious contrast errors.
+dlong_abg <- droplevels(dlong_abg)
+
+# Final guard: drop any factor that is 1‑level in the long frame (should be none after vars_keep)
+one_level_factors <- names(Filter(function(x) is.factor(x) && nlevels(droplevels(x)) < 2,
+                                 dlong_abg[vars_keep]))
+if (length(one_level_factors)) {
+  message("Dropping 1‑level factors in long data: ", paste(one_level_factors, collapse = ", "))
+  vars_keep <- setdiff(vars_keep, one_level_factors)
+}
+
+# Balance with imputation identifiers
+fml_abg <- reformulate(termlabels = vars_keep, response = "has_abg")
+bal_abg <- cobalt::bal.tab(
+  fml_abg,
+  data        = dlong_abg,
+  weights     = dlong_abg$.w,
+  imp         = dlong_abg$.imp,      # vector of imputation IDs
+  estimand    = "ATE",
+  un          = TRUE,
+  m.threshold = 0.1
+)
+
+# Optional plot
+cobalt::love.plot(
+  bal_abg,
+  var.order    = "unadjusted",
+  thresholds   = c(m = .1),
+  sample.names = c("Raw", "IPW"),
+  abs          = TRUE
+)
+```
+
+### **4.3) VBG propensity (has_vbg) — mirror of 4.1**
+
+```{r mi-propensity-vbg}
+fit_vbg_one <- function(d) {
+  w <- weightit(
+    has_vbg ~ .,
+    data   = d[, c("has_vbg", covars_gbm)],
+    method = "gbm",
+    estimand    = "ATE",
+    include.obj = TRUE,
+    n.trees     = 2000,
+    interaction.depth = 3,
+    shrinkage   = 0.01,
+    bag.fraction= 0.6,
+    cv.folds    = 3,
+    stop.method = "es.mean"
+  )
+  ww <- w$weights; ww <- ww/mean(ww); cut <- stats::quantile(ww, c(.01,.99), na.rm=TRUE)
+  ww <- pmin(pmax(ww, cut[1]), cut[2]); ww <- ww/mean(ww)
+  w$weights <- ww
+  w
+}
+
+with_progress({
+  p <- progressor(along = seq_along(dlist))
+  W_vbg_list <- future_lapply(
+    X = seq_along(dlist),
+    FUN = function(i) {
+      p(sprintf("Fitting VBG on imputation %d", i))
+      set.seed(30251206 + i)
+      fit_vbg_one(dlist[[i]])
+    },
+    future.seed = TRUE
+  )
+})
+
+saveRDS(W_vbg_list, "mi_W_vbg_list.rds")
+```
+
+### 4.4) VBG Balance
+
+```{r mi-balance-vbg}
+# --- VBG: balance across imputations (parallel to ABG) ------------------------
+
+# Preconditions: dlist (m completed data sets), W_vbg_list (weights per imputation),
+#                covars_gbm (covariate set). If W_vbg_list not in memory, load it.
+if (!exists("W_vbg_list", inherits = TRUE)) {
+  W_vbg_list <- readRDS("mi_W_vbg_list.rds")
+}
+
+# Helper(s) if not already defined above
+if (!exists("vary_ok", inherits = TRUE)) {
+  vary_ok <- function(z) {
+    nz <- z[!is.na(z)]
+    if (is.factor(nz)) nlevels(droplevels(nz)) > 1 else dplyr::n_distinct(nz) > 1
+  }
+}
+if (!exists("make_long_for_cobalt", inherits = TRUE)) {
+  make_long_for_cobalt <- function(dlist, W_list, treat_var, covars) {
+    stopifnot(length(dlist) == length(W_list))
+    do.call(rbind, lapply(seq_along(dlist), function(i) {
+      di <- dlist[[i]][, c(treat_var, covars), drop = FALSE]
+      di$.imp <- i
+      di$.w   <- W_list[[i]]$weights
+      di
+    }))
+  }
+}
+
+# 1) Keep only covariates that vary (≥2 levels for factors) in every imputation
+vars_keep_vbg <- Reduce(intersect, lapply(dlist, function(d) {
+  keep <- vapply(d[, covars_gbm, drop = FALSE], vary_ok, logical(1))
+  names(keep)[keep]
+}))
+
+# 2) Long data (stack imputations), attach weights and imputation id
+dlong_vbg <- make_long_for_cobalt(dlist, W_vbg_list, "has_vbg", vars_keep_vbg)
+dlong_vbg <- droplevels(dlong_vbg)  # remove empty factor levels from stacking
+
+# 3) Final guard: drop any factor that is 1-level in the stacked frame
+one_level_factors_vbg <- names(Filter(function(x) is.factor(x) && nlevels(x) < 2,
+                                      dlong_vbg[vars_keep_vbg]))
+if (length(one_level_factors_vbg)) {
+  message("Dropping 1-level factors in long VBG data: ",
+          paste(one_level_factors_vbg, collapse = ", "))
+  vars_keep_vbg <- setdiff(vars_keep_vbg, one_level_factors_vbg)
+}
+
+# 4) Balance with imputation identifiers
+fml_vbg <- reformulate(termlabels = vars_keep_vbg, response = "has_vbg")
+
+bal_vbg <- cobalt::bal.tab(
+  fml_vbg,
+  data        = dlong_vbg,
+  weights     = dlong_vbg$.w,
+  imp         = dlong_vbg$.imp,   # vector of imputation IDs
+  estimand    = "ATE",
+  un          = TRUE,
+  m.threshold = 0.1
+)
+
+# 5) Optional Love plot
+cobalt::love.plot(
+  bal_vbg,
+  var.order    = "unadjusted",
+  thresholds   = c(m = .1),
+  sample.names = c("Raw", "IPW"),
+  abs          = TRUE
+)
+```
+
+## **5) Weighted outcome models within each imputation + pooling**
+
+Pool via Rubin’s rules using mitools::MIcombine. Extract the coefficient and its variance for the treatment effect from each imputation.
+
+### **5.1) Helper: fit + extract log‑OR and SE from svyglm**
+
+```{r mi-pool-helpers}
+# --- Robust coefficient extraction from svyglm (handles factor-coded terms) ---
+coef_var_from_svy <- function(fit, treat_name) {
+  cn <- names(coef(fit))
+  idx <- match(treat_name, cn)
+  if (is.na(idx)) {
+    # handle factor encodings like has_abg1, has_abgYes, etc.
+    pat <- paste0("^", gsub("([\\W])", "\\\\$1", treat_name), "(1|Yes|TRUE|Male)?$")
+    idx <- grep(pat, cn, perl = TRUE)[1]
+  }
+  if (is.na(idx)) stop("Treatment coefficient '", treat_name, "' not found in model.")
+  b <- unname(coef(fit)[idx])
+  V <- unname(vcov(fit)[idx, idx, drop = TRUE])
+  if (!is.finite(b) || !is.finite(V)) stop("Non-finite estimate/variance.")
+  list(b = b, V = V)
+}
+
+# --- Fit one weighted GLM on one completed dataset and extract log-OR + var ---
+fit_and_extract <- function(data, weights, formula, treat_name) {
+  stopifnot(length(weights) == nrow(data))
+  # basic guards: variation in outcome and treatment
+  yname <- all.vars(formula)[1L]
+  if (dplyr::n_distinct(na.omit(data[[yname]]))   < 2L) stop("Outcome '", yname, "' has one level.")
+  if (dplyr::n_distinct(na.omit(data[[treat_name]])) < 2L) stop("Treatment '", treat_name, "' has one level.")
+  # design + fit
+  data$w <- as.numeric(weights)
+  des <- survey::svydesign(ids = ~1, weights = ~w, data = data)
+  fit <- survey::svyglm(formula, design = des, family = quasibinomial())
+  cv  <- coef_var_from_svy(fit, treat_name)
+  list(coef = cv$b, vcov = cv$V)
+}
+
+# --- Pool across imputations; tolerate failures; report how many used ----------
+pool_logOR <- function(est_list, term) {
+  ok <- vapply(est_list, function(x) is.list(x) && is.finite(x$coef) && is.finite(x$vcov), logical(1))
+  est_list <- est_list[ok]
+  m_ok  <- length(est_list); m_tot <- length(ok)
+  if (m_ok == 0L) {
+    return(data.frame(term = term, logOR = NA_real_, SE = NA_real_, OR = NA_real_,
+                      LCL = NA_real_, UCL = NA_real_, m_used = 0L, m_total = m_tot))
+  }
+  results   <- lapply(est_list, function(x) setNames(c(x$coef), term))
+  variances <- lapply(est_list, function(x) { M <- matrix(x$vcov, 1, 1); dimnames(M) <- list(term, term); M })
+  pooled <- mitools::MIcombine(results = results, variances = variances)
+  est <- as.numeric(coef(pooled))
+  se  <- sqrt(diag(pooled$variance))
+  data.frame(term = term, logOR = est, SE = se, OR = exp(est),
+             LCL = exp(est - 1.96 * se), UCL = exp(est + 1.96 * se),
+             m_used = m_ok, m_total = m_tot, row.names = NULL)
+}
+```
+
+### **5.2) ABG: outcomes = IMV, NIV, Death(60d), Hypercapnic RF**
+
+```{r mi-abg-outcomes}
+# Parallel ABG outcome fits and pooling across imputations
+library(future.apply)
+library(progressr)
+
+# Inputs assumed present: imp, W_abg_list
+stopifnot(exists("imp"), exists("W_abg_list"))
+dlist <- mice::complete(imp, action = "all")
+stopifnot(length(W_abg_list) == length(dlist))
+
+outcomes_abg <- list(
+  imv_proc = imv_proc ~ has_abg,
+  niv_proc = niv_proc ~ has_abg,
+  death    = death_60d ~ has_abg,
+  hcrf     = hypercap_resp_failure ~ has_abg
+)
+
+old_plan <- future::plan()
+workers  <- max(1L, as.integer(future::availableCores() - 1L))
+future::plan(multisession, workers = workers)
+on.exit(future::plan(old_plan), add = TRUE)
+
+abg_results <- NULL
+progressr::with_progress({
+  p <- progressr::progressor(steps = length(outcomes_abg) * length(dlist))
+  abg_results <- lapply(names(outcomes_abg), function(nm) {
+    fml <- outcomes_abg[[nm]]
+    ests <- future.apply::future_lapply(
+      X = seq_along(dlist),
+      FUN = function(i) {
+        p(sprintf("ABG: %s (imp %d)", nm, i))
+        tryCatch(
+          fit_and_extract(dlist[[i]], W_abg_list[[i]]$weights, fml, "has_abg"),
+          error = function(e) NULL
+        )
+      },
+      future.seed = TRUE
+    )
+    out <- pool_logOR(ests, term = "has_abg")
+    out$outcome <- nm
+    out
+  })
+})
+abg_results <- dplyr::bind_rows(abg_results)[, c("outcome","term","logOR","SE","OR","LCL","UCL","m_used","m_total")]
+abg_results
+```
+
+### **5.3) Repeat for VBG**
+
+```{r mi-vbg-outcomes}
+# --- VBG outcomes --------------------------------------------------------------
+# Parallel VBG outcome fits and pooling across imputations
+library(future.apply)
+library(progressr)
+
+# Inputs assumed present: imp, W_vbg_list
+stopifnot(exists("imp"), exists("W_vbg_list"))
+dlist <- mice::complete(imp, action = "all")
+stopifnot(length(W_vbg_list) == length(dlist))
+
+outcomes_vbg <- list(
+  imv_proc = imv_proc ~ has_vbg,
+  niv_proc = niv_proc ~ has_vbg,
+  death    = death_60d ~ has_vbg,
+  hcrf     = hypercap_resp_failure ~ has_vbg
+)
+
+old_plan <- future::plan()
+workers  <- max(1L, as.integer(future::availableCores() - 1L))
+future::plan(multisession, workers = workers)
+on.exit(future::plan(old_plan), add = TRUE)
+
+vbg_results <- NULL
+progressr::with_progress({
+  p <- progressr::progressor(steps = length(outcomes_vbg) * length(dlist))
+  vbg_results <- lapply(names(outcomes_vbg), function(nm) {
+    fml <- outcomes_vbg[[nm]]
+    ests <- future.apply::future_lapply(
+      X = seq_along(dlist),
+      FUN = function(i) {
+        p(sprintf("VBG: %s (imp %d)", nm, i))
+        tryCatch(
+          fit_and_extract(dlist[[i]], W_vbg_list[[i]]$weights, fml, "has_vbg"),
+          error = function(e) NULL
+        )
+      },
+      future.seed = TRUE
+    )
+    out <- pool_logOR(ests, term = "has_vbg")
+    out$outcome <- nm
+    out
+  })
+})
+vbg_results <- dplyr::bind_rows(vbg_results)[, c("outcome","term","logOR","SE","OR","LCL","UCL","m_used","m_total")]
+vbg_results
+```
+
+## **6) Explainability on one representative imputation**
+
+To manage runtime, compute SHAP/PDP/ALE on the first imputed dataset and its fitted GBM(s).
+
+```{r}
+# --- Fast SHAP for WeightIt GBM fits (works with MI) -------------------------
+
+library(fastshap)
+library(shapviz)
+# --- Robust SHAP backend for WeightIt GBM fits --------------------------------
+# Works whether gbm$var.names are raw feature names (factors ok) or one‑hot names
+# like "sexFemale", "race_ethnicity3", "encounter_typeInpatient", etc.
+
+# Map of factor levels observed at training time (for raw‑factor path)
+.train_levels <- function(df) {
+  f <- vapply(df, is.factor, logical(1))
+  lapply(df[f], levels)
+}
+
+# Align factors in 'df' to a stored levels map (keeps order, avoids new/ambiguous levels)
+.align_to_levels <- function(df, levels_map) {
+  out <- as.data.frame(df, stringsAsFactors = FALSE)
+  for (nm in intersect(names(levels_map), names(out))) {
+    out[[nm]] <- factor(as.character(out[[nm]]), levels = levels_map[[nm]])
+  }
+  out
+}
+
+# Build a design with columns EXACTLY equal to 'varnames' by deriving indicators
+# from the raw covariate frame 'X_raw'. This covers one‑hot names like "sexMale",
+# "race_ethnicity2", "encounter_typeInpatient", etc.
+.design_from_varnames <- function(X_raw, varnames) {
+  X_raw <- as.data.frame(X_raw, stringsAsFactors = FALSE)
+
+  # normalize odd classes; turn characters into factors (stable level strings)
+  for (nm in names(X_raw)) {
+    if (inherits(X_raw[[nm]], "haven_labelled")) X_raw[[nm]] <- as.character(X_raw[[nm]])
+  }
+  X_raw[] <- lapply(X_raw, function(z) if (is.character(z)) factor(z) else z)
+
+  cn    <- colnames(X_raw)
+  cn_s  <- make.names(cn)
+  vn    <- varnames
+  vn_s  <- make.names(vn)
+
+  out <- matrix(NA_real_, nrow = nrow(X_raw), ncol = length(vn))
+  colnames(out) <- vn
+
+  for (i in seq_along(vn)) {
+    v   <- vn[i]
+    v_s <- vn_s[i]
+
+    # Case 1: exact column present
+    if (v %in% cn) {
+      z <- X_raw[[v]]
+      out[, i] <- if (is.factor(z)) as.numeric(z) else as.numeric(z)
+      next
+    }
+
+    # Case 2: derive dummy = 1{ base == level } from a base column prefix
+    # Find the longest raw name that is a prefix of v (sanitized comparison)
+    cand <- which(startsWith(v_s, cn_s))
+    if (length(cand)) {
+      j <- cand[which.max(nchar(cn_s[cand]))]
+      base <- cn[j]
+      # level is the suffix of v after the base name (unsanitized; preserves case)
+      lev  <- sub(paste0("^", base), "", v)
+      x    <- X_raw[[base]]
+
+      # Compare as strings to match labels like "Female", "Inpatient", "0","1",...
+      x_chr <- if (is.factor(x)) as.character(x) else as.character(x)
+      out[, i] <- as.numeric(x_chr == lev)
+      out[is.na(x_chr), i] <- NA_real_
+      next
+    }
+
+    stop("Cannot construct design column for '", v, "'. ",
+         "No matching base variable found in raw covariates.")
+  }
+
+  as.data.frame(out, check.names = FALSE)
+}
+
+# Unified backend:
+#  - If gbm$var.names are raw feature names, pass factors directly (aligning levels).
+#  - Otherwise, build a one‑hot design with those exact column names and predict on it.
+make_shap_backend_any <- function(W) {
+  gbm_fit <- if (!is.null(W$obj)) W$obj else if (!is.null(W$info$obj)) W$info$obj else W$info$model.obj
+  stopifnot(inherits(gbm_fit, "gbm"))
+  best_tree <- if (!is.null(W$info$best.tree)) W$info$best.tree else gbm_fit$n.trees
+
+  X_raw <- as.data.frame(W$covs, stringsAsFactors = FALSE)
+  # tidy odd classes; keep factors where they already are
+  for (nm in names(X_raw)) {
+    if (inherits(X_raw[[nm]], "haven_labelled")) X_raw[[nm]] <- as.character(X_raw[[nm]])
+  }
+  X_raw[] <- lapply(X_raw, function(z) if (is.character(z)) factor(z) else z)
+  X_raw[] <- lapply(X_raw, function(z) if (is.factor(z)) droplevels(z) else z)
+
+  vn <- gbm_fit$var.names
+  levels_map <- .train_levels(X_raw)
+
+  # Path A: raw‑factor training (names line up directly)
+  if (all(vn %in% colnames(X_raw))) {
+    X_use <- .align_to_levels(X_raw[, vn, drop = FALSE], levels_map)
+    pred  <- function(object, newdata) {
+      nd <- .align_to_levels(newdata, levels_map)
+      predict(object, newdata = nd, n.trees = best_tree, type = "link")
+    }
+    return(list(gbm = gbm_fit, X = X_use, pred = pred, best_tree = best_tree))
+  }
+
+  # Path B: dummy‑coded training (var.names are one‑hot)
+  X_use <- .design_from_varnames(X_raw, vn)
+  pred  <- function(object, newdata) {
+    # If caller already supplies the dummy design, use it; else derive it
+    if (all(vn %in% colnames(newdata))) {
+      nd <- as.data.frame(newdata)[, vn, drop = FALSE]
+    } else {
+      nd <- .design_from_varnames(newdata, vn)
+    }
+    predict(object, newdata = nd, n.trees = best_tree, type = "link")
+  }
+
+  list(gbm = gbm_fit, X = X_use, pred = pred, best_tree = best_tree)
+}
+```
+
+```{r}
+# Choose one completed dataset’s fit
+# Device safety (once per doc)
+if (!dir.exists("figs")) dir.create("figs", recursive = TRUE, showWarnings = FALSE)
+knitr::opts_chunk$set(fig.path = "figs/", dev = "ragg_png", dpi = 200)
+
+# --- ABG explainability on imputation 1 ---------------------------------------
+stopifnot(exists("W_abg_list"), length(W_abg_list) >= 1)
+W1_abg <- W_abg_list[[1]]
+
+bk_abg <- make_shap_backend_any(W1_abg)
+
+# Fast SHAP on link (logit) scale
+S_abg <- fastshap::explain(
+  object       = bk_abg$gbm,
+  X            = bk_abg$X,
+  pred_wrapper = bk_abg$pred,
+  nsim         = 32,
+  adjust       = TRUE
+)
+
+# shapviz object (X can be data.frame or matrix; keep column names)
+sv_abg <- shapviz::shapviz(as.matrix(S_abg), X = as.matrix(bk_abg$X))
+
+# Bar importance (top 30)
+ord_abg   <- order(colMeans(abs(S_abg), na.rm = TRUE), decreasing = TRUE)
+topK_abg  <- colnames(S_abg)[ord_abg[1:min(30, ncol(S_abg))]]
+p_bar_abg <- shapviz::sv_importance(sv_abg, kind = "bar", v = topK_abg)
+p_bar_abg
+
+# Dependence: top feature colored by second (add smoother explicitly)
+pri_abg <- topK_abg[1]
+aux_abg <- topK_abg[2]
+# dependence: replace loess with GAM to avoid near-singularity
+p_dep_abg <- shapviz::sv_dependence(sv_abg, v = pri_abg, color_var = aux_abg) +
+  ggplot2::geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs", k = 4),
+                       se = FALSE, linewidth = 0.5)
+
+# for importance: don't set label = element_blank() on shapviz's plot; let it draw defaults
+# if you see "aesthetics dropped: colour", avoid mapping `colour` in a stat
+p_dep_abg
+```
+
+```{r}
+# Repeat for VBG
+
+# --- VBG explainability on imputation 1 ---------------------------------------
+stopifnot(exists("W_vbg_list"), length(W_vbg_list) >= 1)
+W1_vbg <- W_vbg_list[[1]]
+
+bk_vbg <- make_shap_backend_any(W1_vbg)
+
+S_vbg <- fastshap::explain(
+  object       = bk_vbg$gbm,
+  X            = bk_vbg$X,
+  pred_wrapper = bk_vbg$pred,
+  nsim         = 32,
+  adjust       = TRUE
+)
+
+sv_vbg <- shapviz::shapviz(as.matrix(S_vbg), X = as.matrix(bk_vbg$X))
+
+ord_vbg   <- order(colMeans(abs(S_vbg), na.rm = TRUE), decreasing = TRUE)
+topK_vbg  <- colnames(S_vbg)[ord_vbg[1:min(30, ncol(S_vbg))]]
+p_bar_vbg <- shapviz::sv_importance(sv_vbg, kind = "bar", v = topK_vbg)
+p_bar_vbg
+
+pri_vbg <- topK_vbg[1]
+aux_vbg <- topK_vbg[2]
+p_dep_vbg <- shapviz::sv_dependence(sv_vbg, v = pri_vbg, color_var = aux_vbg) +
+  ggplot2::geom_smooth(se = FALSE, linewidth = 0.5, method = "loess", formula = y ~ x)
+p_dep_vbg
+```
+
+## 7) Imputed, Weighted, **Three‑level PCO₂ categories (ABG weighted; VBG weighted)**
+
+```{r}
+#| label: ipw-three-level-pco2-mi-abg-vbg
+#| message: false
+#| warning: false
+#| fig-width: 9
+#| fig-height: 5
+
+library(dplyr)
+library(purrr)
+library(survey)
+library(mitools)
+library(broom)
+library(ggplot2)
+library(scales)
+
+# Expect: 'imp', 'W_abg_list', 'W_vbg_list' already available
+if (!exists("dlist")) dlist <- mice::complete(imp, action = "all")
+stopifnot(length(W_abg_list) == length(dlist),
+          length(W_vbg_list) == length(dlist))
+
+# Pool a set of survey GLMs across imputations for terms with a common prefix
+pool_terms <- function(fits, term_prefix = "^co2_cat") {
+  fits <- Filter(Negate(is.null), fits)
+  stopifnot(length(fits) >= 2L)
+  common <- Reduce(intersect, lapply(fits, ~ names(coef(.x))))
+  keep   <- grep(term_prefix, common, value = TRUE)
+  map_dfr(keep, function(term) {
+    # lists of named scalars and 1x1 variance matrices for MIcombine()
+    results   <- lapply(fits, function(f) setNames(c(coef(f)[term]), term))
+    variances <- lapply(fits, function(f) {
+      V <- vcov(f); m <- matrix(V[term, term], 1, 1); dimnames(m) <- list(term, term); m
+    })
+    pooled <- MIcombine(results = results, variances = variances)
+    est <- as.numeric(coef(pooled)); se <- sqrt(diag(pooled$variance))
+    tibble(term  = term,
+           logOR = est,
+           SE    = se,
+           OR    = exp(est),
+           LCL   = exp(est - 1.96 * se),
+           UCL   = exp(est + 1.96 * se))
+  })
+}
+```
+
+### ABG, imputed, weighted, 3-level outcome
+
+```{r}
+
+# --- ABG: outcome ~ CO2 category, IPW by W_abg_list ---------------------------
+# Assumes: dlist, W_abg_list, make_co2_cat(), use_fixed_abg, co2_breaks_abg,
+#          co2_labels_abg, ref_label_abg are defined.
+
+# ABG: outcome ~ CO2 category with IPW
+fit_abg_cat <- function(outcome_var,
+                        use_fixed_abg   = exists("co2_breaks_abg", inherits = TRUE),
+                        co2_labels_abg  = c("Below normal","Normal","Above normal")) {
+  fits <- vector("list", length(dlist))
+  for (i in seq_along(dlist)) {
+    d <- dlist[[i]]
+    if (!("paco2" %in% names(d))) { fits[[i]] <- NULL; next }
+    d$paco2 <- suppressWarnings(as.numeric(d$paco2))
+
+    g <- with(d, has_abg == 1 & is.finite(paco2))
+    if (!any(g)) { fits[[i]] <- NULL; next }
+
+    d2 <- d[g, , drop = FALSE]
+    d2$co2_cat <- make_co2_cat(
+      d2$paco2,
+      fixed_breaks = if (use_fixed_abg) co2_breaks_abg else NULL,
+      labels       = co2_labels_abg
+    )
+    d2$co2_cat <- stats::relevel(base::droplevels(d2$co2_cat), ref = "Normal")
+    if (nlevels(d2$co2_cat) < 2L) { fits[[i]] <- NULL; next }
+
+    w <- W_abg_list[[i]]$weights[g]
+    d2$w <- w
+    des  <- svydesign(ids = ~1, weights = ~w, data = d2)
+    fml  <- stats::as.formula(paste0(outcome_var, " ~ co2_cat"))
+    fit  <- try(svyglm(fml, design = des, family = quasibinomial()), silent = TRUE)
+    fits[[i]] <- if (!inherits(fit, "try-error")) fit else NULL
+  }
+  pool_terms(fits, term_prefix = "^co2_cat")
+}
+```
+
+### VBG, imputed, weighted, 3-level
+
+```{r}
+# Assumes: dlist, W_vbg_list, make_co2_cat(), use_fixed_vbg, co2_breaks_vbg,
+#          co2_labels_vbg, ref_label_vbg are defined.
+
+
+# VBG: outcome ~ CO2 category with IPW
+fit_vbg_cat <- function(outcome_var,
+                        use_fixed_vbg  = exists("co2_breaks_vbg", inherits = TRUE),
+                        co2_labels_vbg = c("Below normal","Normal","Above normal")) {
+  fits <- vector("list", length(dlist))
+  for (i in seq_along(dlist)) {
+    d <- dlist[[i]]
+    if (!("vbg_co2" %in% names(d))) { fits[[i]] <- NULL; next }
+    d$vbg_co2 <- suppressWarnings(as.numeric(d$vbg_co2))
+
+    g <- with(d, has_vbg == 1 & is.finite(vbg_co2))
+    if (!any(g)) { fits[[i]] <- NULL; next }
+
+    d2 <- d[g, , drop = FALSE]
+    d2$co2_cat <- make_co2_cat(
+      d2$vbg_co2,
+      fixed_breaks = if (use_fixed_vbg) co2_breaks_vbg else NULL,
+      labels       = co2_labels_vbg
+    )
+    d2$co2_cat <- stats::relevel(base::droplevels(d2$co2_cat), ref = "Normal")
+    if (nlevels(d2$co2_cat) < 2L) { fits[[i]] <- NULL; next }
+
+    w <- W_vbg_list[[i]]$weights[g]
+    d2$w <- w
+    des  <- svydesign(ids = ~1, weights = ~w, data = d2)
+    fml  <- stats::as.formula(paste0(outcome_var, " ~ co2_cat"))
+    fit  <- try(svyglm(fml, design = des, family = quasibinomial()), silent = TRUE)
+    fits[[i]] <- if (!inherits(fit, "try-error")) fit else NULL
+  }
+  pool_terms(fits, term_prefix = "^co2_cat")
+}
+```
+
+```{r}
+
+# Run and combine
+outs <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
+
+abg_df <- map_dfr(outs, ~ mutate(fit_abg_cat(.x), outcome = .x, group = "ABG"))
+vbg_df <- map_dfr(outs, ~ mutate(fit_vbg_cat(.x), outcome = .x, group = "VBG"))
+
+or_df <- bind_rows(abg_df, vbg_df) |>
+  mutate(exposure = sub("^co2_cat", "", term),
+         exposure = factor(exposure, levels = c("Below normal","Above normal")),
+         outcome  = factor(outcome, levels = outs),
+         group    = factor(group,   levels = c("ABG","VBG")))
+
+# Plot
+ggplot(or_df,
+       aes(x = outcome, y = OR, ymin = LCL, ymax = UCL,
+           color = group, shape = exposure)) +
+  geom_pointrange(position = position_dodge(width = 0.7), size = 0.6) +
+  geom_hline(yintercept = 1, linetype = "dashed", colour = "grey40") +
+  scale_y_log10(breaks = c(0.25, 0.5, 1, 2, 4, 8, 16), limits = c(0.25, 16),
+                labels = number_format(accuracy = 0.01)) +
+  coord_flip() +
+  labs(title = "Weighted Odds Ratios of Outcomes by PCO\u2082 Category (ABG, VBG)",
+       x = "Outcome", y = "Odds Ratio (log scale, 95% CI)",
+       color = "Blood-gas type", shape = "PCO\u2082 category") +
+  theme_minimal(base_size = 10)
+```
+
+```{r}
+# After re-running MICE:
+dlist <- mice::complete(imp, action = "all")
+
+# 1) must exist and be numeric
+stopifnot(all(c("paco2","vbg_co2") %in% names(dlist[[1]])))
+stopifnot(is.numeric(dlist[[1]]$paco2), is.numeric(dlist[[1]]$vbg_co2))
+
+# 2) confirm at least two PaCO2 levels among those with ABG in each imputation
+table(vapply(dlist, function(d) dplyr::n_distinct(d$paco2[d$has_abg == 1 & is.finite(d$paco2)]), integer(1)) > 1)
+
+# 3) smoke test the ABG category fit on the first imputation
+tmp <- fit_abg_cat("imv_proc"); print(tmp)
+```
+
+### Visualization
+
+```{r}
+#| label: ipw-three-level-pco2-mi-abg-vbg
+#| message: false
+#| warning: false
+#| fig-width: 9
+#| fig-height: 5
+
+library(dplyr)
+library(survey)
+library(ggplot2)
+library(scales)
+library(purrr)
+library(mitools)
+
+# --- Pre-flight ----------------------------------------------------------------
+if (!exists("dlist")) dlist <- mice::complete(imp, action = "all")
+stopifnot(length(W_abg_list) == length(dlist),
+          length(W_vbg_list) == length(dlist))
+
+# --- Pooling helper for term-level log-ORs across imputations ------------------
+pool_terms <- function(fits, term_prefix) {
+  fits <- Filter(Negate(is.null), fits)
+  if (length(fits) == 0L) {
+    return(tibble::tibble(term=character(), logOR=numeric(), SE=numeric(),
+                          OR=numeric(), LCL=numeric(), UCL=numeric()))
+  }
+  terms_list <- lapply(fits, function(f) names(stats::coef(f)))
+  common     <- Reduce(intersect, terms_list)
+  keep_terms <- grep(paste0("^", term_prefix), common, value = TRUE)
+  if (!length(keep_terms)) {
+    return(tibble::tibble(term=character(), logOR=numeric(), SE=numeric(),
+                          OR=numeric(), LCL=numeric(), UCL=numeric()))
+  }
+
+  purrr::map_dfr(keep_terms, function(term) {
+    res <- lapply(fits, function(f) setNames(c(stats::coef(f)[term]), term))
+    vars <- lapply(fits, function(f) {
+      V <- stats::vcov(f)
+      m <- matrix(V[term, term], 1, 1); dimnames(m) <- list(term, term); m
+    })
+    pooled <- mitools::MIcombine(results = res, variances = vars)
+    est <- as.numeric(stats::coef(pooled))
+    se  <- sqrt(diag(pooled$variance))
+    tibble::tibble(
+      term  = term,
+      logOR = est,
+      SE    = se,
+      OR    = exp(est),
+      LCL   = exp(est - 1.96 * se),
+      UCL   = exp(est + 1.96 * se)
+    )
+  })
+}
+
+# --- Per-group runner over imputations (ABG/VBG) -------------------------------
+fit_cat_group <- function(group = c("ABG", "VBG"), outcome) {
+  group <- match.arg(group)
+  fits <- vector("list", length(dlist))
+
+  for (i in seq_along(dlist)) {
+    d <- dlist[[i]]
+
+    if (group == "ABG") {
+      if (!("paco2" %in% names(d))) { fits[[i]] <- NULL; next }
+      d$paco2 <- suppressWarnings(as.numeric(d$paco2))
+      g <- with(d, has_abg == 1 & is.finite(paco2))
+      if (!any(g)) { fits[[i]] <- NULL; next }
+      d2 <- d[g, , drop = FALSE]
+      d2$co2_cat <- make_co2_cat(
+        d2$paco2,
+        normal = if (exists("co2_breaks_abg", inherits = TRUE)) co2_breaks_abg else c(35, 45)
+      )
+      w <- W_abg_list[[i]]$weights[g]
+
+    } else {
+      if (!("vbg_co2" %in% names(d))) { fits[[i]] <- NULL; next }
+      d$vbg_co2 <- suppressWarnings(as.numeric(d$vbg_co2))
+      g <- with(d, has_vbg == 1 & is.finite(vbg_co2))
+      if (!any(g)) { fits[[i]] <- NULL; next }
+      d2 <- d[g, , drop = FALSE]
+      d2$co2_cat <- make_co2_cat(
+        d2$vbg_co2,
+        normal = if (exists("co2_breaks_vbg", inherits = TRUE)) co2_breaks_vbg else c(35, 45)
+      )
+      w <- W_vbg_list[[i]]$weights[g]
+    }
+
+    d2$co2_cat <- stats::relevel(base::droplevels(d2$co2_cat), ref = "Normal")
+    if (nlevels(d2$co2_cat) < 2) { fits[[i]] <- NULL; next }
+
+    d2$w <- w
+    des  <- survey::svydesign(ids = ~1, weights = ~w, data = d2)
+    fml  <- stats::as.formula(paste0(outcome, " ~ co2_cat"))
+    fit  <- try(survey::svyglm(fml, design = des, family = quasibinomial()), silent = TRUE)
+    fits[[i]] <- if (!inherits(fit, "try-error")) fit else NULL
+  }
+
+  out <- pool_terms(fits, term_prefix = "co2_cat")
+  out
+}
+
+# --- Run & plot ----------------------------------------------------------------
+outs <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
+
+abg_df <- purrr::map_dfr(outs, ~ dplyr::mutate(fit_cat_group("ABG", .x),
+                                               outcome = .x, group = "ABG"))
+vbg_df <- purrr::map_dfr(outs, ~ dplyr::mutate(fit_cat_group("VBG", .x),
+                                               outcome = .x, group = "VBG"))
+combined <- dplyr::bind_rows(abg_df, vbg_df)
+
+# decode "co2_cat<level>" → exposure
+combined <- combined |>
+  dplyr::mutate(exposure = gsub("^co2_cat", "", term),
+                exposure = factor(exposure, levels = c("Below normal","Above normal")),
+                outcome  = factor(outcome,
+                                  levels = c("imv_proc","niv_proc","death_60d","hypercap_resp_failure"),
+                                  labels = c("IMV","NIV","Death (60d)","Hypercapnic RF")),
+                group    = factor(group, levels = c("ABG","VBG")))
+
+ggplot(
+  combined,
+  aes(x = outcome, y = OR, ymin = LCL, ymax = UCL, color = group, shape = exposure)
+) +
+  geom_pointrange(position = position_dodge(width = 0.7), size = 0.6) +
+  geom_hline(yintercept = 1, linetype = "dashed", colour = "grey40") +
+  scale_y_log10(
+    breaks = c(0.25, 0.5, 1, 2, 4, 8, 16),
+    limits = c(0.25, 16),
+    labels = scales::number_format(accuracy = 0.01)
+  ) +
+  coord_flip() +
+  labs(
+    title = "MI‑pooled, IPW odds ratios by PCO₂ category (ABG vs VBG)",
+    x = "Outcome",
+    y = "Odds Ratio (log scale, 95% CI)",
+    color = "Blood‑gas type",
+    shape = "PCO₂ category"
+  ) +
+  theme_minimal(base_size = 10)
+```
+
+## 8) Imputed, Weighted **spline PCO₂ (ABG weighted; VBG weighted)**
+
+### ABG, imputed, weighted, spline outcome
+
+```{r}
+# --- ABG: outcome ~ CO2 category, IPW by W_abg_list -------------------------
+fit_abg_cat <- function(outcome_var) {
+  fits <- vector("list", length(dlist))
+  for (i in seq_along(dlist)) {
+    d <- dlist[[i]]
+    g <- with(d, has_abg == 1 & is.finite(paco2))
+    if (!any(g)) { fits[[i]] <- NULL; next }
+
+    d2 <- d[g, , drop = FALSE]
+    d2$co2_cat <- make_co2_cat(
+      d2$paco2,
+      fixed_breaks = if (use_fixed_abg) co2_breaks_abg else NULL,
+      labels       = co2_labels_abg
+    )
+    d2$co2_cat <- stats::relevel(droplevels(d2$co2_cat), ref = ref_label_abg)
+    if (nlevels(d2$co2_cat) < 2) { fits[[i]] <- NULL; next }
+
+    w <- W_abg_list[[i]]$weights[g]
+    des <- survey::svydesign(ids = ~1, weights = ~w, data = d2)
+    fml <- stats::as.formula(sprintf("%s ~ co2_cat", outcome_var))
+    fits[[i]] <- survey::svyglm(fml, design = des, family = quasibinomial())
+  }
+  pool_terms(fits, term_pattern = "^co2_cat")
+}
+
+abg_cat_results <- dplyr::bind_rows(
+  dplyr::mutate(fit_abg_cat("imv_proc"),               outcome = "IMV"),
+  dplyr::mutate(fit_abg_cat("niv_proc"),               outcome = "NIV"),
+  dplyr::mutate(fit_abg_cat("death_60d"),              outcome = "Death60d"),
+  dplyr::mutate(fit_abg_cat("hypercap_resp_failure"),  outcome = "HCRF")
+) |> dplyr::relocate(outcome)
+abg_cat_results
+```
+
+### VBG, imputed, weighted, spline outcome
+
+```{r}
+# --- ABG: outcome ~ CO2 category, IPW by W_abg_list -------------------------
+fit_abg_cat <- function(outcome_var) {
+  fits <- vector("list", length(dlist))
+  for (i in seq_along(dlist)) {
+    d <- dlist[[i]]
+    g <- with(d, has_abg == 1 & is.finite(paco2))
+    if (!any(g)) { fits[[i]] <- NULL; next }
+
+    d2 <- d[g, , drop = FALSE]
+    d2$co2_cat <- make_co2_cat(
+      d2$paco2,
+      fixed_breaks = if (use_fixed_abg) co2_breaks_abg else NULL,
+      labels       = co2_labels_abg
+    )
+    d2$co2_cat <- stats::relevel(droplevels(d2$co2_cat), ref = ref_label_abg)
+    if (nlevels(d2$co2_cat) < 2) { fits[[i]] <- NULL; next }
+
+    w <- W_abg_list[[i]]$weights[g]
+    des <- survey::svydesign(ids = ~1, weights = ~w, data = d2)
+    fml <- stats::as.formula(sprintf("%s ~ co2_cat", outcome_var))
+    fits[[i]] <- survey::svyglm(fml, design = des, family = quasibinomial())
+  }
+  pool_terms(fits, term_pattern = "^co2_cat")
+}
+
+abg_cat_results <- dplyr::bind_rows(
+  dplyr::mutate(fit_abg_cat("imv_proc"),               outcome = "IMV"),
+  dplyr::mutate(fit_abg_cat("niv_proc"),               outcome = "NIV"),
+  dplyr::mutate(fit_abg_cat("death_60d"),              outcome = "Death60d"),
+  dplyr::mutate(fit_abg_cat("hypercap_resp_failure"),  outcome = "HCRF")
+) |> dplyr::relocate(outcome)
+abg_cat_results
+```
+
+### Visualization
+
+```{r}
+#| label: ipw-rcs-overlay-mi-abg-vbg
+#| message: false
+#| warning: false
+#| fig-width: 10
+#| fig-height: 8
+
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(splines)
+library(survey)
+library(purrr)
+
+if (!exists("dlist")) dlist <- mice::complete(imp, action = "all")
+stopifnot(length(W_abg_list) == length(dlist),
+          length(W_vbg_list) == length(dlist))
+
+# Predict link for svyglm; fallback to Xβ and delta method if predict() returns a vector
+predict_link_svyglm <- function(fit, newdata) {
+  pr <- try(stats::predict(fit, newdata = newdata, type = "link", se.fit = TRUE), silent = TRUE)
+  if (!inherits(pr, "try-error") && is.list(pr) && !is.null(pr$fit)) {
+    return(list(fit = as.numeric(pr$fit), se.fit = as.numeric(pr$se.fit)))
+  }
+  # manual: η = Xβ; Var(η) = X V X^T
+  X <- stats::model.matrix(stats::delete.response(stats::terms(fit)), newdata)
+  beta <- stats::coef(fit)
+  eta  <- drop(X %*% beta)
+  V    <- stats::vcov(fit)
+  se   <- sqrt(rowSums((X %*% V) * X))
+  list(fit = eta, se.fit = se)
+}
+
+# Pool predicted curves on the link scale, then transform with logistic
+pool_rcs_curve <- function(group = c("ABG","VBG"), outcome,
+                           df = 4, grid_n = 220, trim = c(0.02, 0.98)) {
+  group <- match.arg(group)
+
+  # global trimmed range for this group
+  co2_all <- unlist(lapply(seq_along(dlist), function(i) {
+    d <- dlist[[i]]
+    if (group == "ABG") as.numeric(d$paco2[d$has_abg == 1])
+    else as.numeric(d$vbg_co2[d$has_vbg == 1])
+  }), use.names = FALSE)
+  co2_all <- co2_all[is.finite(co2_all)]
+  stopifnot(length(co2_all) > 0)
+  rng  <- as.numeric(stats::quantile(co2_all, probs = trim, na.rm = TRUE))
+  if (!is.finite(rng[1]) || !is.finite(rng[2]) || rng[2] <= rng[1]) {
+    med <- stats::median(co2_all); rng <- c(med - 1, med + 1)
+  }
+  xseq <- seq(rng[1], rng[2], length.out = grid_n)
+
+  eta_list <- list()
+  var_list <- list()
+
+  for (i in seq_along(dlist)) {
+    d <- dlist[[i]]
+
+    if (group == "ABG") {
+      d$paco2 <- suppressWarnings(as.numeric(d$paco2))
+      g <- with(d, has_abg == 1 & is.finite(paco2))
+      if (!any(g)) next
+      d2 <- d[g, , drop = FALSE]
+      d2$co2 <- d2$paco2
+      w  <- W_abg_list[[i]]$weights[g]
+    } else {
+      d$vbg_co2 <- suppressWarnings(as.numeric(d$vbg_co2))
+      g <- with(d, has_vbg == 1 & is.finite(vbg_co2))
+      if (!any(g)) next
+      d2 <- d[g, , drop = FALSE]
+      d2$co2 <- d2$vbg_co2
+      w  <- W_vbg_list[[i]]$weights[g]
+    }
+
+    d2$w <- w
+    des  <- survey::svydesign(ids = ~1, weights = ~w, data = d2)
+    fml  <- stats::as.formula(paste0(outcome, " ~ splines::ns(co2, ", df, ")"))
+    fit  <- try(survey::svyglm(fml, design = des, family = quasibinomial()), silent = TRUE)
+    if (inherits(fit, "try-error")) next
+
+    newd <- data.frame(co2 = xseq)
+    pr   <- predict_link_svyglm(fit, newd)
+    eta_list[[length(eta_list) + 1L]] <- pr$fit
+    var_list[[length(var_list) + 1L]] <- pr$se.fit^2
+  }
+
+  m <- length(eta_list)
+  if (m == 0L) stop("No successful fits to pool for ", group, " / ", outcome)
+
+  ETA <- do.call(cbind, eta_list)   # ngrid × m
+  VAR <- do.call(cbind, var_list)   # ngrid × m
+
+  if (m == 1L) {
+    etaBar <- as.numeric(ETA)
+    Tvar   <- as.numeric(VAR)
+  } else {
+    etaBar <- rowMeans(ETA)
+    Wbar   <- rowMeans(VAR)
+    B      <- apply(ETA, 1, stats::var)
+    Tvar   <- Wbar + (1 + 1/m) * B
+  }
+  seBar <- sqrt(pmax(Tvar, 0))
+
+  tibble::tibble(
+    co2   = xseq,
+    yhat  = plogis(etaBar),
+    lower = plogis(etaBar - 1.96 * seBar),
+    upper = plogis(etaBar + 1.96 * seBar),
+    group = group
+  )
+}
+
+mk_curves <- function(outcome)
+  dplyr::bind_rows(
+    pool_rcs_curve("ABG", outcome, df = 4, grid_n = 220, trim = c(0.02, 0.98)),
+    pool_rcs_curve("VBG", outcome, df = 4, grid_n = 220, trim = c(0.02, 0.98))
+  )
+
+cur_imv   <- mk_curves("imv_proc")
+cur_niv   <- mk_curves("niv_proc")
+cur_death <- mk_curves("death_60d")
+cur_hcrf  <- mk_curves("hypercap_resp_failure")
+
+plt_gray <- function(dat, title) {
+  ggplot(dat, aes(x = co2, y = yhat, linetype = group)) +
+    geom_line(color = "black", linewidth = 1) +
+    geom_ribbon(aes(ymin = lower, ymax = upper, fill = group), alpha = 0.3, color = NA) +
+    scale_fill_manual(values = c("ABG" = "gray90", "VBG" = "gray20")) +
+    scale_linetype_manual(values = c("ABG" = "solid", "VBG" = "dashed")) +
+    scale_y_continuous(limits = c(0, 1),
+                       labels = scales::percent_format(accuracy = 1)) +
+    labs(title = title,
+         x = expression(CO[2]~"(mmHg)"),
+         y = "Predicted probability",
+         fill = "Group", linetype = "Group") +
+    theme_minimal(base_size = 10) +
+    theme(legend.position = "bottom")
+}
+
+(patchwork::wrap_plots(
+   plt_gray(cur_imv,   "IMV"),
+   plt_gray(cur_niv,   "NIV"),
+   plt_gray(cur_death, "Death (60d)"),
+   plt_gray(cur_hcrf,  "Hypercapnic RF"),
+   ncol = 2
+ ) +
+  plot_annotation(
+    title = expression(
+      paste("MI‑pooled, propensity‑weighted predicted probability: ABG vs VBG CO"[2],
+            " (restricted cubic splines, 2–98% range)")
+    )
+  ))
+```
+
+## **9) Save, export, and session info**
+
+```{r mi-save-exports}
+saveRDS(list(abg = abg_results, vbg = vbg_results), "mi_pooled_results.rds")
+```
+
+```{r mi-session}
+sessionInfo()
 ```
