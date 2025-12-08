@@ -17,6 +17,22 @@ format:
 fontsize: 11pt
 ---
 
+# TODO:
+
+-   [ ] **High missingness in the 3‑level CO₂ categories.** pco2_cat_abg missing in 1,630/2,491; pco2_cat_vbg in 1,778/2,491; pco2_cat_calc in 2,200/2,491. This drives the complete‑case drop noted above and will also affect any categorical CO₂ models. Evidence: skim table.  - evaluate if this is still a problem? **High apparent missingness in 3‑level CO₂ categories (complete‑case drop).** The three‑category sections trigger “Removed rows…” and show large sample loss. This is expected if many encounters lack PaCO₂/VBG CO₂ (and you haven’t switched those analyses over to MI or inverse‑probability‑of‑observation). Flag it in the text or impute/weight appropriately.  
+
+-   [ ] **ABG vs VBG IPW tuning asymmetry - these should be the same. Currently,** The VBG block shows different tuning prose (“changed trees and bag fraction”), implying divergence from the ABG settings; just document so readers don’t infer drift as a bias. Evidence: the VBG section text notes altered tuning. 
+
+-   [ ] **Shapley plots emit warnings. l**oess near‑singularities and pseudo‑inverse messages (often due to very flat x‑ranges or duplicated x). “aesthetics dropped: colour” (stat layer not using mapped colour), “label cannot be a \<element_blank\> object.”
+
+-   [ ] **Table 2. Baseline Characteristics by Hypercapnia Within ABG and VBG Cohorts** add a small panel with crude outcome rates (%) for each hypercapnia group to give readers intuitive anchoring.
+
+-   [ ] create ready Table 3. Primary Inverse-Probability–Weighted Associations Between CO₂ Category and Outcomes New compact table summarizing, for ABG and VBG separately: • Low vs normal, High vs normal CO₂ Odds ratios and 95% CIs for each of the four outcomes. Use MI‑pooled IPSW models as primary analysis; mention in footnote. This table is the quantitative core supporting “VBG is prognostically equivalent.”
+
+-   [ ] Create Cohort Flow Diagram \[New analysis/graphic needed\] • Show numbers at each step: • Starting suspected-hypercapnia cohort. • Exclusions (age \<18, missing key data, etc.). • Final analytic cohort. • Split into ABG only, VBG only, both, and neither. • This addresses STROBE’s “participants” and flow requirements.
+
+-   create a Missing Data / Imputation Summary (Supplement) One table summarizing missingness for key covariates and outcomes; briefly note MI settings and number of imputations. This can be simple counts/percentages drawn from the pre‑imputation dataset.
+
 # Data Pre-processing
 
 This code pulls in the master database (a STATA file) and does some initial cleaning - this will only need to be run once, and then the data can be accessed in the usual way.
@@ -261,7 +277,7 @@ Creating subset_data
 ```{r sample-subset-data}
 #| code-block-title: "Sample analysis subset"
 set.seed(123)
-rows_to_keep <- round(nrow(stata_data) * 0.25) #1 for real run
+rows_to_keep <- round(nrow(stata_data) * 1) #1 for real run
 subset_data <- stata_data[sample(nrow(stata_data), rows_to_keep), ]
 
 subset_data <- subset_data %>%
@@ -1814,18 +1830,41 @@ options(bitmapType = "cairo")  # prevents device issues on macOS
 ### 7.1 Missingness audit (what, where, how much)
 
 ```{r mi-missing-audit}
-# High-level profiles
-skimr::skim(subset_data)
+# --- Lean missingness audit (memory-safe) ---------------------------------
+library(dplyr)
+library(ggplot2)
+library(naniar)
 
-# Variable-wise % missing
-naniar::miss_var_summary(subset_data)
+# 1) Tabular summary (cheap)
+miss_tbl <- naniar::miss_var_summary(subset_data) %>% arrange(desc(pct_miss))
+print(utils::head(miss_tbl, 40))   # show top 40 in the report
 
-# Patterns
-naniar::gg_miss_var(subset_data, facet = encounter_type)
-naniar::gg_miss_upset(subset_data, nsets = 6)
+# 2) Bar plot of top-K missing variables (avoid long-form of all columns)
+K <- 40
+top_vars <- miss_tbl$variable[seq_len(min(K, nrow(miss_tbl)))]
+p_top <- ggplot(miss_tbl[miss_tbl$variable %in% top_vars, ],
+                aes(x = reorder(variable, pct_miss), y = pct_miss)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Top missing variables", x = NULL, y = "% missing") +
+  theme_minimal()
+print(p_top)
 
-# Types & potential issues
-visdat::vis_dat(subset_data, warn_large_data = FALSE)
+# 3) Small “type+NA heatmap” on a subsample (avoid full vis_dat on 500+ cols)
+#    limit to first M columns with highest missingness and sample rows
+M <- 60
+R <- min(1500, nrow(subset_data))
+cols_heat <- head(top_vars, M)
+rows_heat <- dplyr::slice_sample(subset_data, n = R)
+
+# Use naniar::vis_miss on a subset – much cheaper than vis_dat on all cols
+p_heat <- naniar::vis_miss(rows_heat[, cols_heat, drop = FALSE]) +
+  labs(title = sprintf("Missingness heatmap on %d rows × %d cols", R, length(cols_heat)))
+print(p_heat)
+
+# 4) Optional, but often heavy: UpSet of co-missingness – skip by default.
+# If you really want it, do it for top 6–10 variables only:
+# naniar::gg_miss_upset(subset_data[, head(top_vars, 8), drop = FALSE])
 ```
 
 ## 8) Pre‑imputation data prep (consistent types & predictors)
@@ -2952,6 +2991,8 @@ fit_abg_cat <- function(outcome_var) {
     if (!any(g)) { fits[[i]] <- NULL; next }
 
     d2 <- d[g, , drop = FALSE]
+    w <- W_abg_list[[i]]$weights[g]
+    w[!is.finite(w)] <- NA_real_
     d2$co2_cat <- make_co2_cat(
       d2$paco2,
       fixed_breaks = if (isTRUE(use_fixed_abg)) co2_breaks_abg else NULL,
@@ -2962,7 +3003,13 @@ fit_abg_cat <- function(outcome_var) {
     d2$co2_cat <- stats::relevel(d2$co2_cat, ref = ref_label_abg)
     if (nlevels(d2$co2_cat) < 2) { fits[[i]] <- NULL; next }
 
-    w <- W_abg_list[[i]]$weights[g]
+    ok <- is.finite(w)
+    if (!all(ok)) {
+      d2 <- d2[ok, , drop = FALSE]
+      w  <- w[ok]
+      if (nrow(d2) == 0L) { fits[[i]] <- NULL; next }
+    }
+
     des <- survey::svydesign(ids = ~1, weights = ~w, data = d2)
     fml <- stats::as.formula(sprintf("%s ~ co2_cat", outcome_var))
     fits[[i]] <- survey::svyglm(fml, design = des, family = quasibinomial())
@@ -2997,6 +3044,8 @@ fit_vbg_cat <- function(outcome_var) {
     if (!any(g)) { fits[[i]] <- NULL; next }
 
     d2 <- d[g, , drop = FALSE]
+    w <- W_vbg_list[[i]]$weights[g]
+    w[!is.finite(w)] <- NA_real_
     d2$co2_cat <- make_co2_cat(
       d2$vbg_co2,
       fixed_breaks = if (isTRUE(use_fixed_vbg)) co2_breaks_vbg else NULL,
@@ -3007,7 +3056,13 @@ fit_vbg_cat <- function(outcome_var) {
     d2$co2_cat <- stats::relevel(d2$co2_cat, ref = ref_label_vbg)
     if (nlevels(d2$co2_cat) < 2) { fits[[i]] <- NULL; next }
 
-    w <- W_vbg_list[[i]]$weights[g]
+    ok <- is.finite(w)
+    if (!all(ok)) {
+      d2 <- d2[ok, , drop = FALSE]
+      w  <- w[ok]
+      if (nrow(d2) == 0L) { fits[[i]] <- NULL; next }
+    }
+
     des <- survey::svydesign(ids = ~1, weights = ~w, data = d2)
     fml <- stats::as.formula(sprintf("%s ~ co2_cat", outcome_var))
     fits[[i]] <- survey::svyglm(fml, design = des, family = quasibinomial())
@@ -3117,6 +3172,7 @@ fit_cat_group <- function(group = c("ABG", "VBG"), outcome) {
         normal       = if (exists("co2_breaks_abg", inherits = TRUE)) co2_breaks_abg else c(35, 45)
       )
       w <- W_abg_list[[i]]$weights[g]
+      w[!is.finite(w)] <- NA_real_
 
     } else {
       if (!("vbg_co2" %in% names(d))) { fits[[i]] <- NULL; next }
@@ -3131,6 +3187,7 @@ fit_cat_group <- function(group = c("ABG", "VBG"), outcome) {
         normal       = if (exists("co2_breaks_vbg", inherits = TRUE)) co2_breaks_vbg else c(40, 50)
       )
       w <- W_vbg_list[[i]]$weights[g]
+      w[!is.finite(w)] <- NA_real_
     }
 
     ref_lab <- if (group == "ABG") {
@@ -3141,6 +3198,13 @@ fit_cat_group <- function(group = c("ABG", "VBG"), outcome) {
     if (!ref_lab %in% levels(d2$co2_cat)) ref_lab <- levels(d2$co2_cat)[1]
     d2$co2_cat <- stats::relevel(base::droplevels(d2$co2_cat), ref = ref_lab)
     if (nlevels(d2$co2_cat) < 2) { fits[[i]] <- NULL; next }
+
+    okw <- is.finite(w)
+    if (!all(okw)) {
+      d2 <- d2[okw, , drop = FALSE]
+      w  <- w[okw]
+      if (nrow(d2) == 0L) { fits[[i]] <- NULL; next }
+    }
 
     d2$w <- w
     des  <- survey::svydesign(ids = ~1, weights = ~w, data = d2)
@@ -3305,6 +3369,14 @@ pool_rcs_curve <- function(group = c("ABG","VBG"), outcome,
       d2 <- d[g, , drop = FALSE]
       d2$co2 <- d2$vbg_co2
       w  <- W_vbg_list[[i]]$weights[g]
+    }
+
+    # drop NA/inf weights
+    ok <- is.finite(w)
+    if (!all(ok)) {
+      d2 <- d2[ok, , drop = FALSE]
+      w  <- w[ok]
+      if (nrow(d2) == 0L) next
     }
 
     d2$w <- w
