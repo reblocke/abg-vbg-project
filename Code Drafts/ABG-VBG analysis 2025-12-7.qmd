@@ -17,6 +17,8 @@ format:
 fontsize: 11pt
 ---
 
+reminder: if rendering fails, consider deleting cached items: e.g. rm -rf ABG-VBG-analysis-2025-12-7_cache/
+
 # TODO:
 
 -   [ ] **High missingness in the 3‑level CO₂ categories.** pco2_cat_abg missing in 1,630/2,491; pco2_cat_vbg in 1,778/2,491; pco2_cat_calc in 2,200/2,491. This drives the complete‑case drop noted above and will also affect any categorical CO₂ models. Evidence: skim table.  - evaluate if this is still a problem? **High apparent missingness in 3‑level CO₂ categories (complete‑case drop).** The three‑category sections trigger “Removed rows…” and show large sample loss. This is expected if many encounters lack PaCO₂/VBG CO₂ (and you haven’t switched those analyses over to MI or inverse‑probability‑of‑observation). Flag it in the text or impute/weight appropriately.  
@@ -1005,8 +1007,7 @@ subset_data$encounter_type <- factor(subset_data$encounter_type,
 \*\*Removed lactate from weights, decreased n.trees, increased bagging
 
 ```{r ipw-abg-weighting}
-#| cache: true
-#| cache.extra: !expr digest::digest(list(dim(subset_data), covars_gbm, gbm_params))
+#| cache: false
 #| code-block-title: "ABG GBM propensity and weighting"
 # ── 1. fit GBM propensity model, ABG ───────────────────────────────────────────────
 set.seed(42)
@@ -2099,11 +2100,12 @@ stopifnot(is.numeric(dlist[[1]]$paco2), is.numeric(dlist[[1]]$vbg_co2))
 ```{r mi-diagnostics}
 imp <- readRDS("mi_abg_vbg_mids.rds")
 
-plot(imp)                                    # trace plots
-densityplot(imp, ~ curr_bmi + serum_hco3)    # imputed vs observed
-stripplot(imp,  ~ spo2 + hr)                 # distribution overlap
+# Throttle diagnostics to avoid memory blow-up
+plot(imp)                                             # trace plots (m=5)
+densityplot(imp, ~ curr_bmi + serum_hco3)             # imputed vs observed
+stripplot(imp,  ~ spo2 + hr, subset = .imp == 1)      # distribution overlap on first imp only
 
-md.pattern(complete(imp, "long"))            # pattern after MI - should be complete
+md.pattern(complete(imp, "long", include = FALSE))    # pattern after MI (compact)
 ```
 
 ## 10) Refit propensity models within each imputation
@@ -2144,6 +2146,11 @@ fit_abg_one <- function(d) {
 
 with_progress({
   p <- progressor(along = seq_along(dlist))
+
+  # Avoid hitting future.globals.maxSize with large dlist
+  options(future.globals.maxSize = +Inf)
+  if (utils::object.size(dlist) > 4e8) future::plan(sequential)
+
   W_abg_list <- future_lapply(
     X = seq_along(dlist),
     FUN = function(i) {
@@ -2269,8 +2276,6 @@ cobalt::love.plot(
 ### 10.3 VBG propensity (has_vbg)
 
 ```{r mi-propensity-vbg}
-#| cache: true
-#| cache.extra: !expr digest::digest(list(length(dlist), covars_gbm, gbm_params))
 fit_vbg_one <- function(d) {
   w <- weightit(
     formula_vbg,
@@ -2294,6 +2299,9 @@ fit_vbg_one <- function(d) {
 
 with_progress({
   p <- progressor(along = seq_along(dlist))
+  options(future.globals.maxSize = +Inf)
+  if (utils::object.size(dlist) > 4e8) future::plan(sequential)
+
   W_vbg_list <- future_lapply(
     X = seq_along(dlist),
     FUN = function(i) {
@@ -2328,31 +2336,13 @@ stopifnot(all(is.finite(wdx[, "ess"])), all(wdx[, "max"] < 50))
 ### 10.4 VBG balance
 
 ```{r mi-balance-vbg}
-# --- VBG: balance across imputations (parallel to ABG) ------------------------
+# --- VBG: balance across imputations (fast per-imputation SMD pooling) -------
 
-# Preconditions: dlist (m completed data sets), W_vbg_list (weights per imputation),
-#                covars_gbm (covariate set). If W_vbg_list not in memory, load it.
-if (!exists("W_vbg_list", inherits = TRUE)) {
-  W_vbg_list <- readRDS("mi_W_vbg_list.rds")
-}
+stopifnot(length(dlist) == length(W_vbg_list))
 
-# Helper(s) if not already defined above
-if (!exists("vary_ok", inherits = TRUE)) {
-  vary_ok <- function(z) {
-    nz <- z[!is.na(z)]
-    if (is.factor(nz)) nlevels(droplevels(nz)) > 1 else dplyr::n_distinct(nz) > 1
-  }
-}
-if (!exists("make_long_for_cobalt", inherits = TRUE)) {
-  make_long_for_cobalt <- function(dlist, W_list, treat_var, covars) {
-    stopifnot(length(dlist) == length(W_list))
-    do.call(rbind, lapply(seq_along(dlist), function(i) {
-      di <- dlist[[i]][, c(treat_var, covars), drop = FALSE]
-      di$.imp <- i
-      di$.w   <- W_list[[i]]$weights
-      di
-    }))
-  }
+vary_ok <- function(z) {
+  nz <- z[!is.na(z)]
+  if (is.factor(nz)) nlevels(droplevels(nz)) > 1 else dplyr::n_distinct(nz) > 1
 }
 
 # 1) Keep only covariates that vary (≥2 levels for factors) in every imputation
@@ -2361,42 +2351,69 @@ vars_keep_vbg <- Reduce(intersect, lapply(dlist, function(d) {
   names(keep)[keep]
 }))
 
-# 2) Long data (stack imputations), attach weights and imputation id
-dlong_vbg <- make_long_for_cobalt(dlist, W_vbg_list, "has_vbg", vars_keep_vbg)
-dlong_vbg <- droplevels(dlong_vbg)  # remove empty factor levels from stacking
-
-# 3) Final guard: drop any factor that is 1-level in the stacked frame
-one_level_factors_vbg <- names(Filter(function(x) is.factor(x) && nlevels(x) < 2,
-                                      dlong_vbg[vars_keep_vbg]))
-if (length(one_level_factors_vbg)) {
-  message("Dropping 1-level factors in long VBG data: ",
-          paste(one_level_factors_vbg, collapse = ", "))
-  vars_keep_vbg <- setdiff(vars_keep_vbg, one_level_factors_vbg)
+# 2) Build per-imputation lists; align weights and drop non-finite rows
+X_list_vbg <- vector("list", length(dlist))
+t_list_vbg <- vector("list", length(dlist))
+w_list_vbg <- vector("list", length(dlist))
+for (i in seq_along(dlist)) {
+  di <- dlist[[i]][, vars_keep_vbg, drop = FALSE]
+  ids <- rownames(di)
+  ti  <- dlist[[i]][["has_vbg"]]
+  wi  <- W_vbg_list[[i]]$weights
+  if (!is.null(names(wi))) {
+    wi <- wi[ids]
+  } else if (length(wi) != length(ids)) {
+    stop("Length mismatch weights vs data in VBG imp ", i)
+  }
+  keep <- is.finite(wi)
+  if (!all(keep)) {
+    di <- di[keep, , drop = FALSE]
+    ti <- ti[keep]
+    wi <- wi[keep]
+  }
+  X_list_vbg[[i]] <- di
+  t_list_vbg[[i]] <- ti
+  w_list_vbg[[i]] <- wi
 }
 
-# 4) Balance with imputation identifiers
-fml_vbg <- reformulate(termlabels = vars_keep_vbg, response = "has_vbg")
+# 3) Per-imputation SMDs (mean diffs only; quick path)
+one_imp_bal_vbg <- function(i) {
+  b <- cobalt::bal.tab(
+    x            = X_list_vbg[[i]],
+    treat        = t_list_vbg[[i]],
+    weights      = w_list_vbg[[i]],
+    stats        = "m",          # mean diffs only
+    s.d.denom    = "pooled",
+    quick        = TRUE,
+    int          = FALSE,
+    disp.v.ratio = FALSE,
+    disp.ks      = FALSE,
+    un           = TRUE
+  )
+  S <- as.data.frame(b$Balance)
+  setNames(S[["Diff.Adj"]], rownames(S))
+}
 
-bal_vbg <- cobalt::bal.tab(
-  fml_vbg,
-  data        = dlong_vbg,
-  weights     = dlong_vbg$.w,
-  imp         = dlong_vbg$.imp,   # vector of imputation IDs
-  estimand    = "ATE",
-  un          = TRUE,
-  m.threshold = 0.1,
-  binary      = "std",
-  s.d.denom   = "pooled"
+smd_list_vbg <- lapply(seq_along(dlist), one_imp_bal_vbg)
+all_rows_vbg <- Reduce(union, lapply(smd_list_vbg, names))
+SMD_mat_vbg  <- do.call(cbind, lapply(smd_list_vbg, function(v) v[match(all_rows_vbg, names(v))]))
+smd_abs_vbg  <- abs(SMD_mat_vbg)
+smd_pooled_vbg <- data.frame(
+  covariate = all_rows_vbg,
+  smd_med   = apply(smd_abs_vbg, 1, median, na.rm = TRUE),
+  smd_mean  = rowMeans(smd_abs_vbg, na.rm = TRUE),
+  smd_max   = apply(smd_abs_vbg, 1, max,    na.rm = TRUE),
+  stringsAsFactors = FALSE
 )
 
-# 5) Optional Love plot
-cobalt::love.plot(
-  bal_vbg,
-  var.order    = "unadjusted",
-  thresholds   = c(m = .1),
-  sample.names = c("Raw", "IPW"),
-  abs          = TRUE
-)
+# Optional quick plot of pooled median |SMD|
+ggplot(smd_pooled_vbg, aes(x = reorder(covariate, smd_med), y = smd_med)) +
+  geom_hline(yintercept = 0.1, linetype = 2, linewidth = 0.3) +
+  geom_point(size = 1) +
+  coord_flip() +
+  labs(x = NULL, y = "Median |SMD| across imputations (VBG)") +
+  theme_minimal(base_size = 10)
+message("VBG balance pooled from per-imputation SMDs; Love plot omitted to save memory.")
 ```
 
 ## 11) Weighted outcome models within each imputation + pooling
