@@ -76,7 +76,7 @@ required_pkgs <- c(
   "WeightIt", "broom", "cobalt", "codebookr", "dplyr", "flextable", "parallel",
   "gbm", "ggplot2", "gt", "gtsummary", "haven", "labelled", "scales",
   "modelsummary", "officer", "patchwork", "rms", "survey", "tibble", "lubridate",
-  "sensitivitymw", "here", "fs"
+  "sensitivitymw", "here", "fs", "dagitty", "ggdag"
 )
 
 # Install any missing packages (with dependencies)
@@ -106,6 +106,105 @@ knitr::opts_chunk$set(
 )
 # on macOS and some setups this prevents device headaches
 options(bitmapType = "cairo")
+```
+
+```{r setup-model-diagrams}
+#| code-block-title: "Model diagram helpers (Dagitty)"
+#| echo: false
+#| message: false
+#| warning: false
+library(dagitty)
+library(ggdag)
+
+# Toggle to show diagrams inline in the PDF
+show_model_diagrams <- TRUE
+
+model_diagram_dir <- fs::path(results_dir, "figs", "model-diagrams")
+fs::dir_create(model_diagram_dir)
+
+.make_safe_name <- function(x) {
+  x <- gsub("[^A-Za-z0-9]+", "-", x)
+  x <- gsub("(^-|-$)", "", x)
+  tolower(x)
+}
+
+.extract_model_vars <- function(fml) {
+  tt <- stats::terms(fml)
+  response <- all.vars(stats::update(fml, . ~ 1))
+  response <- if (length(response)) response[1] else NA_character_
+  term_labels <- attr(tt, "term.labels")
+  preds <- unique(unlist(lapply(term_labels, function(t) {
+    all.vars(stats::as.formula(paste("~", t)))
+  })))
+  preds <- setdiff(preds, response)
+  list(response = response, preds = preds)
+}
+
+.build_model_dag <- function(fml) {
+  vars <- .extract_model_vars(fml)
+  if (is.na(vars$response) || length(vars$preds) == 0L) return(NULL)
+  edges <- paste(sprintf("%s -> %s", vars$preds, vars$response), collapse = "\n  ")
+  dagitty::dagitty(sprintf("dag { %s }", edges))
+}
+
+save_model_diagram <- function(name, fml, width = NULL, height = NULL) {
+  dag <- .build_model_dag(fml)
+  if (is.null(dag)) return(NULL)
+
+  vars <- .extract_model_vars(fml)
+  n_pred  <- length(vars$preds)
+  n_nodes <- n_pred + 1L
+
+  label_size <- if (n_pred >= 35) 1.4 else if (n_pred >= 25) 1.8 else if (n_pred >= 15) 2.2 else 2.8
+  point_size <- if (n_pred >= 25) 2.0 else if (n_pred >= 15) 2.5 else 3.0
+
+  base_width  <- if (is.null(width)) 8 else width
+  base_height <- if (is.null(height)) 6 else height
+  width  <- max(base_width,  min(24, 0.4 * n_nodes + 4))
+  height <- max(base_height, min(16, 0.25 * n_nodes + 4))
+
+  layout <- if (n_pred >= 8) "sugiyama" else "nicely"
+  dag_data <- ggdag::tidy_dagitty(dag, layout = layout)$data
+
+  p <- ggplot2::ggplot(
+    dag_data,
+    ggplot2::aes(x = x, y = y, xend = xend, yend = yend)
+  ) +
+    ggdag::geom_dag_edges(color = "grey40") +
+    ggdag::geom_dag_point(size = point_size, color = "black") +
+    ggdag::geom_dag_text_repel(
+      ggplot2::aes(label = name),
+      size = label_size,
+      max.overlaps = Inf
+    ) +
+    ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = 0.15)) +
+    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = 0.15)) +
+    ggplot2::theme_void() +
+    ggplot2::labs(title = name) +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(size = 10, hjust = 0.5),
+      plot.margin = ggplot2::margin(10, 10, 10, 10)
+    )
+
+  file <- fs::path(model_diagram_dir, paste0(.make_safe_name(name), ".png"))
+  ggplot2::ggsave(file, p, width = width, height = height, dpi = 200)
+  if (isTRUE(show_model_diagrams)) print(p)
+  file
+}
+
+model_diagrams <- list()
+register_model_diagram <- function(name, fml, width = 8, height = 6) {
+  if (!is.null(model_diagrams[[name]])) return(invisible(model_diagrams[[name]]))
+  file <- save_model_diagram(name, fml, width = width, height = height)
+  model_diagrams[[name]] <<- file
+  invisible(file)
+}
+
+register_model_diagrams <- function(forms, width = 8, height = 6) {
+  purrr::iwalk(forms, function(fml, nm) {
+    register_model_diagram(nm, fml, width = width, height = height)
+  })
+}
 ```
 
 ```{r setup-shapviz, echo=FALSE}
@@ -267,6 +366,10 @@ gbm_params <- list(
 
 formula_abg      <- reformulate(covars_gbm, response = "has_abg")
 formula_vbg      <- reformulate(covars_gbm, response = "has_vbg")
+
+# Model diagrams: propensity models (GBM PS)
+register_model_diagram("PS model: ABG test (GBM)", formula_abg, width = 10, height = 7)
+register_model_diagram("PS model: VBG test (GBM)", formula_vbg, width = 10, height = 7)
 ```
 
 Creating subset_data
@@ -289,6 +392,10 @@ Generating Codebook for the Full Dataset
 
 ```{r codebook-export-full}
 #| code-block-title: "Generate codebook for full dataset"
+#| echo: false
+#| results: "hide"
+#| message: false
+#| warning: false
 message("Generating codebook for the dataset...")
 study_codebook <- codebookr::codebook(
   stata_data,
@@ -475,6 +582,10 @@ Generating Word Doc for Table 1A & 1B
 
 ```{r export-table1a-table1b-word}
 #| code-block-title: "Export Table 1A/1B to Word"
+#| echo: false
+#| results: "hide"
+#| message: false
+#| warning: false
 ft_table1A <- as_flex_table(table1A)
 ft_table1B <- as_flex_table(table1B)
 
@@ -544,7 +655,7 @@ tbl1
 
 ### 2.3 Table 2 (Hypercapnia within cohorts)
 
-```{r table2-hypercapnia-cohorts}
+```{r tbl2-hypercapnia-cohorts}
 #| code-block-title: "Table 2: Hypercapnia within cohorts"
 # Hypercapnia factors within measured cohorts
 subset_data <- subset_data %>%
@@ -596,16 +707,16 @@ tbl2_vbg <- subset_data %>%
   )
 
 # Merge side-by-side (no spanners; 4 requested columns)
-table2 <- gtsummary::tbl_merge(
+tbl2 <- gtsummary::tbl_merge(
   tbls = list(tbl2_abg, tbl2_vbg),
   tab_spanner = c(NULL, NULL)
 ) %>%
   gtsummary::modify_caption("**Table 2. Baseline summary by hypercapnia within ABG and VBG cohorts**")
 
-table2
+tbl2
 ```
 
-```{r table2-outcome-panel, echo=FALSE, message=FALSE, warning=FALSE}
+```{r tbl2-outcome-panel, echo=FALSE, message=FALSE, warning=FALSE}
 #| code-block-title: "Table 2a: crude outcomes by hypercapnia group"
 outcome_vars <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
 outcome_labels <- c(
@@ -670,15 +781,19 @@ gt::gt(rate_panel) %>%
 
 ### 2.4 Generating Word Docs for Table 1 and Table 2 (separate files)
 
-```{r export-table1-table2-word}
+```{r export-table1-tbl2-word}
 #| code-block-title: "Export Table 1 and Table 2 to separate Word files"
+#| echo: false
+#| results: "hide"
+#| message: false
+#| warning: false
 library(gtsummary)
 library(flextable)
 library(officer)
 
-# gtsummary objects (example: table1, table2)
+# gtsummary objects (example: tbl1, tbl2)
 ft1 <- as_flex_table(tbl1)
-ft2 <- as_flex_table(table2)
+ft2 <- as_flex_table(tbl2)
 
 doc1 <- read_docx() %>%
   body_add_par("Table 1. Baseline summary: Everyone, ABG status, and VBG status",
@@ -704,6 +819,14 @@ Unweighted, ABG Group: hypercapnia treated as a binary (yes/no) predictor
 
 ```{r abg-binary-logit-models}
 #| code-block-title: "Unweighted ABG binary logistic models"
+abg_bin_forms <- list(
+  "ABG binary: IMV ~ hypercapnia"       = imv_proc ~ hypercap_on_abg,
+  "ABG binary: NIV ~ hypercapnia"       = niv_proc ~ hypercap_on_abg,
+  "ABG binary: Death60d ~ hypercapnia"  = death_60d ~ hypercap_on_abg,
+  "ABG binary: HCRF ~ hypercapnia"      = hypercap_resp_failure ~ hypercap_on_abg
+)
+register_model_diagrams(abg_bin_forms)
+
 logit_intubated_abg <- glm(imv_proc ~ hypercap_on_abg, data = subset_data, family = binomial)
 summary(logit_intubated_abg)
 
@@ -759,6 +882,14 @@ Unweighted VBG Group
 
 ```{r vbg-binary-logit-models}
 #| code-block-title: "Unweighted VBG binary logistic models"
+vbg_bin_forms <- list(
+  "VBG binary: IMV ~ hypercapnia"       = imv_proc ~ hypercap_on_vbg,
+  "VBG binary: NIV ~ hypercapnia"       = niv_proc ~ hypercap_on_vbg,
+  "VBG binary: Death60d ~ hypercapnia"  = death_60d ~ hypercap_on_vbg,
+  "VBG binary: HCRF ~ hypercapnia"      = hypercap_resp_failure ~ hypercap_on_vbg
+)
+register_model_diagrams(vbg_bin_forms)
+
 logit_intubated_vbg <- glm(imv_proc ~ hypercap_on_vbg, data = subset_data, family = binomial)
 summary(logit_intubated_vbg)
 tidy(logit_intubated_vbg,
@@ -845,6 +976,18 @@ run_logit <- function(data, outcome, exposure, group_name) {
 }
 
 outcomes <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
+
+three_level_forms <- list(
+  "ABG 3-level: IMV ~ CO2 category"      = imv_proc ~ pco2_cat_abg,
+  "ABG 3-level: NIV ~ CO2 category"      = niv_proc ~ pco2_cat_abg,
+  "ABG 3-level: Death60d ~ CO2 category" = death_60d ~ pco2_cat_abg,
+  "ABG 3-level: HCRF ~ CO2 category"     = hypercap_resp_failure ~ pco2_cat_abg,
+  "VBG 3-level: IMV ~ CO2 category"      = imv_proc ~ pco2_cat_vbg,
+  "VBG 3-level: NIV ~ CO2 category"      = niv_proc ~ pco2_cat_vbg,
+  "VBG 3-level: Death60d ~ CO2 category" = death_60d ~ pco2_cat_vbg,
+  "VBG 3-level: HCRF ~ CO2 category"     = hypercap_resp_failure ~ pco2_cat_vbg
+)
+register_model_diagrams(three_level_forms)
 
 results <- bind_rows(
   lapply(outcomes, function(o) run_logit(subset_data, o, "pco2_cat_abg", "ABG")),
@@ -936,6 +1079,14 @@ options(datadist = "dd_abg")
 
 ```{r rcs-abg-unweighted-models}
 #| code-block-title: "Unweighted ABG restricted cubic spline models"
+abg_rcs_forms <- list(
+  "ABG RCS: IMV ~ PaCO2"      = imv_proc ~ rcs(paco2, 4),
+  "ABG RCS: NIV ~ PaCO2"      = niv_proc ~ rcs(paco2, 4),
+  "ABG RCS: Death60d ~ PaCO2" = death_60d ~ rcs(paco2, 4),
+  "ABG RCS: HCRF ~ PaCO2"     = hypercap_resp_failure ~ rcs(paco2, 4)
+)
+register_model_diagrams(abg_rcs_forms)
+
 fit_imv <- lrm(imv_proc ~ rcs(paco2, 4), data = subset_data_abg)
 pred_imv <- as.data.frame(Predict(fit_imv, paco2, fun = plogis))
 
@@ -996,6 +1147,14 @@ options(datadist = "dd_vbg")
 
 ```{r rcs-vbg-unweighted-models}
 #| code-block-title: "Unweighted VBG restricted cubic spline models"
+vbg_rcs_forms <- list(
+  "VBG RCS: IMV ~ CO2"      = imv_proc ~ rcs(vbg_co2, 4),
+  "VBG RCS: NIV ~ CO2"      = niv_proc ~ rcs(vbg_co2, 4),
+  "VBG RCS: Death60d ~ CO2" = death_60d ~ rcs(vbg_co2, 4),
+  "VBG RCS: HCRF ~ CO2"     = hypercap_resp_failure ~ rcs(vbg_co2, 4)
+)
+register_model_diagrams(vbg_rcs_forms)
+
 subset_data_vbg <- subset_data %>%
   select(vbg_co2, imv_proc, niv_proc, death_60d, hypercap_resp_failure) %>%
   filter(!is.na(vbg_co2) & complete.cases(.))
@@ -1126,6 +1285,14 @@ love.plot(
 design <- svydesign(ids = ~1, weights = ~w_abg, data = subset_data)
 
 # ── 5. outcome models (examples) ─────────────────────────────────────────────
+ipw_abg_bin_forms <- list(
+  "ABG IPW: IMV ~ has_abg"      = imv_proc ~ has_abg,
+  "ABG IPW: NIV ~ has_abg"      = niv_proc ~ has_abg,
+  "ABG IPW: Death60d ~ has_abg" = death_60d ~ has_abg,
+  "ABG IPW: HCRF ~ has_abg"     = hypercap_resp_failure ~ has_abg
+)
+register_model_diagrams(ipw_abg_bin_forms)
+
 fit_niv   <- svyglm(niv_proc   ~ has_abg, design = design, family = quasibinomial())
 fit_imv   <- svyglm(imv_proc   ~ has_abg, design = design, family = quasibinomial())
 fit_death <- svyglm(death_60d       ~ has_abg, design = design, family = quasibinomial())
@@ -1151,6 +1318,15 @@ lapply(list(IMV = fit_imv, NIV = fit_niv, Death = fit_death, ICD = fit_icd), fun
 # 
 # # done in the last block, so not needed
 # 
+
+# Model diagrams: IPW ABG spline models
+ipw_abg_rcs_forms <- list(
+  "ABG IPW RCS: IMV ~ PaCO2"      = imv_proc ~ rcs(paco2, 4),
+  "ABG IPW RCS: NIV ~ PaCO2"      = niv_proc ~ rcs(paco2, 4),
+  "ABG IPW RCS: Death60d ~ PaCO2" = death_60d ~ rcs(paco2, 4),
+  "ABG IPW RCS: HCRF ~ PaCO2"     = hypercap_resp_failure ~ rcs(paco2, 4)
+)
+register_model_diagrams(ipw_abg_rcs_forms)
 
 # ── 2. analysis sample: rows with a measured PaCO2 ────────────────────────────
 subset_data_abg <- subset_data %>%
@@ -1392,6 +1568,15 @@ fitfun <- function(formula)
     family = quasibinomial()
   )
 
+# Model diagrams: IPW VBG spline models
+ipw_vbg_rcs_forms <- list(
+  "VBG IPW RCS: IMV ~ CO2"      = imv_proc ~ rcs(vbg_co2, 4),
+  "VBG IPW RCS: NIV ~ CO2"      = niv_proc ~ rcs(vbg_co2, 4),
+  "VBG IPW RCS: Death60d ~ CO2" = death_60d ~ rcs(vbg_co2, 4),
+  "VBG IPW RCS: HCRF ~ CO2"     = hypercap_resp_failure ~ rcs(vbg_co2, 4)
+)
+register_model_diagrams(ipw_vbg_rcs_forms)
+
 fit_imv_vbg   <- fitfun(imv_proc              ~ rcs(vbg_co2, 4))
 fit_niv_vbg   <- fitfun(niv_proc              ~ rcs(vbg_co2, 4))
 fit_death_vbg <- fitfun(death_60d             ~ rcs(vbg_co2, 4))
@@ -1460,6 +1645,19 @@ Calculated VBG to ABG / Farkas
 #  IP‑weighted odds‑ratio plot (ABG, VBG, Calculated‑ABG)
 #    – exact analogue of the un‑weighted figure
 # ──────────────────────────────────────────────────────────────────────────────
+
+# Model diagrams: IPW binary hypercapnia models
+ipw_hyper_forms <- list(
+  "ABG IPW: IMV ~ hypercapnia"       = imv_proc ~ hypercap_on_abg,
+  "ABG IPW: NIV ~ hypercapnia"       = niv_proc ~ hypercap_on_abg,
+  "ABG IPW: Death60d ~ hypercapnia"  = death_60d ~ hypercap_on_abg,
+  "ABG IPW: HCRF ~ hypercapnia"      = hypercap_resp_failure ~ hypercap_on_abg,
+  "VBG IPW: IMV ~ hypercapnia"       = imv_proc ~ hypercap_on_vbg,
+  "VBG IPW: NIV ~ hypercapnia"       = niv_proc ~ hypercap_on_vbg,
+  "VBG IPW: Death60d ~ hypercapnia"  = death_60d ~ hypercap_on_vbg,
+  "VBG IPW: HCRF ~ hypercapnia"      = hypercap_resp_failure ~ hypercap_on_vbg
+)
+register_model_diagrams(ipw_hyper_forms)
 
 # weights already attached earlier:
 #   • w_abg         – propensity for *ABG*   (column in subset_data)
@@ -1607,6 +1805,18 @@ run_weighted_or <- function(data, outcome, cat_var, weight_var, group_name) {
 
 # ── 3. Run across outcomes & cohorts ────────────────────────────────────────
 outcomes <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
+
+ipw_three_level_forms <- list(
+  "ABG IPW 3-level: IMV ~ CO2 category"      = imv_proc ~ pco2_cat_abg,
+  "ABG IPW 3-level: NIV ~ CO2 category"      = niv_proc ~ pco2_cat_abg,
+  "ABG IPW 3-level: Death60d ~ CO2 category" = death_60d ~ pco2_cat_abg,
+  "ABG IPW 3-level: HCRF ~ CO2 category"     = hypercap_resp_failure ~ pco2_cat_abg,
+  "VBG IPW 3-level: IMV ~ CO2 category"      = imv_proc ~ pco2_cat_vbg,
+  "VBG IPW 3-level: NIV ~ CO2 category"      = niv_proc ~ pco2_cat_vbg,
+  "VBG IPW 3-level: Death60d ~ CO2 category" = death_60d ~ pco2_cat_vbg,
+  "VBG IPW 3-level: HCRF ~ CO2 category"     = hypercap_resp_failure ~ pco2_cat_vbg
+)
+register_model_diagrams(ipw_three_level_forms)
 
 combined_or_df <- bind_rows(
   lapply(outcomes, function(out)
@@ -2048,28 +2258,40 @@ miss_by_strata <- purrr::map_dfr(strata_vars, function(sv) {
     )
 })
 
-# Combine overall + strata for display (limit to top missing variables)
+# Combine overall + strata (save full table; display a compact PDF-friendly view)
 top_miss <- miss_overall |>
   arrange(desc(pct_missing_overall)) |>
-  slice_head(n = 25) |>
+  slice_head(n = 10) |>
   pull(variable)
 
-miss_panel <- miss_by_strata |>
-  filter(variable %in% top_miss) |>
+strata_show <- c("has_abg", "has_vbg", "imv_proc", "death_60d")
+
+miss_panel_full <- miss_by_strata |>
   left_join(miss_overall, by = "variable") |>
   arrange(desc(pct_missing_overall), stratum, level)
 
-gt::gt(miss_panel) |>
-  gt::tab_header(title = "Missingness by key strata (pre-imputation)") |>
-  gt::cols_label(
-    variable              = "Variable",
-    stratum               = "Stratum",
-    level                 = "Level",
-    pct_missing           = "% missing in level",
-    pct_missing_overall   = "% missing overall"
-  ) |>
-  gt::fmt_number(columns = c(pct_missing, pct_missing_overall), decimals = 1) |>
-  gt::fmt_missing(columns = gt::everything(), missing_text = "—")
+miss_panel_file <- results_path("missingness-by-strata.csv")
+utils::write.csv(miss_panel_full, miss_panel_file, row.names = FALSE)
+
+miss_panel_disp <- miss_panel_full |>
+  filter(variable %in% top_miss, stratum %in% strata_show)
+
+kableExtra::kbl(
+  miss_panel_disp,
+  format    = "latex",
+  booktabs  = TRUE,
+  longtable = FALSE,
+  digits    = 1,
+  col.names = c("Variable", "Stratum", "Level", "% missing in level", "% missing overall"),
+  caption   = paste0(
+    "Missingness by key strata (pre-imputation; top 10 variables; full table saved to ",
+    miss_panel_file, ")."
+  )
+) |>
+  kableExtra::kable_styling(
+    latex_options = c("hold_position", "scale_down"),
+    font_size     = 8
+  )
 
 # --- Drivers of missingness (logit I(NA) on observed covariates) --------------
 # Candidate predictors (observed covariates only)
@@ -2095,6 +2317,12 @@ model_results <- purrr::map_dfr(vars_to_model, function(v) {
   if (dplyr::n_distinct(df$miss) < 2L) return(NULL)
 
   fml <- as.formula(paste0("miss ~ ", paste(driver_covars, collapse = " + ")))
+  if (length(driver_covars) > 0L) {
+    diag_outcome <- paste0("missing_", make.names(v))
+    diag_terms <- paste0("`", driver_covars, "`", collapse = " + ")
+    diag_fml <- stats::as.formula(paste0(diag_outcome, " ~ ", diag_terms))
+    register_model_diagram(paste("Missingness model:", v), diag_fml, width = 10, height = 6)
+  }
   fit <- try(glm(fml, data = df, family = binomial()), silent = TRUE)
   if (inherits(fit, "try-error")) return(NULL)
 
@@ -2116,24 +2344,34 @@ model_results <- purrr::map_dfr(vars_to_model, function(v) {
 })
 
 if (nrow(model_results) > 0) {
-  model_results |>
-    mutate(variable = factor(variable, levels = vars_to_model)) |>
-    arrange(variable, desc(abs(log(OR)))) |>
-    head(80) |>  # keep table readable
-    gt::gt() |>
-    gt::tab_header(title = "Predictors of missingness (logit OR)") |>
-    gt::cols_label(
-      variable = "Target variable (missingness)",
-      term     = "Covariate",
-      OR       = "OR",
-      LCL      = "2.5%",
-      UCL      = "97.5%",
-      p.value  = "p"
-    ) |>
-    gt::fmt_number(columns = c(OR, LCL, UCL), decimals = 2) |>
-    gt::fmt_number(columns = p.value, decimals = 3) |>
-    gt::fmt_missing(columns = gt::everything(), missing_text = "—") |>
-    print()
+  model_results_file <- results_path("missingness-drivers.csv")
+  utils::write.csv(model_results, model_results_file, row.names = FALSE)
+
+  model_results_disp <- model_results |>
+    arrange(p.value) |>
+    slice_head(n = 50) |>
+    mutate(
+      OR  = round(OR, 2),
+      LCL = round(LCL, 2),
+      UCL = round(UCL, 2),
+      p.value = signif(p.value, 3)
+    )
+
+  kableExtra::kbl(
+    model_results_disp,
+    format    = "latex",
+    booktabs  = TRUE,
+    longtable = FALSE,
+    col.names = c("Target", "Predictor", "OR", "LCL", "UCL", "p"),
+    caption   = paste0(
+      "Predictors of missingness (logit OR; top 50 by p-value; full table saved to ",
+      model_results_file, ")."
+    )
+  ) |>
+    kableExtra::kable_styling(
+      latex_options = c("hold_position", "scale_down"),
+      font_size     = 8
+    )
 } else {
   message("No modelable missingness signals (all complete or no variation).")
 }
@@ -2155,6 +2393,8 @@ if (!exists("imp")) {
 } else {
 
 # Representative logistic model (unweighted) to assess Monte Carlo error
+mc_diag_fml <- imv_proc ~ has_abg + age_at_encounter + curr_bmi + sex + encounter_type
+register_model_diagram("MI MC error: IMV ~ ABG + covariates", mc_diag_fml, width = 10, height = 6)
 mc_fit <- with(
   imp,
   glm(imv_proc ~ has_abg + age_at_encounter + curr_bmi + sex + encounter_type,
@@ -2425,6 +2665,10 @@ stopifnot(is.numeric(d1$paco2), is.numeric(d1$vbg_co2))
 ### 9.2 Convergence & plausibility checks
 
 ```{r mi-diagnostics}
+#| code-block-title: "MI diagnostics (trace + distributions)"
+#| echo: false
+#| message: false
+#| warning: false
 imp <- readRDS(mi_mids_file)
 imp_n <- imp$m
 get_imp <- function(i, imp_obj = imp) mice::complete(imp_obj, action = i)
@@ -2433,8 +2677,27 @@ get_imp <- function(i, imp_obj = imp) mice::complete(imp_obj, action = i)
 plot(imp)                                             # trace plots (m=5)
 densityplot(imp, ~ curr_bmi + serum_hco3)             # imputed vs observed
 stripplot(imp,  ~ spo2 + hr, subset = .imp == 1)      # distribution overlap on first imp only
+```
 
-md.pattern(imp$data)                                  # pattern before MI (compact)
+```{r mi-missing-pattern}
+#| code-block-title: "Missingness pattern (saved to file)"
+#| echo: false
+#| message: false
+#| warning: false
+#| results: "hide"
+#| fig-show: "hide"
+md_pat <- NULL
+invisible(utils::capture.output(
+  md_pat <- mice::md.pattern(imp$data, plot = FALSE)
+))
+
+md_pat_file <- results_path("missingness-pattern.csv")
+utils::write.csv(md_pat, md_pat_file, row.names = TRUE)
+
+md_fig_file <- results_path("figs", "missingness-pattern.png")
+grDevices::png(md_fig_file, width = 1800, height = 1200, res = 200)
+mice::md.pattern(imp$data, plot = TRUE)
+grDevices::dev.off()
 ```
 
 ### 9.3 Observed vs imputed distributions (by strata)
@@ -2912,6 +3175,9 @@ outcomes_abg <- list(
   death    = death_60d ~ has_abg,
   hcrf     = hypercap_resp_failure ~ has_abg
 )
+purrr::iwalk(outcomes_abg, function(fml, nm) {
+  register_model_diagram(paste("MI IPW ABG:", nm, "~ has_abg"), fml)
+})
 
 old_plan <- future::plan()
 workers  <- max(1L, as.integer(future::availableCores() - 1L))
@@ -2963,6 +3229,9 @@ outcomes_vbg <- list(
   death    = death_60d ~ has_vbg,
   hcrf     = hypercap_resp_failure ~ has_vbg
 )
+purrr::iwalk(outcomes_vbg, function(fml, nm) {
+  register_model_diagram(paste("MI IPW VBG:", nm, "~ has_vbg"), fml)
+})
 
 old_plan <- future::plan()
 workers  <- max(1L, as.integer(future::availableCores() - 1L))
@@ -3433,6 +3702,14 @@ if (!exists("imp")) imp <- readRDS(mi_mids_file)
 imp_n <- imp$m
 if (!exists("get_imp")) get_imp <- function(i, imp_obj = imp) mice::complete(imp_obj, action = i)
 
+mi_abg_cat_forms <- list(
+  "MI IPW ABG 3-level: IMV ~ CO2 category"      = imv_proc ~ co2_cat,
+  "MI IPW ABG 3-level: NIV ~ CO2 category"      = niv_proc ~ co2_cat,
+  "MI IPW ABG 3-level: Death60d ~ CO2 category" = death_60d ~ co2_cat,
+  "MI IPW ABG 3-level: HCRF ~ CO2 category"     = hypercap_resp_failure ~ co2_cat
+)
+register_model_diagrams(mi_abg_cat_forms)
+
 fit_abg_cat <- function(outcome_var) {
   fits <- vector("list", imp_n)
   for (i in seq_len(imp_n)) {
@@ -3489,6 +3766,14 @@ abg_cat_results <- dplyr::bind_rows(
 if (!exists("imp")) imp <- readRDS(mi_mids_file)
 imp_n <- imp$m
 if (!exists("get_imp")) get_imp <- function(i, imp_obj = imp) mice::complete(imp_obj, action = i)
+
+mi_vbg_cat_forms <- list(
+  "MI IPW VBG 3-level: IMV ~ CO2 category"      = imv_proc ~ co2_cat,
+  "MI IPW VBG 3-level: NIV ~ CO2 category"      = niv_proc ~ co2_cat,
+  "MI IPW VBG 3-level: Death60d ~ CO2 category" = death_60d ~ co2_cat,
+  "MI IPW VBG 3-level: HCRF ~ CO2 category"     = hypercap_resp_failure ~ co2_cat
+)
+register_model_diagrams(mi_vbg_cat_forms)
 
 fit_vbg_cat <- function(outcome_var) {
   fits <- vector("list", imp_n)
@@ -3816,6 +4101,18 @@ library(patchwork)
 library(splines)
 library(survey)
 library(purrr)
+
+mi_ipw_rcs_forms <- list(
+  "MI IPW RCS: IMV ~ CO2 (ABG)"        = imv_proc ~ splines::ns(co2, 4),
+  "MI IPW RCS: NIV ~ CO2 (ABG)"        = niv_proc ~ splines::ns(co2, 4),
+  "MI IPW RCS: Death60d ~ CO2 (ABG)"   = death_60d ~ splines::ns(co2, 4),
+  "MI IPW RCS: HCRF ~ CO2 (ABG)"       = hypercap_resp_failure ~ splines::ns(co2, 4),
+  "MI IPW RCS: IMV ~ CO2 (VBG)"        = imv_proc ~ splines::ns(co2, 4),
+  "MI IPW RCS: NIV ~ CO2 (VBG)"        = niv_proc ~ splines::ns(co2, 4),
+  "MI IPW RCS: Death60d ~ CO2 (VBG)"   = death_60d ~ splines::ns(co2, 4),
+  "MI IPW RCS: HCRF ~ CO2 (VBG)"       = hypercap_resp_failure ~ splines::ns(co2, 4)
+)
+register_model_diagrams(mi_ipw_rcs_forms)
 
 if (!exists("imp")) imp <- readRDS(mi_mids_file)
 imp_n <- imp$m

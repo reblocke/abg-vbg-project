@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata in this file (and cite the associated manuscript when available)."
+title: "ABG vs VBG Project"
+type: software
+authors:
+  - family-names: "Locke"
+    given-names: "Brian"
+  - family-names: "Khan"
+    given-names: "Anila"
+repository-code: "https://github.com/reblocke/abg-vbg-project"
+license: "MIT"
+keywords:
+  - "arterial blood gas"
+  - "venous blood gas"
+  - "ABG"
+  - "VBG"
+  - "reproducible research"
+version: "0.1.0"
+# preferred-citation:
+#   type: article
+#   title: "TODO: paper title"
+#   authors:
+#     - family-names: "Locke"
+#       given-names: "Brian"
+#     - family-names: "Khan"
+#       given-names: "Anila"
+#   doi: "TODO"
+#   year: 2025
