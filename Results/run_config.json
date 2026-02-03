@@ -1,0 +1,10 @@
+{
+  "run_id": "20260202_191751",
+  "run_mode": "pilot",
+  "pilot_frac": 0.12,
+  "mi_batch_threshold": 5000,
+  "data_dir": "/Users/reblocke/Research/abg-vbg-project/data",
+  "results_dir": "/Users/reblocke/Research/abg-vbg-project/Results",
+  "full_n": 833476,
+  "subset_n": 61802
+}
