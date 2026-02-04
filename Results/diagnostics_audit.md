@@ -2,9 +2,9 @@
 
 ## Executive Summary
 - Run mode: pilot; pilot_frac: 0.001; m: 80; maxit: 20
-- Runtime total (sec): 236.540
+- Runtime total (sec): 94.955
 - MI batch status: batches=0; m_batch=NA; failures=NA
-- Balance: ABG max|SMD|=0.282; VBG max|SMD|=0.210
+- Balance: ABG max|SMD|=0.209; VBG max|SMD|=0.307
 - Separation flags: 1151 / 1324
 
 ## Artifact Inventory (Found / Missing)
@@ -34,9 +34,8 @@
 
 ## Runtime Top Steps
 
-- mi_single_pass: 164.559 sec
-- mice_imputation: 63.429 sec
-- shap_summary: 8.552 sec
+- mice_imputation: 63.748 sec
+- mi_single_pass: 31.207 sec
 
 ## MI Health
 
@@ -47,8 +46,8 @@
 
 ## Balance
 
-- ABG max |SMD|: 0.282
-- VBG max |SMD|: 0.210
+- ABG max |SMD|: 0.209
+- VBG max |SMD|: 0.307
 
 ## Outcome Fits
 
@@ -62,5 +61,5 @@ Top separation counts (analysis_variant/group/outcome):
 
 ## Issues (prioritized)
 
-- [high] Balance: ABG max|SMD|=0.282 (Results/balance_target_imp_summary.csv)
+- [high] Balance: ABG max|SMD|=0.209 (Results/balance_target_imp_summary.csv)
 - [high] Outcome: sep_flag TRUE for 1151 / 1324 fits (Results/model_fit_diagnostics.csv)

@@ -4,7 +4,7 @@ author: "Brian Locke, Anila Mehta"
 editor: visual
 params:
   run_mode: "pilot" # options: "pilot" or "full"
-  pilot_frac: 0.12 # used only when run_mode == "pilot"
+  pilot_frac: 0.05 # used only when run_mode == "pilot"
   mi_batch_threshold_pilot: 5000 # pilot-only batching threshold
   mi_batch_threshold_full: 200000 # full-run batching threshold
   sample_seed: 20251206
@@ -28,7 +28,7 @@ header-includes:
 output-dir: "../Results"
 fontsize: 11pt
 execute:
-  echo: false
+  echo: true
   message: false
   warning: false
 ---
@@ -198,7 +198,7 @@ required_pkgs <- c(
   "gbm", "ggplot2", "gt", "gtsummary", "haven", "labelled", "scales",
   "modelsummary", "officer", "patchwork", "rms", "survey", "tibble", "lubridate",
   "sensitivitymw", "here", "fs", "dagitty", "ggdag", "naniar", "mice", "miceadds",
-  "fastshap", "shapviz", "ggrepel", "digest"
+  "digest"
 )
 
 # Fail fast if packages are missing (use renv to install)
@@ -301,6 +301,8 @@ message(
 #| include: false
 diag_run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
 diag_run_ts <- as.character(Sys.time())
+run_id <- diag_run_id
+run_ts <- diag_run_ts
 runtime_run_id <- diag_run_id
 runtime_log <- data.frame()
 mi_warn_log <- data.frame(
@@ -718,8 +720,9 @@ append_mem_snapshot <- function(stage_id, context_id = NA_character_, when = "pr
   invisible(TRUE)
 }
 
-write_factor_levels_diag <- function(df, vars, context_id) {
-  if (context_id %in% factor_diag_written) {
+write_factor_levels_diag <- function(df, vars, context_id, file_prefix = "gbm_preflight_factor_levels") {
+  key <- paste0(file_prefix, "::", context_id)
+  if (key %in% factor_diag_written) {
     return(invisible(FALSE))
   }
   vars <- intersect(vars, names(df))
@@ -745,9 +748,9 @@ write_factor_levels_diag <- function(df, vars, context_id) {
   })
   diag <- dplyr::bind_rows(diag)
   if (nrow(diag) == 0L) return(invisible(FALSE))
-  out_path <- results_path(paste0("gbm_preflight_factor_levels_", context_id, ".csv"))
+  out_path <- results_path(paste0(file_prefix, "_", context_id, ".csv"))
   write_csv_safely(diag, out_path, row_names = FALSE)
-  factor_diag_written <<- c(factor_diag_written, context_id)
+  factor_diag_written <<- c(factor_diag_written, key)
   invisible(TRUE)
 }
 
@@ -780,7 +783,7 @@ log_design_dims <- function(df, covars, context_id, sample_n = 5000L) {
 
 gbm_preflight <- function(df, covars, context_id, sample_n = 50000L) {
   df <- droplevels_all(df)
-  write_factor_levels_diag(df, covars, context_id)
+  write_factor_levels_diag(df, covars, context_id, file_prefix = "gbm_preflight_factor_levels")
   covars <- intersect(covars, names(df))
   if (!length(covars)) return(invisible(FALSE))
   n_full <- nrow(df)
@@ -1339,12 +1342,15 @@ register_model_diagrams <- function(forms, width = 8, height = 6) {
 
 ```{r setup-shapviz}
 #| include: false
-if (!requireNamespace("shapviz", quietly = TRUE) ||
-    packageVersion("shapviz") < "0.2.0") {
-  stop("Package 'shapviz' (>= 0.2.0) is required. Install with renv::install(\"shapviz\").")
-}
-if (!requireNamespace("fastshap", quietly = TRUE)) {
-  stop("Package 'fastshap' is required. Install with renv::install(\"fastshap\").")
+RUN_SHAP <- FALSE
+if (RUN_SHAP) {
+  if (!requireNamespace("shapviz", quietly = TRUE) ||
+      packageVersion("shapviz") < "0.2.0") {
+    stop("Package 'shapviz' (>= 0.2.0) is required. Install with renv::install(\"shapviz\").")
+  }
+  if (!requireNamespace("fastshap", quietly = TRUE)) {
+    stop("Package 'fastshap' is required. Install with renv::install(\"fastshap\").")
+  }
 }
 ```
 
@@ -1388,21 +1394,19 @@ seed_escrow <- data.frame(
     "Multiple imputation (mice)",
     "ABG propensity GBM (non-MI)",
     "VBG propensity GBM (non-MI)",
-    "SHAP (fastshap/shapviz)",
-    "MI GBM seeds (ABG per imputation)",
-    "MI GBM seeds (VBG per imputation)"
+    "MI PS (glm RCS) seeds (ABG per imputation)",
+    "MI PS (glm RCS) seeds (VBG per imputation)"
   ),
   seed = c(
     "20251206",
     "42",
     "42",
-    "123",
     "20251206 + imputation index",
     "30251206 + imputation index"
   ),
   stringsAsFactors = FALSE
 )
-knitr::kable(seed_escrow, caption = "Seed escrow for MI, GBM, and SHAP runs")
+knitr::kable(seed_escrow, caption = "Seed escrow for MI and GBM runs")
 
 DEBUG_SPLINE <- FALSE
 ```
@@ -1476,6 +1480,7 @@ covars_gbm <- c(
   "wbc","plt","serum_phos","serum_ca"
 )
 covars_gbm <- setdiff(covars_gbm, drop_vars_ultra_missing)
+covars_ps <- covars_gbm
 
 # Core adjustment set for conditional prognostic models
 adj_core <- c("age_at_encounter", "sex", "race_ethnicity", "location", "encounter_type")
@@ -2719,6 +2724,7 @@ unw_vbg_panel <- ((plot_imv_vbg | plot_niv_vbg) /
 
 print_plot_once(unw_abg_panel, "spline-unweighted-abg", width = 8.5, height = 6)
 print_plot_once(unw_vbg_panel, "spline-unweighted-vbg", width = 8.5, height = 6)
+float_barrier()
 
 ```
 
@@ -3463,6 +3469,11 @@ M_IMP_STEP <- 10
 MCERR_RATIO_TARGET <- 0.10
 ALLOW_M_IMP_EARLY_STOP <- FALSE
 
+# MI propensity model (MI-only)
+MI_PS_METHOD    <- "glm_rcs4"
+MI_PS_SPLINE_K  <- 4L
+MI_GLM_MAXIT    <- 25L
+
 MINCOR_QUICKPRED <- 0.05
 MINPUC_QUICKPRED <- 0.25
 MAX_PRED_PER_VAR <- 40L
@@ -3491,6 +3502,7 @@ if (isTRUE(DEBUG_SPLINE)) {
   stop("DEBUG_SPLINE must be FALSE; pilot and full runs must use the same model workflow.")
 }
 stopifnot(M_IMP >= M_IMP_MIN, M_IMP <= 100)
+stopifnot(MI_PS_METHOD %in% c("glm_rcs4"))
 ```
 
 ```{r mi-missing-summary}
@@ -3540,6 +3552,97 @@ gt::gt(miss_tbl_disp) |>
       if (length(extra_miss_vars)) " BNP and SpO2 are reported here but excluded from MI/weighting models." else ""
     )
   )
+```
+
+```{r mi-ps-helpers}
+#| include: false
+# MI propensity model helpers (glm with RCS on continuous covariates)
+ps_is_continuous <- function(v, df) {
+  x <- df[[v]]
+  if (!is.numeric(x)) return(FALSE)
+  x <- x[is.finite(x)]
+  if (length(x) < 10) return(FALSE)
+  if (length(unique(x)) < 10) return(FALSE)
+  TRUE
+}
+
+build_mi_ps_formula <- function(treat, covars, df, k = 4L, basis = "rcs") {
+  cont <- covars[vapply(covars, ps_is_continuous, logical(1), df = df)]
+  catv <- setdiff(covars, cont)
+  term_cont <- character()
+  if (length(cont)) {
+    term_cont <- if (basis == "rcs") {
+      paste0("rms::rcs(`", cont, "`, ", k, ")")
+    } else {
+      paste0("splines::ns(`", cont, "`, ", k, ")")
+    }
+  }
+  term_cat <- if (length(catv)) paste0("`", catv, "`") else character()
+  rhs <- c(term_cont, term_cat)
+  if (!length(rhs)) stop("No covariates available for MI PS model.")
+  stats::as.formula(paste0("`", treat, "` ~ ", paste(rhs, collapse = " + ")))
+}
+
+fit_mi_ps_glm <- function(df, treat, covars, k = 4L, maxit = 25L, context = NULL) {
+  stopifnot(all(c(treat, covars) %in% names(df)))
+  df <- droplevels_all(df)
+  basis <- if (requireNamespace("rms", quietly = TRUE)) "rcs" else "ns"
+  if (is.null(context)) {
+    context <- make_context(
+      stage = "MI", component = "mi_ps_glm",
+      analysis_variant = "weighted_imputed",
+      model_type = "ps",
+      group = NA_character_,
+      outcome = NA_character_,
+      imputation = NA_integer_,
+      batch = NA_integer_
+    )
+  }
+
+  fit_once <- function(basis_type) {
+    if (basis_type == "rcs") {
+      dd <- rms::datadist(df)
+      old_opt <- options(datadist = ".__dd_ps__")
+      assign(".__dd_ps__", dd, envir = .GlobalEnv)
+      on.exit({
+        options(old_opt)
+        rm(list = ".__dd_ps__", envir = .GlobalEnv)
+      }, add = TRUE)
+    }
+    form <- build_mi_ps_formula(treat, covars, df, k = k, basis = basis_type)
+    cap <- capture_warnings(
+      tryCatch(
+        stats::glm(form, data = df, family = stats::binomial(),
+                   control = stats::glm.control(maxit = maxit),
+                   model = FALSE, x = FALSE, y = FALSE),
+        error = function(e) e
+      ),
+      context = context
+    )
+    append_warnings(cap$warnings)
+    list(fit = cap$value, formula = form, basis = basis_type)
+  }
+
+  res <- fit_once(basis)
+  if (inherits(res$fit, "error") && basis == "rcs") {
+    res <- fit_once("ns")
+  }
+  if (inherits(res$fit, "error")) {
+    return(list(error = conditionMessage(res$fit), method = paste0("glm_", res$basis)))
+  }
+
+  ps <- as.numeric(res$fit$fitted.values)
+  ps <- pmin(pmax(ps, 1e-8), 1 - 1e-8)
+  list(
+    ps = ps,
+    fit_ok = TRUE,
+    converged = if (!is.null(res$fit$converged)) isTRUE(res$fit$converged) else NA,
+    formula = as.character(res$formula),
+    n = nrow(df),
+    p = length(res$fit$coefficients),
+    method = paste0("glm_", res$basis)
+  )
+}
 ```
 
 ### 7.2 Missingness structure and drivers
@@ -5415,7 +5518,7 @@ print(p_heat)
 
 ## 10) Refit propensity models within each imputation
 
-GBM recipe matches the non‑MI run (shared `gbm_params`, balance‑based stopping).
+MI propensity scores use logistic regression with restricted cubic splines (`rms::rcs`, 4 knots by default) for continuous covariates; the same covariate set used in non‑MI models is reused here (`covars_ps`). IPSW truncation rules are unchanged.
 
 Note: the MI computations below run in a single pass per imputation (weights, balance, cat3, spline). Subsequent MI sections reuse those outputs and will stop if they are missing.
 
@@ -5425,7 +5528,6 @@ Note: the MI computations below run in a single pass per imputation (weights, ba
 #| code-block-title: "FAIL-FAST CHECKS"
 #| echo: false
 #| message: false
-stopifnot(gbm_params$stop.method == "smd.max")
 if (M_IMP < 50) {
   stop("M_IMP must be >= 50. Current M_IMP = ", M_IMP)
 }
@@ -5439,7 +5541,7 @@ if (imp$m < 50) {
 # Ensure no missing covariates in each imputation for WeightIt
 for (i in seq_len(imp$m)) {
   di <- get_imp(i)
-  assert_no_na_covars(di, covars_gbm, context = paste0("imputation ", i))
+  assert_no_na_covars(di, covars_ps, context = paste0("imputation ", i))
 }
 ```
 
@@ -5456,84 +5558,80 @@ imp_n <- imp$m
 mi_single_pass_t0 <- Sys.time()
 
 # --- Helper: fit ABG/VBG weights for a single imputation ----------------------
-fit_abg_one <- function(d) {
-  stopifnot(gbm_params$stop.method == "smd.max")
+fit_abg_one <- function(d, imp_index) {
   d <- normalize_types(d, levels_ref)
-  d_gbm <- d[, c("has_abg", "has_vbg", covars_gbm), drop = FALSE]
-  d_gbm <- droplevels_all(d_gbm)
-  assert_no_na_covars(d_gbm, covars_gbm, context = "ABG WeightIt (MI)")
-  gbm_preflight(d_gbm, covars_gbm, "mi_abg")
-  append_mem_snapshot("mi_gbm", "mi_abg", "pre")
-  w <- weightit(
-    formula_abg,
-    data   = d_gbm,
-    method = "gbm",
-    estimand    = "ATE",
-    include.obj = FALSE,
-    n.trees           = gbm_params$n.trees,
-    interaction.depth = gbm_params$interaction.depth,
-    shrinkage         = gbm_params$shrinkage,
-    bag.fraction      = gbm_params$bag.fraction,
-    n.minobsinnode    = gbm_params$n.minobsinnode,
-    cv.folds          = gbm_params$cv.folds,
-    stop.method       = gbm_params$stop.method,
-    n.cores           = get_gbm_cores()
+  d_ps <- d[, c("has_abg", "has_vbg", covars_ps), drop = FALSE]
+  d_ps <- droplevels_all(d_ps)
+  write_factor_levels_diag(d_ps, covars_ps, "abg", file_prefix = "mi_ps_factor_levels")
+  assert_no_na_covars(d_ps, covars_ps, context = "ABG MI PS (glm)")
+  ps_fit <- fit_mi_ps_glm(
+    d_ps, "has_abg", covars_ps,
+    k = MI_PS_SPLINE_K, maxit = MI_GLM_MAXIT,
+    context = make_context(
+      stage = "MI", component = "mi_ps_glm",
+      analysis_variant = "weighted_imputed",
+      model_type = "ps",
+      group = "ABG",
+      outcome = NA_character_,
+      imputation = imp_index,
+      batch = NA_integer_
+    )
   )
-  append_mem_snapshot("mi_gbm", "mi_abg", "post")
+  if (!is.null(ps_fit$error)) {
+    stop("MI PS model failed (ABG, imp ", imp_index, "): ", ps_fit$error)
+  }
   ipow <- compute_ipow_weights(
-    w,
-    treat = d_gbm$has_abg,
+    ps_fit,
+    treat = to01(d_ps$has_abg),
     ps_floor_quantile = ps_trunc_quantile,
     stabilize = TRUE
   )
-  assert_finite_weights(ipow$weights[d_gbm$has_abg == 1], "w_abg")
-  w$weights <- ipow$weights
-  w$ipow_info <- list(
+  assert_finite_weights(ipow$weights[d_ps$has_abg == 1], "w_abg")
+  ps_fit$weights <- ipow$weights
+  ps_fit$ipow_info <- list(
     ps_floor = ipow$ps_floor,
     cap      = ipow$cap,
     trunc_rate = mean(ipow$truncated, na.rm = TRUE)
   )
-  w
+  ps_fit
 }
 
-fit_vbg_one <- function(d) {
-  stopifnot(gbm_params$stop.method == "smd.max")
+fit_vbg_one <- function(d, imp_index) {
   d <- normalize_types(d, levels_ref)
-  d_gbm <- d[, c("has_abg", "has_vbg", covars_gbm), drop = FALSE]
-  d_gbm <- droplevels_all(d_gbm)
-  assert_no_na_covars(d_gbm, covars_gbm, context = "VBG WeightIt (MI)")
-  gbm_preflight(d_gbm, covars_gbm, "mi_vbg")
-  append_mem_snapshot("mi_gbm", "mi_vbg", "pre")
-  w <- weightit(
-    formula_vbg,
-    data   = d_gbm,
-    method = "gbm",
-    estimand    = "ATE",
-    include.obj = FALSE,
-    n.trees           = gbm_params$n.trees,
-    interaction.depth = gbm_params$interaction.depth,
-    shrinkage         = gbm_params$shrinkage,
-    bag.fraction      = gbm_params$bag.fraction,
-    n.minobsinnode    = gbm_params$n.minobsinnode,
-    cv.folds          = gbm_params$cv.folds,
-    stop.method       = gbm_params$stop.method,
-    n.cores           = get_gbm_cores()
+  d_ps <- d[, c("has_abg", "has_vbg", covars_ps), drop = FALSE]
+  d_ps <- droplevels_all(d_ps)
+  write_factor_levels_diag(d_ps, covars_ps, "vbg", file_prefix = "mi_ps_factor_levels")
+  assert_no_na_covars(d_ps, covars_ps, context = "VBG MI PS (glm)")
+  ps_fit <- fit_mi_ps_glm(
+    d_ps, "has_vbg", covars_ps,
+    k = MI_PS_SPLINE_K, maxit = MI_GLM_MAXIT,
+    context = make_context(
+      stage = "MI", component = "mi_ps_glm",
+      analysis_variant = "weighted_imputed",
+      model_type = "ps",
+      group = "VBG",
+      outcome = NA_character_,
+      imputation = imp_index,
+      batch = NA_integer_
+    )
   )
-  append_mem_snapshot("mi_gbm", "mi_vbg", "post")
+  if (!is.null(ps_fit$error)) {
+    stop("MI PS model failed (VBG, imp ", imp_index, "): ", ps_fit$error)
+  }
   ipow <- compute_ipow_weights(
-    w,
-    treat = d_gbm$has_vbg,
+    ps_fit,
+    treat = to01(d_ps$has_vbg),
     ps_floor_quantile = ps_trunc_quantile,
     stabilize = TRUE
   )
-  assert_finite_weights(ipow$weights[d_gbm$has_vbg == 1], "w_vbg")
-  w$weights <- ipow$weights
-  w$ipow_info <- list(
+  assert_finite_weights(ipow$weights[d_ps$has_vbg == 1], "w_vbg")
+  ps_fit$weights <- ipow$weights
+  ps_fit$ipow_info <- list(
     ps_floor = ipow$ps_floor,
     cap      = ipow$cap,
     trunc_rate = mean(ipow$truncated, na.rm = TRUE)
   )
-  w
+  ps_fit
 }
 
 # --- Helper: target balance (treated vs target) -------------------------------
@@ -5924,9 +6022,26 @@ grid_vbg_mi <- grid_vbg_info_mi$grid
 ref_idx_vbg_mi <- grid_vbg_info_mi$ref_idx
 co2_ref_vbg_mi <- grid_vbg_info_mi$co2_ref
 
-covars_use <- intersect(covars_gbm, names(subset_data))
+covars_use <- intersect(covars_ps, names(subset_data))
 covars_use_abg <- covars_use
 covars_use_vbg <- covars_use
+
+# MI PS covariate typing (continuous vs categorical) for transparency
+mi_ps_type_file <- results_path("mi_ps_covariate_types.csv")
+d_ps_tmp <- get_imp(1)
+d_ps_tmp <- normalize_types(d_ps_tmp, levels_ref)
+d_ps_tmp <- d_ps_tmp[, c("has_abg", "has_vbg", covars_ps), drop = FALSE]
+d_ps_tmp <- droplevels_all(d_ps_tmp)
+cont_vars <- covars_ps[vapply(covars_ps, ps_is_continuous, logical(1), df = d_ps_tmp)]
+cat_vars_ps  <- setdiff(covars_ps, cont_vars)
+mi_ps_types <- dplyr::bind_rows(
+  data.frame(variable = cont_vars, type = "continuous", stringsAsFactors = FALSE),
+  data.frame(variable = cat_vars_ps,  type = "categorical", stringsAsFactors = FALSE)
+) |>
+  dplyr::mutate(run_id = run_id, run_ts = run_ts)
+write_csv_safely(mi_ps_types, mi_ps_type_file, row_names = FALSE)
+rm(d_ps_tmp, cont_vars, cat_vars_ps, mi_ps_types)
+gc()
 
 W_abg_list <- vector("list", imp_n)
 W_vbg_list <- vector("list", imp_n)
@@ -5947,9 +6062,9 @@ for (i in seq_len(imp_n)) {
   d <- get_imp(i)
 
   set.seed(20251206 + i)
-  W_abg_list[[i]] <- fit_abg_one(d)
+  W_abg_list[[i]] <- fit_abg_one(d, i)
   set.seed(30251206 + i)
-  W_vbg_list[[i]] <- fit_vbg_one(d)
+  W_vbg_list[[i]] <- fit_vbg_one(d, i)
 
   bal_rows_abg[[i]] <- target_balance_table(
     d, "has_abg", W_abg_list[[i]]$weights, covars_use_abg, levels_ref
@@ -6330,349 +6445,20 @@ message("VBG MI spline results were computed in the single-pass MI loop above.")
 
 ## 12) Explainability on one representative imputation
 
-To manage runtime, compute SHAP summaries (importance + dependence) on the first imputed dataset and its fitted GBM(s).
-
-```{r shap-axis-labels, echo=FALSE}
-shap_y_abg <- "Contribution to log-odds of receiving an ABG"
-shap_y_vbg <- "Contribution to log-odds of receiving a VBG"
-```
-
-```{r shap-backend-helpers}
-#| code-block-title: "SHAP diagnostics (ABG/VBG)"
-# --- Fast SHAP for WeightIt GBM fits (works with MI) -------------------------
-
-library(fastshap)
-library(shapviz)
-# --- Robust SHAP backend for WeightIt GBM fits --------------------------------
-# Works whether gbm$var.names are raw feature names (factors ok) or one‑hot names
-# like "sexFemale", "race_ethnicity3", "encounter_typeInpatient", etc.
-
-# Map of factor levels observed at training time (for raw‑factor path)
-.train_levels <- function(df) {
-  f <- vapply(df, is.factor, logical(1))
-  lapply(df[f], levels)
-}
-
-# Align factors in 'df' to a stored levels map (keeps order, avoids new/ambiguous levels)
-.align_to_levels <- function(df, levels_map) {
-  out <- as.data.frame(df, stringsAsFactors = FALSE)
-  for (nm in intersect(names(levels_map), names(out))) {
-    out[[nm]] <- factor(as.character(out[[nm]]), levels = levels_map[[nm]])
-  }
-  out
-}
-
-# Build a design with columns EXACTLY equal to 'varnames' by deriving indicators
-# from the raw covariate frame 'X_raw'. This covers one‑hot names like "sexMale",
-# "race_ethnicity2", "encounter_typeInpatient", etc.
-.design_from_varnames <- function(X_raw, varnames) {
-  X_raw <- as.data.frame(X_raw, stringsAsFactors = FALSE)
-
-  # normalize odd classes; turn characters into factors (stable level strings)
-  for (nm in names(X_raw)) {
-    if (inherits(X_raw[[nm]], "haven_labelled")) X_raw[[nm]] <- as.character(X_raw[[nm]])
-  }
-  X_raw[] <- lapply(X_raw, function(z) if (is.character(z)) factor(z) else z)
-
-  cn    <- colnames(X_raw)
-  cn_s  <- make.names(cn)
-  vn    <- varnames
-  vn_s  <- make.names(vn)
-
-  out <- matrix(NA_real_, nrow = nrow(X_raw), ncol = length(vn))
-  colnames(out) <- vn
-
-  for (i in seq_along(vn)) {
-    v   <- vn[i]
-    v_s <- vn_s[i]
-
-    # Case 1: exact column present
-    if (v %in% cn) {
-      z <- X_raw[[v]]
-      out[, i] <- if (is.factor(z)) as.numeric(z) else as.numeric(z)
-      next
-    }
-
-    # Case 2: derive dummy = 1{ base == level } from a base column prefix
-    # Find the longest raw name that is a prefix of v (sanitized comparison)
-    cand <- which(startsWith(v_s, cn_s))
-    if (length(cand)) {
-      j <- cand[which.max(nchar(cn_s[cand]))]
-      base <- cn[j]
-      # level is the suffix of v after the base name (unsanitized; preserves case)
-      lev  <- sub(paste0("^", base), "", v)
-      x    <- X_raw[[base]]
-
-      # Compare as strings to match labels like "Female", "Inpatient", "0","1",...
-      x_chr <- if (is.factor(x)) as.character(x) else as.character(x)
-      out[, i] <- as.numeric(x_chr == lev)
-      out[is.na(x_chr), i] <- NA_real_
-      next
-    }
-
-    stop("Cannot construct design column for '", v, "'. ",
-         "No matching base variable found in raw covariates.")
-  }
-
-  as.data.frame(out, check.names = FALSE)
-}
-
-# Unified backend:
-#  - If gbm$var.names are raw feature names, pass factors directly (aligning levels).
-#  - Otherwise, build a one‑hot design with those exact column names and predict on it.
-make_shap_backend_any <- function(W) {
-  gbm_fit <- if (!is.null(W$obj)) W$obj else if (!is.null(W$info$obj)) W$info$obj else W$info$model.obj
-  stopifnot(inherits(gbm_fit, "gbm"))
-  best_tree <- if (!is.null(W$info$best.tree)) W$info$best.tree else gbm_fit$n.trees
-
-  X_raw <- as.data.frame(W$covs, stringsAsFactors = FALSE)
-  # tidy odd classes; keep factors where they already are
-  for (nm in names(X_raw)) {
-    if (inherits(X_raw[[nm]], "haven_labelled")) X_raw[[nm]] <- as.character(X_raw[[nm]])
-  }
-  X_raw[] <- lapply(X_raw, function(z) if (is.character(z)) factor(z) else z)
-  X_raw[] <- lapply(X_raw, function(z) if (is.factor(z)) droplevels(z) else z)
-
-  vn <- gbm_fit$var.names
-  levels_map <- .train_levels(X_raw)
-
-  # Path A: raw‑factor training (names line up directly)
-  if (all(vn %in% colnames(X_raw))) {
-    X_use <- .align_to_levels(X_raw[, vn, drop = FALSE], levels_map)
-    pred  <- function(object, newdata) {
-      nd <- .align_to_levels(newdata, levels_map)
-      predict(object, newdata = nd, n.trees = best_tree, type = "link")
-    }
-    return(list(gbm = gbm_fit, X = X_use, pred = pred, best_tree = best_tree))
-  }
-
-  # Path B: dummy‑coded training (var.names are one‑hot)
-  X_use <- .design_from_varnames(X_raw, vn)
-  pred  <- function(object, newdata) {
-    # If caller already supplies the dummy design, use it; else derive it
-    if (all(vn %in% colnames(newdata))) {
-      nd <- as.data.frame(newdata)[, vn, drop = FALSE]
-    } else {
-      nd <- .design_from_varnames(newdata, vn)
-    }
-    predict(object, newdata = nd, n.trees = best_tree, type = "link")
-  }
-
-  list(gbm = gbm_fit, X = X_use, pred = pred, best_tree = best_tree)
-}
-```
+MI propensity scores are estimated via logistic regression with splines; SHAP summaries are not computed for the MI PS model. A placeholder diagnostic file is written for audit completeness.
 
 ```{r shap-abg-vbg-main}
 #| include: false
-# Choose one completed dataset’s fit
-# Device safety (once per doc)
-fs::dir_create(fig_dir, recurse = TRUE)
-knitr::opts_chunk$set(fig.path = fig_path, dev = "ragg_png", dpi = 200)
-
-# SHAP throttle knobs (single imputation, subsample rows, fewer sims)
-shap_cfg <- list(
-  frac_rows = 0.03,
-  nsim      = 8,
-  top_k     = 20,
-  seed      = 123
-)
-shap_t0 <- Sys.time()
-
-add_smooth_safe <- function(p, x_vals, k = 4) {
-  x_vals <- suppressWarnings(as.numeric(as.character(x_vals)))
-  x_vals <- x_vals[is.finite(x_vals)]
-  n_uniq <- length(unique(x_vals))
-  if (n_uniq < 4) return(p)
-  k_use <- min(k, n_uniq - 1)
-  p + ggplot2::geom_smooth(method = "gam",
-                           formula = y ~ s(x, bs = "cs", k = k_use),
-                           se = FALSE, linewidth = 0.5)
-}
-
-# --- ABG explainability on one representative imputation ----------------------
-stopifnot(exists("imp"))
-rep_imp_idx <- 1
-d_rep <- get_imp(rep_imp_idx)
-assert_no_na_covars(d_rep, covars_gbm, context = "SHAP ABG")
-w_abg_shap <- weightit(
-  formula_abg,
-  data        = d_rep[, c("has_abg", covars_gbm)],
-  method      = "gbm",
-  estimand    = "ATE",
-  include.obj = TRUE,
-  n.trees           = gbm_params$n.trees,
-  interaction.depth = gbm_params$interaction.depth,
-  shrinkage         = gbm_params$shrinkage,
-  bag.fraction      = gbm_params$bag.fraction,
-  n.minobsinnode    = gbm_params$n.minobsinnode,
-  cv.folds          = gbm_params$cv.folds,
-  stop.method       = gbm_params$stop.method,
-  n.cores           = get_gbm_cores()
-)
-bk_abg <- make_shap_backend_any(w_abg_shap)
-
-# Equivalence: wrapper vs direct gbm predict on the same design matrix
-bk <- make_shap_backend_any(w_abg_shap)
-p_wrap <- bk$pred(bk$gbm, bk$X)
-p_direct <- predict(
-  bk$gbm,
-  newdata = bk$X[, bk$gbm$var.names, drop = FALSE],
-  n.trees = bk$best_tree,
-  type    = "link"
-)
-stopifnot(mean(abs(p_wrap - p_direct), na.rm = TRUE) < 1e-8)
-
-# Subsample rows for SHAP speed
-set.seed(shap_cfg$seed)
-ix_abg <- sample.int(nrow(bk_abg$X), max(50L, floor(shap_cfg$frac_rows * nrow(bk_abg$X))))
-X_abg  <- bk_abg$X[ix_abg, , drop = FALSE]
-
-# Fast SHAP on link (logit) scale
-S_abg <- fastshap::explain(
-  object       = bk_abg$gbm,
-  X            = X_abg,
-  pred_wrapper = bk_abg$pred,
-  nsim         = shap_cfg$nsim,
-  adjust       = FALSE
-)
-
-# Stability check: rerun SHAP with a different seed
-set.seed(shap_cfg$seed + 1)
-S_abg_b <- fastshap::explain(
-  object       = bk_abg$gbm,
-  X            = X_abg,
-  pred_wrapper = bk_abg$pred,
-  nsim         = shap_cfg$nsim,
-  adjust       = FALSE
-)
-
-shap_stability_abg <- tibble::tibble(
-  cohort = "ABG",
-  feature = colnames(S_abg),
-  mean_abs_seed1 = colMeans(abs(S_abg), na.rm = TRUE),
-  mean_abs_seed2 = colMeans(abs(S_abg_b), na.rm = TRUE)
-)
-
-# shapviz object (X can be data.frame or matrix; keep column names)
-sv_abg <- shapviz::shapviz(as.matrix(S_abg), X = as.matrix(X_abg))
-
-# Bar importance (top K)
-ord_abg   <- order(colMeans(abs(S_abg), na.rm = TRUE), decreasing = TRUE)
-topK_abg  <- colnames(S_abg)[ord_abg[1:min(shap_cfg$top_k, ncol(S_abg))]]
-p_bar_abg <- suppressWarnings(shapviz::sv_importance(sv_abg, kind = "bar", v = topK_abg))
-suppressWarnings(print(p_bar_abg))
-
-# Dependence: top feature colored by second (add smoother explicitly)
-pri_abg <- topK_abg[1]
-aux_abg <- topK_abg[2]
-p_dep_abg <- suppressWarnings(shapviz::sv_dependence(sv_abg, v = pri_abg, color_var = aux_abg))
-p_dep_abg <- add_smooth_safe(p_dep_abg, X_abg[, pri_abg])
-p_dep_abg <- p_dep_abg + ggplot2::labs(y = shap_y_abg, x = pri_abg)
-
-# for importance: don't set label = element_blank() on shapviz's plot; let it draw defaults
-# if you see "aesthetics dropped: colour", avoid mapping `colour` in a stat
-suppressWarnings(print(p_dep_abg))
-
-# --- VBG explainability on one representative imputation ----------------------
-assert_no_na_covars(d_rep, covars_gbm, context = "SHAP VBG")
-w_vbg_shap <- weightit(
-  formula_vbg,
-  data        = d_rep[, c("has_vbg", covars_gbm)],
-  method      = "gbm",
-  estimand    = "ATE",
-  include.obj = TRUE,
-  n.trees           = gbm_params$n.trees,
-  interaction.depth = gbm_params$interaction.depth,
-  shrinkage         = gbm_params$shrinkage,
-  bag.fraction      = gbm_params$bag.fraction,
-  n.minobsinnode    = gbm_params$n.minobsinnode,
-  cv.folds          = gbm_params$cv.folds,
-  stop.method       = gbm_params$stop.method,
-  n.cores           = get_gbm_cores()
-)
-bk_vbg <- make_shap_backend_any(w_vbg_shap)
-
-set.seed(shap_cfg$seed)
-ix_vbg <- sample.int(nrow(bk_vbg$X), max(50L, floor(shap_cfg$frac_rows * nrow(bk_vbg$X))))
-X_vbg  <- bk_vbg$X[ix_vbg, , drop = FALSE]
-
-S_vbg <- fastshap::explain(
-  object       = bk_vbg$gbm,
-  X            = X_vbg,
-  pred_wrapper = bk_vbg$pred,
-  nsim         = shap_cfg$nsim,
-  adjust       = FALSE
-)
-
-set.seed(shap_cfg$seed + 1)
-S_vbg_b <- fastshap::explain(
-  object       = bk_vbg$gbm,
-  X            = X_vbg,
-  pred_wrapper = bk_vbg$pred,
-  nsim         = shap_cfg$nsim,
-  adjust       = FALSE
-)
-
-shap_stability_vbg <- tibble::tibble(
-  cohort = "VBG",
-  feature = colnames(S_vbg),
-  mean_abs_seed1 = colMeans(abs(S_vbg), na.rm = TRUE),
-  mean_abs_seed2 = colMeans(abs(S_vbg_b), na.rm = TRUE)
-)
-
-sv_vbg <- shapviz::shapviz(as.matrix(S_vbg), X = as.matrix(X_vbg))
-
-ord_vbg   <- order(colMeans(abs(S_vbg), na.rm = TRUE), decreasing = TRUE)
-topK_vbg  <- colnames(S_vbg)[ord_vbg[1:min(shap_cfg$top_k, ncol(S_vbg))]]
-p_bar_vbg <- suppressWarnings(shapviz::sv_importance(sv_vbg, kind = "bar", v = topK_vbg))
-suppressWarnings(print(p_bar_vbg))
-
-pri_vbg <- topK_vbg[1]
-aux_vbg <- topK_vbg[2]
-p_dep_vbg <- suppressWarnings(shapviz::sv_dependence(sv_vbg, v = pri_vbg, color_var = aux_vbg))
-p_dep_vbg <- add_smooth_safe(p_dep_vbg, X_vbg[, pri_vbg])
-p_dep_vbg <- p_dep_vbg + ggplot2::labs(y = shap_y_vbg, x = pri_vbg)
-suppressWarnings(print(p_dep_vbg))
-
-shap_stability <- bind_rows(shap_stability_abg, shap_stability_vbg)
 shap_stability_file <- results_path("diag-ps-shap-stability.csv")
-write_csv_safely(shap_stability, shap_stability_file, row_names = FALSE)
-
-shap_corr <- shap_stability |>
-  group_by(cohort) |>
-  summarise(rank_corr = cor(mean_abs_seed1, mean_abs_seed2, method = "spearman"),
-            .groups = "drop")
-
-p_shap_stab <- ggplot(shap_stability, aes(x = mean_abs_seed1, y = mean_abs_seed2)) +
-  geom_point(alpha = 0.6, size = 1) +
-  geom_smooth(method = "lm", se = FALSE, linewidth = 0.4) +
-  facet_wrap(~cohort, scales = "free") +
-  labs(
-    title = "SHAP stability (mean |SHAP|, two seeds)",
-    x = "Mean |SHAP| (seed 1)",
-    y = "Mean |SHAP| (seed 2)"
-  ) +
-  theme_minimal(base_size = 10)
-
-save_diag_plot(p_shap_stab, results_path("figs", "diag-ps-shap-stability.png"),
-               width = 8, height = 4.5)
-shap_t1 <- Sys.time()
-stopifnot(exists("runtime_log"))
-run_id <- runtime_run_id
-runtime_log <- dplyr::bind_rows(
-  runtime_log,
-  data.frame(
-    step_name = "shap_summary",
-    seconds = as.numeric(difftime(shap_t1, shap_t0, units = "secs")),
-    start_time = as.character(shap_t0),
-    end_time = as.character(shap_t1),
-    notes = paste0("frac_rows=", shap_cfg$frac_rows, "; nsim=", shap_cfg$nsim),
-    run_id = run_id,
-    run_mode = RUN_MODE,
-    n_subset = nrow(subset_data),
-    stringsAsFactors = FALSE
-  )
+shap_stub <- data.frame(
+  cohort = character(),
+  feature = character(),
+  mean_abs_seed1 = numeric(),
+  mean_abs_seed2 = numeric(),
+  run_id = character(),
+  stringsAsFactors = FALSE
 )
+write_csv_safely(shap_stub, shap_stability_file, row_names = FALSE)
 ```
 
 ## 13) MI three‑level PCO2 helpers and checks
@@ -6806,7 +6592,7 @@ gt::gt(table3_wide) |>
   gt::fmt_missing(columns = gt::everything(), missing_text = "—") |>
   gt::tab_source_note(
     paste0(
-      "Weighted survey GLMs adjusted for baseline covariates; weights = MI-specific GBM IPW; m = ", M_IMP,
+      "Weighted survey GLMs adjusted for baseline covariates; weights = MI-specific GLM (RCS) IPW; m = ", M_IMP,
       " imputations (seed ", MI_SEED, "); reference = Normal."
     )
   )
@@ -7105,7 +6891,10 @@ render_table_pdf(miss_tbl,
 mi_spec_tbl <- tibble::tibble(
   m = imp$m,
   maxit = MAXIT_MI,
-  methods = paste(unique(imp$method[imp$method != ""]), collapse = ", ")
+  methods = paste(unique(imp$method[imp$method != ""]), collapse = ", "),
+  ps_model = MI_PS_METHOD,
+  ps_spline_k = MI_PS_SPLINE_K,
+  ps_glm_maxit = MI_GLM_MAXIT
 )
 render_table_pdf(mi_spec_tbl,
                  "MI specification (methods used)",
@@ -7176,6 +6965,7 @@ mi_p_or <- plot_or_safe(
   title = "MI-pooled, IPW-adjusted odds ratios by PCO2 category (ABG vs VBG)"
 )
 print_plot_once(mi_p_or, "or-plot-mi-weighted", width = 7.5, height = 4.8)
+float_barrier()
 ```
 
 ### 15.3 Visualization
@@ -7233,6 +7023,7 @@ ggplot(curve_all, aes(x = co2, y = OR, color = group, fill = group)) +
     caption = paste0("Reference CO2: ABG ", ABG_CO2_REF, " mmHg; VBG ", VBG_CO2_REF, " mmHg")
   ) +
   theme_minimal(base_size = 10)
+float_barrier()
 ```
 
 ## Diagnostics
@@ -8074,9 +7865,9 @@ audit_lines <- c(
   "## A2. MI settings",
   paste0("- m = ", M_IMP, ", maxit = ", MAXIT_MI, ", seed = ", MI_SEED,
          "; treatments/outcomes/PaCO2/VBG CO2 are not imputed but are predictors (`mi-exec`)."),
-  "## A3. GBM propensity weighting",
-  "- WeightIt with method = \"gbm\" and balance-based stopping (stop.method = \"smd.max\"); no AUC-based tuning (`propensity-config`, `ipw-abg-weighting`, `ipw-vbg-workflow`, MI blocks).",
-  "- SHAP summaries are computed on the log-odds (link) scale for the GBM propensity models; stability is checked with two seeds (`shap-abg-vbg-main`).",
+  "## A3. Propensity weighting",
+  "- Unimputed weighting uses WeightIt with method = \"gbm\" and balance-based stopping (stop.method = \"smd.max\"); no AUC-based tuning (`propensity-config`, `ipw-abg-weighting`, `ipw-vbg-workflow`).",
+  "- MI weighting uses logistic PS with restricted cubic splines (glm + rcs); no SHAP is computed for MI.",
   "## A4. One-sided IPSW + truncation",
   "- Weights are 1/ps for observed tests (ABG or VBG), truncated only for very small propensities (ps floor = 1st percentile), then stabilized by the mean; controls receive weight 1 for balance diagnostics only.",
   "## A5. Robust variance",

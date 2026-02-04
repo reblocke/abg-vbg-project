@@ -1,2 +1,2 @@
-"m","maxit","methods","run_id","run_ts"
-80,20,"pmm","20260202_181139","2026-02-02 18:11:39.084456"
+"m","maxit","methods","ps_model","ps_spline_k","ps_glm_maxit","run_id","run_ts"
+80,20,"pmm","glm_rcs4",4,25,"20260203_073803","2026-02-03 07:38:03.890464"
