@@ -1,11 +1,11 @@
 # Diagnostics Audit
 
 ## Executive Summary
-- Run mode: pilot; pilot_frac: 0.001; m: 80; maxit: 20
-- Runtime total (sec): 94.955
-- MI batch status: batches=0; m_batch=NA; failures=NA
-- Balance: ABG max|SMD|=0.209; VBG max|SMD|=0.307
-- Separation flags: 1151 / 1324
+- Run mode: pilot; pilot_frac: 0.05; m: 80; maxit: 20
+- Runtime total (sec): 900.534
+- MI batch status: batches=40; m_batch=2; failures=0
+- Balance: ABG max|SMD|=0.100; VBG max|SMD|=0.051
+- Separation flags: 905 / 1324
 
 ## Artifact Inventory (Found / Missing)
 
@@ -34,32 +34,40 @@
 
 ## Runtime Top Steps
 
-- mice_imputation: 63.748 sec
-- mi_single_pass: 31.207 sec
+- mi_single_pass: 195.230 sec
+- mice_batch_36: 18.205 sec
+- mice_batch_37: 18.120 sec
+- mice_batch_35: 18.066 sec
+- mice_batch_34: 18.025 sec
+- mice_batch_38: 18.017 sec
+- mice_batch_1: 17.993 sec
+- mice_batch_40: 17.782 sec
+- mice_batch_6: 17.762 sec
+- mice_batch_14: 17.747 sec
 
 ## MI Health
 
 - Smoke test failed: FALSE
-- Predictor width max mm_cols: 37.000
+- Predictor width max mm_cols: 34.000
 - Chain diagnostics issue: FALSE (numeric_names=FALSE; drift_tail_na_frac=0.000)
-- MI warnings rows: 4
+- MI warnings rows: 0
 
 ## Balance
 
-- ABG max |SMD|: 0.209
-- VBG max |SMD|: 0.307
+- ABG max |SMD|: 0.100
+- VBG max |SMD|: 0.051
 
 ## Outcome Fits
 
 Top separation counts (analysis_variant/group/outcome):
 - mi_ipw / ABG / death_60d: 160
 - mi_ipw / VBG / death_60d: 160
-- mi_ipw / ABG / hypercap_resp_failure: 160
 - mi_ipw / VBG / hypercap_resp_failure: 160
-- mi_ipw / VBG / imv_proc: 160
 - mi_ipw / ABG / niv_proc: 160
+- mi_ipw / VBG / niv_proc: 160
+- mi_ipw / ABG / hypercap_resp_failure:  80
 
 ## Issues (prioritized)
 
-- [high] Balance: ABG max|SMD|=0.209 (Results/balance_target_imp_summary.csv)
-- [high] Outcome: sep_flag TRUE for 1151 / 1324 fits (Results/model_fit_diagnostics.csv)
+- [high] Balance: ABG max|SMD|=0.100 (Results/balance_target_imp_summary.csv)
+- [high] Outcome: sep_flag TRUE for 905 / 1324 fits (Results/model_fit_diagnostics.csv)
