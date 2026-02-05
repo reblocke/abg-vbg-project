@@ -1,0 +1,3 @@
+"time","stage","component","analysis_variant","model_type","group","outcome","imputation","batch","message","run_id","run_ts"
+"2026-02-04 19:37:57.97993","MI","mice_maxit_short","mi","mice",NA,NA,NA,NA,"Number of logged events: 200","20260204_191353","2026-02-04 19:13:53.507587"
+"2026-02-04 19:38:21.11376","MI","mice_maxit_long","mi","mice",NA,NA,NA,NA,"Number of logged events: 400","20260204_191353","2026-02-04 19:13:53.507587"

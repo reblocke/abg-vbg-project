@@ -81,8 +81,7 @@ to_pdf_table <- function(tbl, font_size = 8, landscape = FALSE,
   }
 
   latex_opts <- if (longtable) {
-    # longtable + scale_down triggers longtabu (TeX error)
-    c("repeat_header", "hold_position")
+    c("repeat_header")
   } else {
     c("hold_position", "scale_down")
   }
@@ -95,19 +94,22 @@ to_pdf_table <- function(tbl, font_size = 8, landscape = FALSE,
   )
 
   if (landscape) kbl <- kableExtra::landscape(kbl) # needs pdflscape (enabled above)
+  mark_float_emitted()
   kbl
 }
 
 # helper: scale generic data.frames for PDF output
 kable_pdf <- function(df, caption = NULL, font_size = 7) {
   kbl <- knitr::kable(df, format = "latex", booktabs = TRUE, caption = caption)
-  kableExtra::kable_styling(
+  kbl <- kableExtra::kable_styling(
     kbl,
     latex_options = c("hold_position", "scale_down"),
     font_size     = font_size,
     full_width    = TRUE,
     position      = "center"
   )
+  mark_float_emitted()
+  kbl
 }
 
 # helper: pretty, relative paths for PDF output
@@ -135,8 +137,24 @@ strip_manual_table_number <- function(caption) {
   cap
 }
 
+# helper: escape LaTeX special chars in plain captions
+escape_latex_text <- function(x) {
+  if (is.null(x)) return(x)
+  if (!knitr::is_latex_output()) return(x)
+  gsub("([\\\\%$&#{}_\\^~])", "\\\\\\1", x, perl = TRUE)
+}
+
+# Float barrier: emit only when a float has just been produced
+float_barrier_pending <- FALSE
+mark_float_emitted <- function() {
+  float_barrier_pending <<- TRUE
+  invisible(TRUE)
+}
 float_barrier <- function() {
-  if (knitr::is_latex_output()) knitr::asis_output("\\FloatBarrier")
+  if (!knitr::is_latex_output()) return(invisible(NULL))
+  if (!isTRUE(float_barrier_pending)) return(invisible(NULL))
+  float_barrier_pending <<- FALSE
+  knitr::asis_output("\\FloatBarrier\\nopagebreak")
 }
 
 # helper: render full tables for PDF (no previews)
@@ -150,6 +168,7 @@ render_table_pdf <- function(df, caption, file_stub,
   write_csv_safely(df, out_csv, row_names = FALSE)
 
   if (is.null(landscape)) landscape <- (wide || ncol(df) > max_cols)
+  use_longtable <- nrow(df) > 40
   n_cols <- ncol(df)
   parts <- if (n_cols <= max_cols) list(df) else {
     idx <- split(seq_len(n_cols), ceiling(seq_len(n_cols) / max_cols))
@@ -157,19 +176,20 @@ render_table_pdf <- function(df, caption, file_stub,
   }
 
   build_kbl <- function(df_part, cap) {
+    cap <- escape_latex_text(strip_manual_table_number(cap))
     kbl <- knitr::kable(
       df_part,
       format    = "latex",
       booktabs  = TRUE,
-      longtable = TRUE,
-      caption   = strip_manual_table_number(cap),
+      longtable = use_longtable,
+      caption   = cap,
       digits    = digits
     )
     kbl <- kableExtra::kable_styling(
       kbl,
-      latex_options = c("repeat_header", "hold_position"),
+      latex_options = if (use_longtable) c("repeat_header") else c("hold_position", "scale_down"),
       font_size     = if (ncol(df_part) > max_cols || wide) 6 else 7,
-      full_width    = !landscape,
+      full_width    = FALSE,
       position      = "center"
     )
     if (landscape) kbl <- kableExtra::landscape(kbl)
@@ -177,6 +197,7 @@ render_table_pdf <- function(df, caption, file_stub,
   }
 
   if (length(parts) == 1L) {
+    mark_float_emitted()
     return(build_kbl(parts[[1]], caption))
   }
 
@@ -186,7 +207,29 @@ render_table_pdf <- function(df, caption, file_stub,
     cap_i <- paste0(caption, " (Part ", letters_part[i], ")")
     out <- c(out, build_kbl(parts[[i]], cap_i))
   }
+  mark_float_emitted()
   knitr::asis_output(paste(out, collapse = "\n\n"))
+}
+
+render_table_pdf_maybe <- function(df, caption, file_stub,
+                                   wide = FALSE,
+                                   digits = 2,
+                                   max_cols = 6,
+                                   landscape = NULL,
+                                   show = TRUE) {
+  tbl <- render_table_pdf(
+    df,
+    caption = caption,
+    file_stub = file_stub,
+    wide = wide,
+    digits = digits,
+    max_cols = max_cols,
+    landscape = landscape
+  )
+  if (isTRUE(show)) {
+    return(tbl)
+  }
+  invisible(NULL)
 }
 ```
 
@@ -273,6 +316,7 @@ stopifnot(is.finite(SAMPLE_SEED))
 
 pilot_frac <- PILOT_FRAC
 FULL_RUN <- identical(RUN_MODE, "full")
+SHOW_LOW_VALUE_TABLES <- FALSE
 MI_BATCH_THRESHOLD <- if (RUN_MODE == "pilot") {
   as.integer(params$mi_batch_threshold_pilot)
 } else {
@@ -310,6 +354,7 @@ diag_run_ts <- as.character(Sys.time())
 run_id <- diag_run_id
 run_ts <- diag_run_ts
 runtime_run_id <- diag_run_id
+options(run_id = run_id, run_ts = run_ts)
 runtime_log <- data.frame()
 mi_warn_log <- data.frame(
   time = character(), stage = character(), component = character(),
@@ -335,7 +380,7 @@ cleanup_diagnostics_outputs <- function() {
     "runtime_log.csv", "runtime_summary.csv", "runtime_summary_top15.csv",
     "warnings_log.csv", "mi_warnings_log.csv", "mi_info_log.csv",
     "diagnostics_summary.csv", "diagnostics_missingness.csv",
-    "diagnostics_missingness_by_strata.csv",
+    "diagnostics_missingness-by-strata.csv",
     "balance_target_imp_summary.csv", "balance_target_by_imp.csv",
     "balance_target_worst_rows.csv", "balance_max_smd_by_imp.csv",
     "balance_worst_terms.csv", "balance_worst10.csv", "balance_table.csv",
@@ -350,7 +395,10 @@ cleanup_diagnostics_outputs <- function() {
     "mice_logged_events_summary.csv", "mice_spec.rds",
     "missingness-by-strata.csv", "missingness-drivers.csv",
     "missingness-pattern.csv", "plot_drop_log.csv",
-    "plot_registry.csv"
+    "plot_registry.csv",
+    "mi_logistic_ps_covariate_types.csv",
+    "mi_logistic_ps_abg_list.rds",
+    "mi_logistic_ps_vbg_list.rds"
   )
   diag_patterns <- c(
     "^mice_.*\\.(csv|log|rds|txt)$",
@@ -362,7 +410,8 @@ cleanup_diagnostics_outputs <- function() {
     "^ps_overlap_summary\\.csv$",
     "^model_fit_diagnostics\\.csv$",
     "^plot_drop_log\\.csv$",
-    "^diag-.*\\.csv$"
+    "^diag-.*\\.csv$",
+    "^mi_logistic_ps_.*\\.(csv|rds)$"
   )
   files <- list.files(results_dir, full.names = TRUE)
   base <- basename(files)
@@ -401,6 +450,31 @@ cleanup_diagnostics_outputs <- function() {
 }
 
 cleanup_diagnostics_outputs()
+# Ensure any stale Results artifacts from prior runs are removed
+stale_patterns <- c(
+  "^missingness_by_strata\\.csv$",
+  "^missingness_drivers\\.csv$",
+  "^missingness_by_strata_preview\\.csv$",
+  "^missingness_drivers_top20\\.csv$",
+  "^missingness_top10\\.csv$",
+  "^outcome_counts_by_cohort\\.csv$",
+  "^weighting_diagnostics_non_mi\\.csv$",
+  "^mi_specification\\.csv$",
+  "^memory_snapshots\\.csv$",
+  "^gbm_preflight_design_dims\\.csv$",
+  "^gbm_preflight_factor_levels_.*\\.csv$",
+  "^mi_logistic_ps_factor_levels_.*\\.csv$",
+  "^mi_logistic_ps_.*\\.(csv|rds)$",
+  "^get_imp_usage\\.csv$",
+  "^diagnostics_audit\\.md$",
+  "^pdf_page_text_stats\\.csv$",
+  "^pdf_blank_pages\\.json$",
+  "^pdf_hygiene_scan\\.csv$"
+)
+stale_files <- list.files(results_dir, full.names = TRUE)
+stale_base <- basename(stale_files)
+stale_files <- stale_files[grepl(paste(stale_patterns, collapse = "|"), stale_base)]
+if (length(stale_files)) fs::file_delete(stale_files)
 ```
 
 ## Helper functions for model diagnostics
@@ -664,6 +738,14 @@ write_csv_safely <- function(df, path, row_names = FALSE, required_cols = NULL) 
   run_ts <- diag_run_ts
   stopifnot(!is.null(df))
   df <- as.data.frame(df)
+  # Normalize pillar/vctrs numeric classes to base numeric for CSV export
+  df <- dplyr::mutate(
+    df,
+    dplyr::across(
+      where(~ inherits(.x, "pillar_num")),
+      ~ suppressWarnings(as.numeric(.x))
+    )
+  )
   if (!is.null(required_cols)) {
     missing <- setdiff(required_cols, names(df))
     stopifnot(length(missing) == 0)
@@ -1048,6 +1130,7 @@ print_plot_once <- function(p, plot_name, width = 8, height = 6, dpi = 200) {
   file <- results_path("figs", paste0(plot_name, ".png"))
   save_diag_plot(p, file, width = width, height = height, dpi = dpi)
   if (register_plot_file(plot_name, file)) {
+    mark_float_emitted()
     knitr::include_graphics(file)
   } else {
     invisible(NULL)
@@ -2096,6 +2179,9 @@ tbl1b_pdf <- to_pdf_table(table1B, font_size = 7, landscape = FALSE, label_col_w
                           longtable = TRUE)
 tbl1a_pdf
 tbl1b_pdf
+```
+
+```{r float-barrier-table1abg, include=FALSE}
 float_barrier()
 ```
 
@@ -2178,8 +2264,10 @@ tbl1_abg_pdf <- to_pdf_table(tbl1_abg, font_size = 7, landscape = FALSE, label_c
 tbl1_vbg_pdf <- to_pdf_table(tbl1_vbg, font_size = 7, landscape = FALSE, label_col_width = "2.0in",
                              longtable = TRUE)
 tbl1_abg_pdf
-float_barrier()
 tbl1_vbg_pdf
+```
+
+```{r float-barrier-table1-everyone, include=FALSE}
 float_barrier()
 ```
 
@@ -2309,6 +2397,9 @@ tbl2 <- gtsummary::tbl_merge(
 tbl2_pdf <- to_pdf_table(tbl2, font_size = 7, landscape = FALSE, label_col_width = "2.0in",
                          longtable = TRUE)
 tbl2_pdf
+```
+
+```{r float-barrier-table2, include=FALSE}
 float_barrier()
 ```
 
@@ -2741,8 +2832,11 @@ unw_vbg_panel <- ((plot_imv_vbg | plot_niv_vbg) /
 
 print_plot_once(unw_abg_panel, "spline-unweighted-abg", width = 8.5, height = 6)
 print_plot_once(unw_vbg_panel, "spline-unweighted-vbg", width = 8.5, height = 6)
-float_barrier()
 
+```
+
+```{r float-barrier-spline-unweighted, include=FALSE}
+float_barrier()
 ```
 
 # Inverse Propensity Weighting
@@ -3736,7 +3830,10 @@ render_table_pdf(
   file_stub = "missingness_by_strata",
   digits = 1
 )
+
+```{r float-barrier-missingness-strata, include=FALSE}
 float_barrier()
+```
 
 # --- Drivers of missingness (logit I(NA) on observed covariates) --------------
 # Candidate predictors (observed covariates only)
@@ -6835,8 +6932,8 @@ flow_tbl <- tibble::tibble(
     sum(subset_data$has_vbg == 1 & !is.na(subset_data$vbg_co2), na.rm = TRUE)
   )
 )
-render_table_pdf(flow_tbl, "Cohort flow summary", "cohort_flow_summary",
-                 digits = 0)
+render_table_pdf_maybe(flow_tbl, "Cohort flow summary", "cohort_flow_summary",
+                       digits = 0, show = SHOW_LOW_VALUE_TABLES)
 
 # Event counts by cohort
 outcome_vars <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
@@ -6866,10 +6963,10 @@ event_tbl <- dplyr::bind_rows(
 )
 event_tbl <- event_tbl |>
   dplyr::mutate(pct = ifelse(n > 0, 100 * events / n, NA_real_))
-render_table_pdf(event_tbl,
-                 "Outcome counts by cohort (ABG/VBG tested)",
-                 "outcome_counts_by_cohort",
-                 digits = 1)
+render_table_pdf_maybe(event_tbl,
+                       "Outcome counts by cohort (ABG/VBG tested)",
+                       "outcome_counts_by_cohort",
+                       digits = 1, show = SHOW_LOW_VALUE_TABLES)
 
 # Weighting diagnostics (non‑MI weights)
 stopifnot(all(c("w_abg", "w_vbg", "ps_abg", "ps_vbg") %in% names(subset_data)))
@@ -6894,11 +6991,12 @@ wt_sum_display <- wt_sum |>
     trunc = trunc_rate,
     p01_ps = ps_p01
   )
-render_table_pdf(wt_sum_display,
-                 "Weighting diagnostics summary (non‑MI)",
-                 "weighting_diagnostics_non_mi",
-                 wide = TRUE,
-                 digits = 3)
+render_table_pdf_maybe(wt_sum_display,
+                       "Weighting diagnostics summary (non‑MI)",
+                       "weighting_diagnostics_non_mi",
+                       wide = TRUE,
+                       digits = 3,
+                       show = SHOW_LOW_VALUE_TABLES)
 
 # Missingness + MI spec summary
 miss_vars <- c(covars_ps, "paco2", "vbg_co2",
@@ -6908,10 +7006,11 @@ miss_tbl <- subset_data_raw |>
   dplyr::summarise(dplyr::across(dplyr::all_of(miss_vars), ~ mean(is.na(.)) * 100)) |>
   tidyr::pivot_longer(dplyr::everything(), names_to = "variable", values_to = "pct_missing") |>
   dplyr::arrange(dplyr::desc(pct_missing))
-render_table_pdf(miss_tbl,
-                 "Variables by missingness (pre‑imputation)",
-                 "missingness_all",
-                 digits = 1)
+render_table_pdf_maybe(miss_tbl,
+                       "Variables by missingness (pre‑imputation)",
+                       "missingness_all",
+                       digits = 1,
+                       show = SHOW_LOW_VALUE_TABLES)
 
 mi_spec_tbl <- tibble::tibble(
   m = imp$m,
@@ -6921,9 +7020,10 @@ mi_spec_tbl <- tibble::tibble(
   ps_spline_k = MI_PS_SPLINE_K,
   ps_glm_maxit = MI_GLM_MAXIT
 )
-render_table_pdf(mi_spec_tbl,
-                 "MI specification (methods used)",
-                 "mi_specification")
+render_table_pdf_maybe(mi_spec_tbl,
+                       "MI specification (methods used)",
+                       "mi_specification",
+                       show = SHOW_LOW_VALUE_TABLES)
 ```
 
 ```{r}
@@ -6989,6 +7089,9 @@ mi_p_or <- plot_or_safe(
   title = "MI-pooled, IPW-adjusted odds ratios by PCO2 category (ABG vs VBG)"
 )
 print_plot_once(mi_p_or, "or-plot-mi-weighted", width = 7.5, height = 4.8)
+```
+
+```{r float-barrier-mi-or-plot, include=FALSE}
 float_barrier()
 ```
 
@@ -7047,6 +7150,9 @@ ggplot(curve_all, aes(x = co2, y = OR, color = group, fill = group)) +
     caption = paste0("Reference CO2: ABG ", ABG_CO2_REF, " mmHg; VBG ", VBG_CO2_REF, " mmHg")
   ) +
   theme_minimal(base_size = 10)
+```
+
+```{r float-barrier-mi-spline, include=FALSE}
 float_barrier()
 ```
 
@@ -7069,7 +7175,7 @@ fs::dir_create(diag_fig_dir)
 <!-- Missingness diagnostics (output suppressed) -->
 
 ```{r diagnostics-missingness}
-#| include: true
+#| include: false
 library(dplyr)
 library(tidyr)
 library(naniar)
@@ -7104,7 +7210,7 @@ miss_by_strata <- bind_rows(
     select(stratum, level, variable, pct_missing)
 )
 
-miss_by_strata_file <- results_path("diagnostics_missingness_by_strata.csv")
+miss_by_strata_file <- results_path("diagnostics_missingness-by-strata.csv")
 write_csv_safely(miss_by_strata, miss_by_strata_file, row_names = FALSE)
 
 md_fig_file <- results_path("figs", "diag-mi-missingness-pattern.png")
@@ -7141,11 +7247,12 @@ log_events_summary <- tryCatch(
   error = function(e) data.frame()
 )
 if (nrow(log_events_summary) && !("empty" %in% names(log_events_summary) && all(log_events_summary$empty))) {
-  render_table_pdf(
+  render_table_pdf_maybe(
     log_events_summary,
     caption = "Logged events (MI)",
     file_stub = "mice_logged_events_summary",
-    digits = 0
+    digits = 0,
+    show = SHOW_LOW_VALUE_TABLES
   )
 
   stopifnot(all(c("variable", "n") %in% names(log_events_summary)))
@@ -7185,13 +7292,14 @@ top_flagged <- chain_diag |>
   dplyr::filter(flag %in% TRUE) |>
   dplyr::arrange(dplyr::desc(abs(drift_tail_scaled)))
 if (nrow(top_flagged)) {
-  render_table_pdf(
+  render_table_pdf_maybe(
     top_flagged |>
       dplyr::select(variable, method, drift_tail, drift_tail_scaled, slope, slope_scaled,
                     tail_n_finite, tail_window_na_frac, flag_reason),
     caption = "MICE chain diagnostics (flagged drift)",
     file_stub = "mice_chain_diagnostics_flagged",
-    digits = 3
+    digits = 3,
+    show = SHOW_LOW_VALUE_TABLES
   )
 } else {
   message("No flagged drift in chain diagnostics.")
@@ -7200,11 +7308,12 @@ if (nrow(top_flagged)) {
 top_tail_na <- chain_diag |>
   dplyr::arrange(dplyr::desc(tail_window_na_frac))
 if (nrow(top_tail_na)) {
-  render_table_pdf(
+  render_table_pdf_maybe(
     top_tail_na,
     caption = "MICE chain diagnostics (tail NA fraction)",
     file_stub = "mice_chain_diagnostics_tail_na",
-    digits = 3
+    digits = 3,
+    show = SHOW_LOW_VALUE_TABLES
   )
 }
 
@@ -7502,11 +7611,12 @@ ps_summary <- dplyr::bind_rows(
   ps_stat(ps_vbg, "VBG")
 )
 write_csv_safely(ps_summary, results_path("ps_overlap_summary.csv"), row_names = FALSE)
-render_table_pdf(
+render_table_pdf_maybe(
   ps_summary,
   caption = "Propensity score overlap (tested cohort)",
   file_stub = "ps_overlap_summary",
-  digits = 3
+  digits = 3,
+  show = SHOW_LOW_VALUE_TABLES
 )
 
 wt_df <- bind_rows(
@@ -7625,11 +7735,12 @@ worst_terms_by_imp <- bind_rows(bal_imp_abg$worst_terms_by_imp, bal_imp_vbg$wors
 write_csv_safely(bal_imp, results_path("balance_target_by_imp.csv"), row_names = FALSE)
 write_csv_safely(bal_imp_summary, results_path("balance_target_imp_summary.csv"), row_names = FALSE)
 write_csv_safely(worst_rows, results_path("balance_target_worst_rows.csv"), row_names = FALSE)
-render_table_pdf(
+render_table_pdf_maybe(
   worst_rows,
   caption = "Target SMD rows across imputations (sorted by |SMD|)",
   file_stub = "balance_target_worst_rows",
-  digits = 3
+  digits = 3,
+  show = SHOW_LOW_VALUE_TABLES
 )
 write_csv_safely(worst_by_imp, results_path("balance_max_smd_by_imp.csv"), row_names = FALSE)
 write_csv_safely(worst_terms_by_imp, results_path("balance_worst_terms.csv"), row_names = FALSE)
@@ -7645,22 +7756,24 @@ if (nrow(bal_imp_summary)) {
       max = max(max_abs_post, na.rm = TRUE),
       .groups = "drop"
     )
-  render_table_pdf(
+  render_table_pdf_maybe(
     dist_tbl,
     caption = "Distribution of max |Target SMD| across imputations",
     file_stub = "balance_target_max_smd_distribution",
-    digits = 3
+    digits = 3,
+    show = SHOW_LOW_VALUE_TABLES
   )
 }
 if (nrow(worst_terms_by_imp)) {
   worst_freq <- worst_terms_by_imp |>
     dplyr::count(group, term, sort = TRUE) |>
     dplyr::ungroup()
-  render_table_pdf(
+  render_table_pdf_maybe(
     worst_freq,
     caption = "Most frequent worst-balance terms",
     file_stub = "balance_worst_terms_freq",
-    digits = 0
+    digits = 0,
+    show = SHOW_LOW_VALUE_TABLES
   )
 }
 
@@ -7900,11 +8013,12 @@ diag_summary_display <- diag_summary |>
     `med_max_smd` = target_max_smd_post_med,
     `max_max_smd` = target_max_smd_post_max
   )
-render_table_pdf(diag_summary_display,
-                 "Diagnostics summary (IPSW + MI)",
-                 "diagnostics_summary_display",
-                 wide = TRUE,
-                 digits = 3)
+render_table_pdf_maybe(diag_summary_display,
+                       "Diagnostics summary (IPSW + MI)",
+                       "diagnostics_summary_display",
+                       wide = TRUE,
+                       digits = 3,
+                       show = SHOW_LOW_VALUE_TABLES)
 
 audit_lines <- c(
   "# Diagnostics Audit",
@@ -7948,11 +8062,12 @@ write_csv_safely(mi_info_log, results_path("mi_info_log.csv"), row_names = FALSE
 if (nrow(warn_df)) {
   msg_counts <- warn_df |>
     dplyr::count(stage, component, message, sort = TRUE)
-  render_table_pdf(
+  render_table_pdf_maybe(
     msg_counts,
     caption = "Warning messages by stage/component",
     file_stub = "warnings_by_stage_component",
-    digits = 0
+    digits = 0,
+    show = SHOW_LOW_VALUE_TABLES
   )
 
   nonconv <- warn_df |>
@@ -7960,11 +8075,12 @@ if (nrow(warn_df)) {
   if (nrow(nonconv)) {
     nonconv_ctx <- nonconv |>
       dplyr::count(stage, component, analysis_variant, model_type, outcome, group, imputation, sort = TRUE)
-    render_table_pdf(
+    render_table_pdf_maybe(
       nonconv_ctx,
       caption = "Nonconvergence contexts",
       file_stub = "nonconvergence_contexts",
-      digits = 0
+      digits = 0,
+      show = SHOW_LOW_VALUE_TABLES
     )
   }
 } else {
@@ -7995,20 +8111,22 @@ sep <- mi_outcome_diag |>
 if (nrow(nonconv)) {
   nonconv_counts <- nonconv |>
     dplyr::count(analysis_variant, group, outcome, model_type, sort = TRUE)
-  render_table_pdf(
+  render_table_pdf_maybe(
     nonconv_counts,
     caption = "Nonconverged fits by variant/group/outcome",
     file_stub = "nonconverged_fits_by_variant",
-    digits = 0
+    digits = 0,
+    show = SHOW_LOW_VALUE_TABLES
   )
 
   worst_imps <- nonconv |>
     dplyr::count(imputation, sort = TRUE)
-  render_table_pdf(
+  render_table_pdf_maybe(
     worst_imps,
     caption = "Imputations with most nonconverged fits",
     file_stub = "nonconverged_imputations",
-    digits = 0
+    digits = 0,
+    show = SHOW_LOW_VALUE_TABLES
   )
 } else {
   message("No nonconverged outcome fits recorded.")
@@ -8017,11 +8135,12 @@ if (nrow(nonconv)) {
 if (nrow(sep)) {
   sep_counts <- sep |>
     dplyr::count(analysis_variant, group, outcome, model_type, sort = TRUE)
-  render_table_pdf(
+  render_table_pdf_maybe(
     sep_counts,
     caption = "Separation flags by variant/group/outcome",
     file_stub = "separation_flags_by_variant",
-    digits = 0
+    digits = 0,
+    show = SHOW_LOW_VALUE_TABLES
   )
 } else {
   message("No separation flags recorded.")
@@ -8032,11 +8151,12 @@ if (nrow(sep)) {
     dplyr::mutate(extreme = pmin(min_phat, 1 - max_phat, na.rm = TRUE)) |>
     dplyr::arrange(extreme)
 if (nrow(worst_phat)) {
-  render_table_pdf(
+  render_table_pdf_maybe(
     worst_phat,
     caption = "Worst fitted-probability extremes",
     file_stub = "worst_phat_extremes",
-    digits = 3
+    digits = 3,
+    show = SHOW_LOW_VALUE_TABLES
   )
 }
 
@@ -8070,22 +8190,24 @@ write_csv_safely(issue_summary, results_path("mi_fit_issue_summary.csv"))
 if (nrow(mi_warn_log)) {
   warn_top <- mi_warn_log |>
     dplyr::count(stage, component, analysis_variant, model_type, message, sort = TRUE)
-  render_table_pdf(
+  render_table_pdf_maybe(
     warn_top,
     caption = "Warnings by stage/component",
     file_stub = "warnings_by_stage_component_full",
-    digits = 0
+    digits = 0,
+    show = SHOW_LOW_VALUE_TABLES
   )
 }
 
 # Top MICE loggedEvents drivers
 stopifnot(exists("log_events_summary"))
 if (nrow(log_events_summary)) {
-  render_table_pdf(
+  render_table_pdf_maybe(
     log_events_summary,
     caption = "MICE loggedEvents drivers",
     file_stub = "mice_logged_events_drivers",
-    digits = 0
+    digits = 0,
+    show = SHOW_LOW_VALUE_TABLES
   )
 }
 
@@ -8162,11 +8284,12 @@ top_steps <- runtime_log_curr |>
   arrange(desc(seconds))
 top15_file <- results_path("runtime_summary_top15.csv")
 write_csv_safely(top_steps, top15_file, row_names = FALSE)
-render_table_pdf(
+render_table_pdf_maybe(
   top_steps,
   caption = "Runtime steps (seconds)",
   file_stub = "runtime_steps",
-  digits = 3
+  digits = 3,
+  show = SHOW_LOW_VALUE_TABLES
 )
 
 total_seconds <- sum(runtime_log_curr$seconds, na.rm = TRUE)
@@ -8178,11 +8301,12 @@ runtime_summary <- bind_rows(
 )
 runtime_summary_file <- results_path("runtime_summary.csv")
 write_csv_safely(runtime_summary, runtime_summary_file, row_names = FALSE)
-render_table_pdf(
+render_table_pdf_maybe(
   runtime_summary,
   caption = "Runtime summary (total + all steps)",
   file_stub = "runtime_summary",
-  digits = 3
+  digits = 3,
+  show = SHOW_LOW_VALUE_TABLES
 )
 
 # GBM preflight diagnostics (CSV only)
@@ -8197,11 +8321,12 @@ if (is.finite(PILOT_FRAC) && PILOT_FRAC > 0 && PILOT_FRAC < 1) {
     mutate(projected_seconds = seconds / PILOT_FRAC,
            projected_hours = projected_seconds / 3600)
   proj_total <- sum(proj$projected_hours, na.rm = TRUE)
-  render_table_pdf(
+  render_table_pdf_maybe(
     proj |> select(step_name, seconds, projected_hours),
     caption = paste0("Runtime projection (scalable steps; pilot_frac = ", PILOT_FRAC, ")"),
     file_stub = "runtime_projection",
-    digits = 3
+    digits = 3,
+    show = SHOW_LOW_VALUE_TABLES
   )
   if (is.finite(proj_total) && proj_total > 10) {
     warning("Projected full-run time exceeds 10 hours (", round(proj_total, 1), "h).",
@@ -8230,7 +8355,7 @@ expected_diag <- c(
   "runtime_log.csv", "runtime_summary.csv", "runtime_summary_top15.csv",
   "warnings_log.csv", "mi_warnings_log.csv", "mi_info_log.csv",
   "diagnostics_summary.csv", "diagnostics_missingness.csv",
-  "diagnostics_missingness_by_strata.csv",
+  "diagnostics_missingness-by-strata.csv",
   "balance_target_imp_summary.csv", "balance_target_by_imp.csv",
   "balance_target_worst_rows.csv", "balance_max_smd_by_imp.csv",
   "balance_worst_terms.csv", "balance_worst10.csv", "balance_table.csv",
@@ -8312,11 +8437,12 @@ if (file.exists(audit_issues)) {
   issues_df <- read.csv(audit_issues)
   issues_df <- issues_df |>
     dplyr::arrange(factor(severity, levels = c("blocker", "high", "medium", "low")))
-  render_table_pdf(
+  render_table_pdf_maybe(
     issues_df,
     caption = "Diagnostics audit issues (see Results/diagnostics_audit.md for details)",
     file_stub = "diagnostics_audit_issues",
-    digits = 2
+    digits = 2,
+    show = SHOW_LOW_VALUE_TABLES
   )
 } else {
   cat("Diagnostics audit summary not available.\n")
