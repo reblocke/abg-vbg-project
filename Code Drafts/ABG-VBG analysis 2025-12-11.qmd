@@ -3,7 +3,7 @@ title: "ABG‑VBG Analysis"
 author: "Brian Locke, Anila Mehta"
 editor: visual
 params:
-  run_mode: "pilot" # options: "pilot" or "full"
+  run_mode: "full" # options: "pilot" or "full"
   pilot_frac: 0.05 # used only when run_mode == "pilot"
   mi_batch_threshold_pilot: 5000 # pilot-only batching threshold
   mi_batch_threshold_full: 200000 # full-run batching threshold
@@ -144,17 +144,21 @@ escape_latex_text <- function(x) {
   gsub("([\\\\%$&#{}_\\^~])", "\\\\\\1", x, perl = TRUE)
 }
 
-# Float barrier: emit only when a float has just been produced
-float_barrier_pending <- FALSE
+# Float barrier helpers (use 4 modes to control float flushing)
 mark_float_emitted <- function() {
-  float_barrier_pending <<- TRUE
   invisible(TRUE)
 }
-float_barrier <- function() {
+float_barrier <- function(mode = c("soft", "section", "hard", "flush")) {
   if (!knitr::is_latex_output()) return(invisible(NULL))
-  if (!isTRUE(float_barrier_pending)) return(invisible(NULL))
-  float_barrier_pending <<- FALSE
-  knitr::asis_output("\\FloatBarrier\\nopagebreak")
+  mode <- match.arg(mode)
+  cmd <- switch(
+    mode,
+    soft = "\\FloatBarrier\\nopagebreak",
+    section = "\\FloatBarrier\\nopagebreak\\par\\noindent",
+    hard = "\\FloatBarrier\\clearpage",
+    flush = "\\FloatBarrier\\pagebreak"
+  )
+  knitr::asis_output(cmd)
 }
 
 # helper: render full tables for PDF (no previews)
@@ -1536,7 +1540,31 @@ append_mem_snapshot("stage1", "start", "pre")
 stata_file <- file.path(data_dir_name, "full_db.dta")
 
 stata_data <- read_dta(stata_file)
-var_labels <- var_label(stata_data)
+
+# Sanitize variable labels for PDF/TOC safety (avoid Unicode subscripts)
+sanitize_label_text <- function(x) {
+  if (is.null(x)) return(x)
+  x <- gsub("\u2080", "0", x, fixed = TRUE)
+  x <- gsub("\u2081", "1", x, fixed = TRUE)
+  x <- gsub("\u2082", "2", x, fixed = TRUE)
+  x <- gsub("\u2083", "3", x, fixed = TRUE)
+  x <- gsub("\u2084", "4", x, fixed = TRUE)
+  x <- gsub("\u2085", "5", x, fixed = TRUE)
+  x <- gsub("\u2086", "6", x, fixed = TRUE)
+  x <- gsub("\u2087", "7", x, fixed = TRUE)
+  x <- gsub("\u2088", "8", x, fixed = TRUE)
+  x <- gsub("\u2089", "9", x, fixed = TRUE)
+  x
+}
+sanitize_var_labels <- function(df) {
+  labs <- labelled::var_label(df)
+  labs <- lapply(labs, sanitize_label_text)
+  labelled::var_label(df) <- labs
+  df
+}
+stata_data <- sanitize_var_labels(stata_data)
+
+var_labels <- labelled::var_label(stata_data)
 value_labels <- lapply(stata_data, function(x) if (is.labelled(x)) val_labels(x))
 saveRDS(
   list(var_labels = var_labels, value_labels = value_labels),
@@ -2167,8 +2195,10 @@ tbl1a_pdf
 tbl1b_pdf
 ```
 
-```{r float-barrier-table1abg, include=FALSE}
-float_barrier()
+```{r float-barrier-table1abg}
+#| echo: false
+#| results: "asis"
+float_barrier("section")
 ```
 
 ```{r export-table1a-table1b-word}
@@ -2251,8 +2281,10 @@ tbl1_abg_pdf
 tbl1_vbg_pdf
 ```
 
-```{r float-barrier-table1-everyone, include=FALSE}
-float_barrier()
+```{r float-barrier-table1-everyone}
+#| echo: false
+#| results: "asis"
+float_barrier("section")
 ```
 
 ```{r co2-category-definitions}
@@ -2381,8 +2413,10 @@ tbl2_pdf <- to_pdf_table(tbl2, font_size = 7, landscape = FALSE, label_col_width
 tbl2_pdf
 ```
 
-```{r float-barrier-table2, include=FALSE}
-float_barrier()
+```{r float-barrier-table2}
+#| echo: false
+#| results: "asis"
+float_barrier("section")
 ```
 
 ```{r tbl2-outcome-panel, echo=FALSE, message=FALSE, warning=FALSE}
@@ -2817,13 +2851,15 @@ print_plot_once(unw_vbg_panel, "spline-unweighted-vbg", width = 8.5, height = 6)
 
 ```
 
-```{r float-barrier-spline-unweighted, include=FALSE}
-float_barrier()
+```{r float-barrier-spline-unweighted}
+#| echo: false
+#| results: "asis"
+float_barrier("section")
 ```
 
 # Inverse Propensity Weighting
 
-IPW done using Gradient Boosting Methods (GBM) - a type of decision-tree based machine learning. "***Random forests and GBM are designed to automatically include relevant interactions for variables included in the model.*** As such, using a GBM to estimate the PS model, can reduce model misspecification, since ***the analyst is not required to identify relevant interactions or nonlinearities."*** from this citation: PMID: [39947224](https://pubmed.ncbi.nlm.nih.gov/39947224/)<https://pmc.ncbi.nlm.nih.gov/articles/PMC11825193/>
+IPW done using Gradient Boosting Methods (GBM) - a type of decision-tree based machine learning. "***Random forests and GBM are designed to automatically include relevant interactions for variables included in the model.*** As such, using a GBM to estimate the PS model, can reduce model misspecification, since ***the analyst is not required to identify relevant interactions or nonlinearities."*** from this citation: PMID: [39947224](https://pubmed.ncbi.nlm.nih.gov/39947224/). PMCID: [PMC11825193](https://pmc.ncbi.nlm.nih.gov/articles/PMC11825193/).
 
 Current propensity score uses `covars_gbm` (demographics, comorbidities, encounter type, vitals, labs) as defined above; in this block only `encounter_type` is explicitly factored before weighting.
 
@@ -3742,6 +3778,7 @@ fit_mi_ps_glm <- function(df, treat, covars, k = 4L, maxit = 25L, context = NULL
 #| code-block-title: "Missingness structure and drivers"
 #| echo: true
 #| message: false
+#| results: "hide"
 
 library(dplyr)
 library(tidyr)
@@ -3804,15 +3841,20 @@ miss_panel_full <- miss_by_strata |>
 miss_panel_file <- results_path("missingness-by-strata.csv")
 write_csv_safely(miss_panel_full, miss_panel_file, row_names = FALSE)
 
-render_table_pdf(
+render_table_pdf_maybe(
   miss_panel_full,
   caption = "Missingness by key strata (pre-imputation).",
   file_stub = "missingness_by_strata",
-  digits = 1
+  digits = 1,
+  show = SHOW_LOW_VALUE_TABLES
 )
 
-float_barrier()
+```
 
+```{r float-barrier-missingness}
+#| echo: false
+#| results: "asis"
+float_barrier("section")
 ```
 
 ```{r missingness-drivers}
@@ -3911,11 +3953,12 @@ if (nrow(model_results) > 0) {
       p.value = signif(p.value, 3)
     )
 
-  render_table_pdf(
+  render_table_pdf_maybe(
     model_results_disp,
     caption = "Predictors of missingness (logit OR).",
     file_stub = "missingness-drivers",
-    digits = 2
+    digits = 2,
+    show = SHOW_LOW_VALUE_TABLES
   )
 } else {
   model_results_stub <- data.frame(
@@ -5218,11 +5261,12 @@ if (length(mc_key_terms)) {
   mc_key <- mc_tab |>
     dplyr::filter(term %in% mc_key_terms) |>
     dplyr::mutate(qc_flag = mc_err_over_se > MC_ERR_RATIO_THRESH)
-  render_table_pdf(
+  render_table_pdf_maybe(
     mc_key,
     caption = paste0("MC error QC (key terms only; threshold = ", MC_ERR_RATIO_THRESH, ")"),
     file_stub = "mc_error_qc_key_terms",
-    digits = 3
+    digits = 3,
+    show = SHOW_LOW_VALUE_TABLES
   )
   if (any(mc_key$qc_flag, na.rm = TRUE)) {
     knitr::asis_output(
@@ -5423,11 +5467,12 @@ mi_obs_imp_summary <- dplyr::bind_rows(lapply(diag_vars, function(v) {
 mi_obs_imp_summary_file <- results_path("mi_obs_vs_imp_summary.csv")
 if (nrow(mi_obs_imp_summary)) {
   write_csv_safely(mi_obs_imp_summary, mi_obs_imp_summary_file, row_names = FALSE)
-  render_table_pdf(
+  render_table_pdf_maybe(
     mi_obs_imp_summary,
     caption = "Observed vs imputed summaries",
     file_stub = "mi_obs_vs_imp_summary",
-    digits = 3
+    digits = 3,
+    show = SHOW_LOW_VALUE_TABLES
   )
 } else {
   mi_obs_imp_stub <- data.frame(
@@ -5564,11 +5609,12 @@ if (length(vars_show)) {
 mc_file <- results_path("mi_mcerr_progress.csv")
 stopifnot(file.exists(mc_file))
 mc_prog <- utils::read.csv(mc_file)
-render_table_pdf(
+render_table_pdf_maybe(
   mc_prog,
   caption = "MC error progress by m (early-stop diagnostic)",
   file_stub = "mi_mcerr_progress",
-  digits = 3
+  digits = 3,
+  show = SHOW_LOW_VALUE_TABLES
 )
 ```
 
@@ -5585,11 +5631,12 @@ dat_imp <- mice::complete(imp, action = 1, include = FALSE)
 
 # 1) Tabular summary on completed data (should be near 0% by design)
 miss_tbl <- naniar::miss_var_summary(dat_imp) %>% arrange(desc(pct_miss))
-render_table_pdf(
+render_table_pdf_maybe(
   miss_tbl,
   caption = "Missingness after MI (completed data)",
   file_stub = "missingness_after_mi",
-  digits = 2
+  digits = 2,
+  show = SHOW_LOW_VALUE_TABLES
 )
 
 # 2) Bar plot of top-K (mostly zeros after imputation)
@@ -6394,11 +6441,12 @@ mi_weight_diag_abg_df <- dplyr::mutate(
 )
 mi_weight_diag_abg_sum <- mi_weight_diag_abg_df |>
   dplyr::summarise(dplyr::across(where(is.numeric), ~ stats::median(.x, na.rm = TRUE)))
-render_table_pdf(
+render_table_pdf_maybe(
   round(mi_weight_diag_abg_sum, 3),
   caption = "ABG weight diagnostics (MI; median across imputations)",
   file_stub = "mi_weight_diag_abg_summary",
-  digits = 3
+  digits = 3,
+  show = SHOW_LOW_VALUE_TABLES
 )
 stopifnot(all(is.finite(mi_weight_diag_abg_df$ess)))
 ```
@@ -6442,11 +6490,12 @@ p_abg <- ggplot(bal_abg_plot, aes(x = smd, y = label, shape = type)) +
   theme_minimal(base_size = 10)
 save_diag_plot(p_abg, results_path("figs", "diag-mi-balance-pooled-abg.png"), width = 7, height = 6)
 
-render_table_pdf(
+render_table_pdf_maybe(
   bal_imp_abg$worst_rows_overall,
   caption = "ABG: target SMD rows across imputations (sorted by |SMD|)",
   file_stub = "abg_worst_target_smd_rows",
-  digits = 3
+  digits = 3,
+  show = SHOW_LOW_VALUE_TABLES
 )
 
 abg_imp_summary <- bal_imp_abg$bal_imp_summary |>
@@ -6455,11 +6504,12 @@ abg_imp_summary <- bal_imp_abg$bal_imp_summary |>
     p90 = quantile(max_abs_post, 0.9, na.rm = TRUE),
     max = max(max_abs_post, na.rm = TRUE)
   )
-render_table_pdf(
+render_table_pdf_maybe(
   abg_imp_summary,
   caption = "ABG: max |Target SMD| summary across imputations",
   file_stub = "abg_target_smd_summary",
-  digits = 3
+  digits = 3,
+  show = SHOW_LOW_VALUE_TABLES
 )
 ```
 
@@ -6483,11 +6533,12 @@ mi_weight_diag_vbg_df <- dplyr::mutate(
 )
 mi_weight_diag_vbg_sum <- mi_weight_diag_vbg_df |>
   dplyr::summarise(dplyr::across(where(is.numeric), ~ stats::median(.x, na.rm = TRUE)))
-render_table_pdf(
+render_table_pdf_maybe(
   round(mi_weight_diag_vbg_sum, 3),
   caption = "VBG weight diagnostics (MI; median across imputations)",
   file_stub = "mi_weight_diag_vbg_summary",
-  digits = 3
+  digits = 3,
+  show = SHOW_LOW_VALUE_TABLES
 )
 stopifnot(all(is.finite(mi_weight_diag_vbg_df$ess)))
 ```
@@ -6523,11 +6574,12 @@ p_vbg <- ggplot(bal_vbg_plot, aes(x = smd, y = label, shape = type)) +
   theme_minimal(base_size = 10)
 save_diag_plot(p_vbg, results_path("figs", "diag-mi-balance-pooled-vbg.png"), width = 7, height = 6)
 
-render_table_pdf(
+render_table_pdf_maybe(
   bal_imp_vbg$worst_rows_overall,
   caption = "VBG: target SMD rows across imputations (sorted by |SMD|)",
   file_stub = "vbg_worst_target_smd_rows",
-  digits = 3
+  digits = 3,
+  show = SHOW_LOW_VALUE_TABLES
 )
 
 vbg_imp_summary <- bal_imp_vbg$bal_imp_summary |>
@@ -6536,11 +6588,12 @@ vbg_imp_summary <- bal_imp_vbg$bal_imp_summary |>
     p90 = quantile(max_abs_post, 0.9, na.rm = TRUE),
     max = max(max_abs_post, na.rm = TRUE)
   )
-render_table_pdf(
+render_table_pdf_maybe(
   vbg_imp_summary,
   caption = "VBG: max |Target SMD| summary across imputations",
   file_stub = "vbg_target_smd_summary",
-  digits = 3
+  digits = 3,
+  show = SHOW_LOW_VALUE_TABLES
 )
 ```
 
@@ -6627,9 +6680,9 @@ invisible(lapply(seq_len(imp_n), function(i) {
 }))
 ```
 
-## 14) MI + IPW three-level PCO2 (ABG & VBG)
+## MI + IPW three-level PCO2 (ABG & VBG)
 
-### 14.1 ABG: MI + IPW, three-level PCO2 outcomes
+### ABG: MI + IPW, three-level PCO2 outcomes
 
 ```{r}
 #| label: mi-ipw-abg-threelevel
@@ -6647,7 +6700,7 @@ register_model_diagrams(mi_abg_cat_forms)
 message("ABG MI 3-level results were computed in the single-pass MI loop above.")
 ```
 
-### 14.2 VBG: MI + IPW, three-level PCO2 outcomes
+### VBG: MI + IPW, three-level PCO2 outcomes
 
 ```{r}
 #| label: mi-ipw-vbg-threelevel
@@ -6665,7 +6718,7 @@ register_model_diagrams(mi_vbg_cat_forms)
 message("VBG MI 3-level results were computed in the single-pass MI loop above.")
 ```
 
-### 14.3 Table 3: MI-pooled IPW associations (3-level CO₂)
+### Table 3: MI-pooled IPW associations (3-level CO2)
 
 ```{r table3-ipw-mi-co2}
 #| code-block-title: "Table 3. Primary IPW associations (MI-pooled)"
@@ -6725,7 +6778,7 @@ gt::gt(table3_wide) |>
   )
 ```
 
-### 14.4 Summary: adjusted CO2-category associations across analysis tracks
+### Summary: adjusted CO2-category associations across analysis tracks
 
 ```{r table-summary-adjusted-threelevel}
 #| code-block-title: "Summary: adjusted CO2-category ORs (unweighted, IPW, IPW+MI)"
@@ -7050,7 +7103,7 @@ table(vapply(seq_len(imp_n), function(i) {
 stopifnot(exists("abg_cat_results"), nrow(abg_cat_results) > 0)
 ```
 
-### 14.3 Visualization: pooled three-level ORs
+### Visualization: pooled three-level ORs
 
 ```{r}
 #| label: ipw-three-level-pco2-mi-abg-vbg
@@ -7093,11 +7146,13 @@ mi_p_or <- plot_or_safe(
 print_plot_once(mi_p_or, "or-plot-mi-weighted", width = 7.5, height = 4.8)
 ```
 
-```{r float-barrier-mi-or-plot, include=FALSE}
-float_barrier()
+```{r float-barrier-mi-or-plot}
+#| echo: false
+#| results: "asis"
+float_barrier("section")
 ```
 
-### 15.3 Visualization
+### Visualization
 
 ```{r}
 #| label: ipw-rcs-overlay-mi-abg-vbg
@@ -7154,8 +7209,10 @@ ggplot(curve_all, aes(x = co2, y = OR, color = group, fill = group)) +
   theme_minimal(base_size = 10)
 ```
 
-```{r float-barrier-mi-spline, include=FALSE}
-float_barrier()
+```{r float-barrier-mi-spline}
+#| echo: false
+#| results: "asis"
+float_barrier("section")
 ```
 
 ## Diagnostics
@@ -7173,7 +7230,9 @@ fs::dir_create(diag_fig_dir)
 ```
 
 ```{r diagnostics-missingness}
-#| include: false
+#| echo: true
+#| message: false
+#| results: "hide"
 library(dplyr)
 library(tidyr)
 library(naniar)
@@ -7683,11 +7742,12 @@ bal_worst <- bal_target_sum |>
   arrange(desc(max_abs_post)) |>
   ungroup()
 write_csv_safely(bal_worst, results_path("balance_worst10.csv"), row_names = FALSE)
-render_table_pdf(
+render_table_pdf_maybe(
   bal_worst,
   caption = "Target balance by covariate (sorted by max |SMD|)",
   file_stub = "balance_worst",
-  digits = 3
+  digits = 3,
+  show = SHOW_LOW_VALUE_TABLES
 )
 
 bal_plot_df <- bal_target |>
