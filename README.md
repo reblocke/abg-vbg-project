@@ -24,31 +24,32 @@ If you use this repository, please cite the accompanying paper (**TODO**) and/or
 
 - Open `abg-vbg-project.Rproj` in RStudio.
 
-### 2) Restore the analysis environment (recommended)
+### 2) Restore the analysis environment (required)
 
-If you are using `renv` (recommended for reproducible R environments):
+This project uses `renv` as the source of truth for R package reproducibility.
 
 ```r
-install.packages("renv")
 renv::restore()
 ```
 
-If `renv.lock` is **not** present in the repo yet, create it once dependencies are stable:
+Before long renders, run the preflight checker:
 
-```r
-install.packages("renv")
-renv::init()
-renv::snapshot()
+```bash
+Rscript -e "source('scripts/check_env.R')"
 ```
 
 ### 3) Run the analysis
 
-**TODO:** Replace the examples below with the project’s real entrypoints once finalized.
+Main PDF render:
 
-```r
-# Example patterns (choose one that matches your workflow)
-source("Code Drafts/01_analysis.R")
-rmarkdown::render("Drafts/manuscript.Rmd")
+```bash
+quarto render "Code Drafts/ABG-VBG analysis 2025-12-11.qmd" --to pdf
+```
+
+Reproducible wrapper (preflight + render):
+
+```bash
+./scripts/render_pdf.sh
 ```
 
 Expected outputs (examples):
@@ -76,8 +77,12 @@ If you add any non-trivial datasets, also add:
 - Hardware notes (if any)
 
 Environment capture options:
-- `renv` (recommended): `renv.lock`
+- `renv` (required for R): `renv.lock`
 - Container (optional): `Dockerfile` / `rocker/*` base image
+
+Python helper tooling (optional):
+- Use `uv` only for Python sidecar scripts (for example, PDF parsing helpers).
+- `uv` does not replace `renv`; it complements it in mixed-language workflows.
 
 ## Repository layout
 
@@ -152,4 +157,4 @@ If you discover a security or privacy issue, please follow [`SECURITY.md`](./SEC
 - [ ] Add a one-command reproducibility target (`make all` / `Rscript run_all.R`)
 - [ ] Fill Results mapping table for all figures/tables
 - [ ] Add data provenance + access notes
-- [ ] Pin dependencies (`renv.lock`)
+- [x] Pin dependencies (`renv.lock`)

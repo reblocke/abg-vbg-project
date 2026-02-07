@@ -1,2 +1,2 @@
-"run_id","run_ts","run_mode","pilot_frac","full_n","subset_n"
-"20260205_144255","2026-02-05 14:42:55.002451","pilot",0.01,833476,8335
+"run_id","run_ts","run_mode","pilot_frac","full_n","sampled_n","subset_n"
+"20260206_194732","2026-02-06 19:47:32.320298","pilot",0.01,833476,8335,5175
