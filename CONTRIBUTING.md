@@ -18,11 +18,27 @@ Thanks for your interest in contributing!
 ## Development setup (suggested)
 - Install R and RStudio
 - Open `abg-vbg-project.Rproj`
-- If using `renv`:
+- Restore packages from lockfile:
   ```r
-  install.packages("renv")
   renv::restore()
   ```
+
+## Dependency workflow (required)
+1. Use `renv.lock` as the canonical R dependency snapshot.
+2. Before long renders, run:
+   ```bash
+   Rscript -e "source('scripts/check_env.R')"
+   ```
+3. If dependencies change:
+   ```r
+   renv::snapshot()
+   ```
+4. Commit `renv.lock` in the same PR as code changes that require new packages.
+5. Do not add `install.packages()` calls to project scripts or notebooks.
+
+Python sidecars (optional):
+- If Python helper scripts become part of routine workflow, manage them with `uv`.
+- Keep that scope separate from R dependency management (`renv` remains authoritative for analysis execution).
 
 ## Style
 - Prefer clear file names (e.g., `01_import.R`, `02_clean.R`, `03_model.R`)
