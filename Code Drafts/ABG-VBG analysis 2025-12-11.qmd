@@ -3,8 +3,8 @@ title: "ABG‑VBG Analysis"
 author: "Brian Locke, Anila Mehta"
 editor: visual
 params:
-  run_mode: "pilot" # options: "pilot" or "full"
-  pilot_frac: 0.01 # used only when run_mode == "pilot"
+  run_mode: "full" # options: "pilot" or "full"
+  pilot_frac: 0.05 # used only when run_mode == "pilot"
   mi_batch_threshold_pilot: 5000 # pilot-only batching threshold
   mi_batch_threshold_full: 200000 # full-run batching threshold
   sample_seed: 20251206
@@ -252,7 +252,7 @@ render_table_pdf_maybe <- function(df, caption, file_stub,
 # Consolidated package management ------------------------------------------------
 required_pkgs <- c(
   "WeightIt", "broom", "cobalt", "codebookr", "dplyr", "flextable", "parallel",
-  "gbm", "ggplot2", "gt", "gtsummary", "haven", "labelled", "scales",
+  "gbm", "ggplot2", "gt", "gtsummary", "haven", "labelled", "Matrix", "scales",
   "modelsummary", "officer", "patchwork", "rms", "survey", "tibble", "lubridate",
   "sensitivitymw", "here", "fs", "dagitty", "ggdag", "naniar", "mice", "miceadds",
   "digest"
@@ -474,6 +474,9 @@ stale_patterns <- c(
   "^memory_snapshots\\.csv$",
   "^gbm_preflight_design_dims\\.csv$",
   "^gbm_preflight_factor_levels_.*\\.csv$",
+  "^diag_mi_shap_errors\\.csv$",
+  "^diag_mi_shap_method_used\\.csv$",
+  "^mi_shap_imp_diagnostics\\.csv$",
   "^mi_logistic_ps_factor_levels_.*\\.csv$",
   "^mi_logistic_ps_.*\\.(csv|rds)$",
   "^get_imp_usage\\.csv$",
@@ -1699,6 +1702,11 @@ RUN_SHAP <- TRUE
 SHAP_TOP_N <- 10L
 SHAP_SAMPLE_N <- 2000L
 SHAP_NSIM <- 20L
+MI_SHAP_SAMPLE_N_FULL <- 400L
+MI_SHAP_SAMPLE_N_PILOT <- 1000L
+MI_SHAP_SAMPLE_N <- if (RUN_MODE == "full") MI_SHAP_SAMPLE_N_FULL else MI_SHAP_SAMPLE_N_PILOT
+MI_SHAP_MAX_TERMS <- 50000L
+MI_SHAP_FAIL_OPEN <- TRUE
 
 HAS_FASTSHAP <- requireNamespace("fastshap", quietly = TRUE)
 if (RUN_SHAP && !HAS_FASTSHAP) {
@@ -4065,7 +4073,6 @@ p_shap <- plot_shap_top10_two_panel(
 )
 print(p_shap)
 ```
-
 
 ```{r stage2-cleanup}
 #| include: true
@@ -7413,36 +7420,144 @@ stopifnot(exists("mi_logistic_ps_abg_list"), exists("mi_logistic_ps_vbg_list"))
 mi_shap_abg_file <- results_path("shap_top10_mi_logistic_abg.csv")
 mi_shap_vbg_file <- results_path("shap_top10_mi_logistic_vbg.csv")
 mi_shap_stability_file <- results_path("diag-ps-shap-stability.csv")
+mi_shap_error_file <- results_path("diag_mi_shap_errors.csv")
+mi_shap_method_file <- results_path("diag_mi_shap_method_used.csv")
+mi_shap_diag_file <- results_path("mi_shap_imp_diagnostics.csv")
 
-calc_mi_glm_contrib <- function(meta, d_ps, feature_names, sample_n = 1000L) {
-  # Return per-feature mean absolute contribution for one imputation.
-  if (is.null(meta$formula) || is.null(meta$coef)) {
-    return(data.frame(feature = character(), mean_abs_shap = numeric(), stringsAsFactors = FALSE))
-  }
-  form <- stats::as.formula(meta$formula)
-  mm <- stats::model.matrix(form, data = d_ps)
-  coef_vec <- meta$coef
-  common_terms <- intersect(colnames(mm), names(coef_vec))
-  common_terms <- setdiff(common_terms, "(Intercept)")
-  if (!length(common_terms)) {
-    return(data.frame(feature = character(), mean_abs_shap = numeric(), stringsAsFactors = FALSE))
-  }
-  mm <- mm[, common_terms, drop = FALSE]
-  beta <- coef_vec[common_terms]
-  mm <- sample_rows_for_shap(mm, n_max = sample_n, seed = 20251206L)
-  centered <- sweep(mm, 2, colMeans(mm, na.rm = TRUE), FUN = "-")
-  contrib <- sweep(centered, 2, beta, FUN = "*")
-  term_abs <- colMeans(abs(contrib), na.rm = TRUE)
-  out <- data.frame(
-    term = names(term_abs),
-    mean_abs = as.numeric(term_abs),
+make_empty_mi_shap <- function() {
+  data.frame(feature = character(), mean_abs_shap = numeric(), stringsAsFactors = FALSE)
+}
+
+calc_mi_glm_contrib <- function(meta, d_ps, feature_names, imp_index, group_label,
+                                sample_n = MI_SHAP_SAMPLE_N,
+                                max_terms = MI_SHAP_MAX_TERMS) {
+  # Memory-safe contribution approximation for GLM PS:
+  # sample rows first, build sparse model matrix, then aggregate |contribution|
+  # by feature without constructing a full-N dense matrix.
+  diag_row <- data.frame(
+    imp = imp_index,
+    group = group_label,
+    sample_n = NA_integer_,
+    n_terms_used = NA_integer_,
+    seconds = NA_real_,
+    vcells_pre_mb = NA_real_,
+    vcells_post_mb = NA_real_,
+    method_used = "sparse_sampled_glm_link",
+    ok = FALSE,
+    error_msg = NA_character_,
     stringsAsFactors = FALSE
-  ) |>
-    dplyr::mutate(feature = vapply(term, term_to_parent_feature, character(1), feature_names = feature_names)) |>
-    dplyr::filter(!is.na(feature)) |>
-    dplyr::group_by(feature) |>
-    dplyr::summarise(mean_abs_shap = sum(mean_abs, na.rm = TRUE), .groups = "drop")
-  out
+  )
+  t0 <- Sys.time()
+  mem_pre <- get_vcells_stats()
+  diag_row$vcells_pre_mb <- mem_pre$gc_vcells_used_mb
+
+  err_msg <- NA_character_
+  out <- tryCatch({
+    if (is.null(meta$formula) || is.null(meta$coef) || !length(meta$coef)) {
+      stop("Missing formula/coefficients in MI PS metadata.")
+    }
+
+    n_all <- nrow(d_ps)
+    n_use <- min(as.integer(sample_n), n_all)
+    if (!is.finite(n_use) || n_use < 2L) {
+      stop("Insufficient rows available for MI SHAP sample.")
+    }
+    seed_offset <- if (toupper(group_label) == "ABG") 10000L else 20000L
+    set.seed(20251206L + as.integer(imp_index) + seed_offset)
+    idx <- if (n_all > n_use) sample.int(n_all, size = n_use, replace = FALSE) else seq_len(n_all)
+    d_sample <- d_ps[idx, , drop = FALSE]
+    diag_row$sample_n <- n_use
+
+    form <- stats::as.formula(meta$formula)
+    mm_model <- NULL
+    mm_mode <- "dense_model_matrix"
+    if (requireNamespace("Matrix", quietly = TRUE)) {
+      mm_sparse_try <- tryCatch(
+        Matrix::sparse.model.matrix(form, data = d_sample),
+        error = function(e) NULL
+      )
+      if (!is.null(mm_sparse_try)) {
+        mm_model <- mm_sparse_try
+        mm_mode <- "sparse_sampled_glm_link"
+      }
+    }
+    if (is.null(mm_model)) {
+      mm_model <- stats::model.matrix(form, data = d_sample)
+      mm_mode <- "dense_sampled_glm_link"
+    }
+    diag_row$method_used <- mm_mode
+
+    coef_vec <- meta$coef
+    canon_term <- function(x) {
+      x <- gsub("`", "", x, fixed = TRUE)
+      gsub("\\s+", "", x, perl = TRUE)
+    }
+    mm_terms <- colnames(mm_model)
+    coef_terms <- names(coef_vec)
+    mm_key <- canon_term(mm_terms)
+    coef_key <- canon_term(coef_terms)
+    coef_pos <- setNames(seq_along(coef_terms), coef_key)
+    keep_mm <- which(mm_key %in% names(coef_pos) & mm_terms != "(Intercept)")
+    if (!length(keep_mm)) {
+      stop("No overlapping terms between sparse design matrix and coefficient vector.")
+    }
+
+    mm_model <- mm_model[, keep_mm, drop = FALSE]
+    diag_row$n_terms_used <- ncol(mm_model)
+    if (is.finite(max_terms) && ncol(mm_model) > as.integer(max_terms)) {
+      stop(
+        "MI SHAP term count (", ncol(mm_model), ") exceeded MI_SHAP_MAX_TERMS (",
+        as.integer(max_terms), ")."
+      )
+    }
+
+    mm_terms_kept <- colnames(mm_model)
+    mm_keys_kept <- canon_term(mm_terms_kept)
+    coef_idx <- coef_pos[mm_keys_kept]
+    beta <- as.numeric(coef_vec[coef_idx])
+    names(beta) <- mm_terms_kept
+    mu <- colMeans(mm_model, na.rm = TRUE)
+    abs_beta <- abs(beta)
+    term_abs <- vapply(
+      seq_len(ncol(mm_model)),
+      function(j) {
+        xj <- mm_model[, j]
+        if (!is.numeric(xj)) xj <- as.numeric(xj)
+        mean(abs(xj - mu[j]), na.rm = TRUE) * abs_beta[j]
+      },
+      numeric(1)
+    )
+    names(term_abs) <- colnames(mm_model)
+    rm(mm_model, mu, abs_beta)
+    invisible(gc())
+
+    out_tbl <- data.frame(
+      term = names(term_abs),
+      mean_abs = as.numeric(term_abs),
+      stringsAsFactors = FALSE
+    ) |>
+      dplyr::mutate(feature = vapply(term, term_to_parent_feature, character(1), feature_names = feature_names)) |>
+      dplyr::filter(!is.na(feature)) |>
+      dplyr::group_by(feature) |>
+      dplyr::summarise(mean_abs_shap = sum(mean_abs, na.rm = TRUE), .groups = "drop")
+    if (!nrow(out_tbl)) {
+      stop("No feature-mapped terms remained after contribution aggregation.")
+    }
+    out_tbl
+  }, error = function(e) {
+    err_msg <<- conditionMessage(e)
+    make_empty_mi_shap()
+  })
+
+  mem_post <- get_vcells_stats()
+  diag_row$vcells_post_mb <- mem_post$gc_vcells_used_mb
+  diag_row$seconds <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+  diag_row$ok <- nrow(out) > 0
+  if (!isTRUE(diag_row$ok) && is.na(diag_row$error_msg)) {
+    diag_row$error_msg <- err_msg
+  }
+
+  list(data = out, diag = diag_row)
 }
 
 calc_mi_coef_fallback <- function(meta_list, feature_names, group_label, top_n = SHAP_TOP_N) {
@@ -7474,41 +7589,117 @@ calc_mi_coef_fallback <- function(meta_list, feature_names, group_label, top_n =
 }
 
 if (RUN_SHAP) {
-  # Compute per-imputation feature contributions and average across imputations.
-  mi_shap_rows_abg <- vector("list", imp$m)
-  mi_shap_rows_vbg <- vector("list", imp$m)
+  # Streaming accumulator avoids storing per-imputation SHAP tables in memory.
+  update_feature_accum <- function(accum, contrib_df) {
+    if (!nrow(contrib_df)) return(accum)
+    vals <- stats::setNames(contrib_df$mean_abs_shap, contrib_df$feature)
+    feats <- names(vals)
+    new_feats <- setdiff(feats, names(accum$sum))
+    if (length(new_feats)) {
+      accum$sum[new_feats] <- 0
+      accum$count[new_feats] <- 0
+    }
+    accum$sum[feats] <- accum$sum[feats] + vals
+    accum$count[feats] <- accum$count[feats] + 1L
+    accum
+  }
+  finalize_feature_accum <- function(accum, group_label) {
+    if (!length(accum$sum)) {
+      return(data.frame(feature = character(), mean_abs_shap = numeric(), group = character(), stringsAsFactors = FALSE))
+    }
+    keep <- accum$count > 0
+    data.frame(
+      feature = names(accum$sum)[keep],
+      mean_abs_shap = as.numeric(accum$sum[keep] / accum$count[keep]),
+      group = group_label,
+      stringsAsFactors = FALSE
+    ) |>
+      dplyr::arrange(dplyr::desc(mean_abs_shap)) |>
+      dplyr::slice_head(n = SHAP_TOP_N)
+  }
+
+  accum_abg <- list(sum = numeric(0), count = numeric(0))
+  accum_vbg <- list(sum = numeric(0), count = numeric(0))
+  mi_shap_diag_rows <- list()
+  mi_shap_error_rows <- list()
+
   for (i in seq_len(imp$m)) {
     d_i <- get_imp(i)
     d_ps <- d_i[, c("has_abg", "has_vbg", covars_ps), drop = FALSE]
     d_ps <- normalize_types(d_ps, levels_ref)
     d_ps <- droplevels_all(d_ps)
 
-    mi_shap_rows_abg[[i]] <- calc_mi_glm_contrib(mi_logistic_ps_abg_list[[i]], d_ps, covars_ps, sample_n = 1000L) |>
-      dplyr::mutate(group = "ABG", imp = i)
-    mi_shap_rows_vbg[[i]] <- calc_mi_glm_contrib(mi_logistic_ps_vbg_list[[i]], d_ps, covars_ps, sample_n = 1000L) |>
-      dplyr::mutate(group = "VBG", imp = i)
+    abg_res <- calc_mi_glm_contrib(
+      mi_logistic_ps_abg_list[[i]], d_ps, covars_ps,
+      imp_index = i, group_label = "ABG",
+      sample_n = MI_SHAP_SAMPLE_N, max_terms = MI_SHAP_MAX_TERMS
+    )
+    mi_shap_diag_rows[[length(mi_shap_diag_rows) + 1L]] <- abg_res$diag
+    if (!isTRUE(abg_res$diag$ok)) {
+      mi_shap_error_rows[[length(mi_shap_error_rows) + 1L]] <- data.frame(
+        imp = i, group = "ABG", error_msg = abg_res$diag$error_msg,
+        stringsAsFactors = FALSE
+      )
+    }
+    accum_abg <- update_feature_accum(accum_abg, abg_res$data)
+
+    vbg_res <- calc_mi_glm_contrib(
+      mi_logistic_ps_vbg_list[[i]], d_ps, covars_ps,
+      imp_index = i, group_label = "VBG",
+      sample_n = MI_SHAP_SAMPLE_N, max_terms = MI_SHAP_MAX_TERMS
+    )
+    mi_shap_diag_rows[[length(mi_shap_diag_rows) + 1L]] <- vbg_res$diag
+    if (!isTRUE(vbg_res$diag$ok)) {
+      mi_shap_error_rows[[length(mi_shap_error_rows) + 1L]] <- data.frame(
+        imp = i, group = "VBG", error_msg = vbg_res$diag$error_msg,
+        stringsAsFactors = FALSE
+      )
+    }
+    accum_vbg <- update_feature_accum(accum_vbg, vbg_res$data)
+
+    rm(d_i, d_ps, abg_res, vbg_res)
+    invisible(gc())
   }
 
-  mi_shap_top_abg <- dplyr::bind_rows(mi_shap_rows_abg) |>
-    dplyr::group_by(feature) |>
-    dplyr::summarise(mean_abs_shap = mean(mean_abs_shap, na.rm = TRUE), .groups = "drop") |>
-    dplyr::arrange(dplyr::desc(mean_abs_shap)) |>
-    dplyr::slice_head(n = SHAP_TOP_N) |>
-    dplyr::mutate(group = "ABG")
-  mi_shap_top_vbg <- dplyr::bind_rows(mi_shap_rows_vbg) |>
-    dplyr::group_by(feature) |>
-    dplyr::summarise(mean_abs_shap = mean(mean_abs_shap, na.rm = TRUE), .groups = "drop") |>
-    dplyr::arrange(dplyr::desc(mean_abs_shap)) |>
-    dplyr::slice_head(n = SHAP_TOP_N) |>
-    dplyr::mutate(group = "VBG")
+  mi_shap_top_abg <- finalize_feature_accum(accum_abg, "ABG")
+  mi_shap_top_vbg <- finalize_feature_accum(accum_vbg, "VBG")
 
-  if (nrow(mi_shap_top_abg) == 0L) {
+  used_method_abg <- "sparse_sampled_glm_link"
+  used_method_vbg <- "sparse_sampled_glm_link"
+  if (nrow(mi_shap_top_abg) == 0L && isTRUE(MI_SHAP_FAIL_OPEN)) {
     mi_shap_top_abg <- calc_mi_coef_fallback(mi_logistic_ps_abg_list, covars_ps, "ABG")
+    used_method_abg <- "coef_fallback"
   }
-  if (nrow(mi_shap_top_vbg) == 0L) {
+  if (nrow(mi_shap_top_vbg) == 0L && isTRUE(MI_SHAP_FAIL_OPEN)) {
     mi_shap_top_vbg <- calc_mi_coef_fallback(mi_logistic_ps_vbg_list, covars_ps, "VBG")
+    used_method_vbg <- "coef_fallback"
   }
 
+  mi_shap_diag_df <- dplyr::bind_rows(mi_shap_diag_rows)
+  mi_shap_error_df <- dplyr::bind_rows(mi_shap_error_rows)
+  infer_primary_method <- function(diag_df, grp, fallback_method) {
+    if (identical(fallback_method, "coef_fallback")) return("coef_fallback")
+    diag_grp <- diag_df |>
+      dplyr::filter(group == grp, ok %in% TRUE, !is.na(method_used), nzchar(method_used))
+    if (!nrow(diag_grp)) return(fallback_method)
+    names(sort(table(diag_grp$method_used), decreasing = TRUE))[1]
+  }
+  used_method_abg <- infer_primary_method(mi_shap_diag_df, "ABG", used_method_abg)
+  used_method_vbg <- infer_primary_method(mi_shap_diag_df, "VBG", used_method_vbg)
+  mi_shap_method_df <- data.frame(
+    group = c("ABG", "VBG"),
+    method_used = c(used_method_abg, used_method_vbg),
+    n_success = c(
+      sum(mi_shap_diag_df$group == "ABG" & (mi_shap_diag_df$ok %in% TRUE), na.rm = TRUE),
+      sum(mi_shap_diag_df$group == "VBG" & (mi_shap_diag_df$ok %in% TRUE), na.rm = TRUE)
+    ),
+    fallback_used = c(used_method_abg == "coef_fallback", used_method_vbg == "coef_fallback"),
+    stringsAsFactors = FALSE
+  )
+
+  write_csv_safely(mi_shap_diag_df, mi_shap_diag_file, row_names = FALSE)
+  write_csv_safely(mi_shap_error_df, mi_shap_error_file, row_names = FALSE)
+  write_csv_safely(mi_shap_method_df, mi_shap_method_file, row_names = FALSE)
   write_csv_safely(mi_shap_top_abg, mi_shap_abg_file, row_names = FALSE)
   write_csv_safely(mi_shap_top_vbg, mi_shap_vbg_file, row_names = FALSE)
 
@@ -7524,24 +7715,26 @@ if (RUN_SHAP) {
 
   mi_shap_plot_df <- dplyr::bind_rows(mi_shap_top_abg, mi_shap_top_vbg)
   if (nrow(mi_shap_plot_df) > 0) {
-    # Two-panel publication figure with top 10 features for ABG and VBG.
     p_shap_mi <- plot_shap_top10_two_panel(
       mi_shap_plot_df,
       "MI logistic IPSW: top 10 features by mean absolute contribution",
       "Mean absolute contribution on link scale"
     )
-    # Save + register; display occurs after love plot for narrative flow.
     shap_file <- results_path("figs", "shap-top10-mi-logistic-abg-vbg.png")
     save_diag_plot(p_shap_mi, shap_file, width = 9, height = 5, dpi = 200)
     register_plot_file("shap-top10-mi-logistic-abg-vbg", shap_file)
   }
 
   rm(
-    mi_shap_rows_abg, mi_shap_rows_vbg, mi_shap_plot_df, mi_shap_stability,
-    mi_shap_top_abg, mi_shap_top_vbg
+    accum_abg, accum_vbg, mi_shap_diag_rows, mi_shap_error_rows,
+    mi_shap_diag_df, mi_shap_error_df, mi_shap_method_df,
+    mi_shap_plot_df, mi_shap_stability, mi_shap_top_abg, mi_shap_top_vbg
   )
   invisible(gc())
 } else {
+  write_csv_safely(data.frame(), mi_shap_diag_file, row_names = FALSE)
+  write_csv_safely(data.frame(), mi_shap_error_file, row_names = FALSE)
+  write_csv_safely(data.frame(), mi_shap_method_file, row_names = FALSE)
   write_csv_safely(data.frame(), mi_shap_abg_file, row_names = FALSE)
   write_csv_safely(data.frame(), mi_shap_vbg_file, row_names = FALSE)
   write_csv_safely(data.frame(), mi_shap_stability_file, row_names = FALSE)
@@ -8245,7 +8438,6 @@ p_shap <- plot_shap_top10_two_panel(
 )
 print(p_shap)
 ```
-
 
 ```{r float-barrier-mi-or-plot}
 #| echo: false
@@ -9627,6 +9819,7 @@ expected_diag <- c(
   "mi_obs_vs_imp_summary.csv", "mi_spline_curve_abg.csv",
   "mi_spline_curve_vbg.csv", "mi_spline_coef_abg.csv",
   "mi_spline_coef_vbg.csv", "diag-ps-shap-stability.csv",
+  "diag_mi_shap_errors.csv", "diag_mi_shap_method_used.csv", "mi_shap_imp_diagnostics.csv",
   "mice_logged_events_raw.csv", "mice_logged_events_summary.csv",
   "mice_pred_width_preflight.csv", "mice_chain_diagnostics.csv",
   "mice_batches_log.csv", "missingness-by-strata.csv",

@@ -2,7 +2,7 @@
 
 ## Executive Summary
 - Run mode: pilot; pilot_frac: 0.01; m: 80; maxit: 20
-- Runtime total (sec): 386.754
+- Runtime total (sec): 323.987
 - MI batch status: batches=40; m_batch=2; failures=0
 - Balance: ABG max|SMD|=0.116; VBG max|SMD|=0.086
 - Separation flags: 1182 / 1324
@@ -34,16 +34,16 @@
 
 ## Runtime Top Steps
 
-- mi_single_pass: 151.279 sec
-- mice_batch_18: 6.633 sec
-- mice_batch_12: 6.614 sec
-- mice_batch_5: 6.346 sec
-- mice_batch_1: 6.303 sec
-- mice_batch_37: 6.274 sec
-- mice_batch_19: 6.204 sec
-- mice_batch_17: 6.172 sec
-- mice_batch_15: 6.123 sec
-- mice_batch_28: 6.090 sec
+- mi_single_pass: 137.318 sec
+- mice_batch_1: 4.948 sec
+- mice_batch_26: 4.867 sec
+- mice_batch_27: 4.695 sec
+- mice_batch_2: 4.684 sec
+- mice_batch_21: 4.683 sec
+- mice_batch_30: 4.675 sec
+- mice_batch_14: 4.675 sec
+- mice_batch_8: 4.673 sec
+- mice_batch_13: 4.671 sec
 
 ## MI Health
 

@@ -1,0 +1,125 @@
+
+
+processing file: ABG-VBG-analysis-2025-12-11.rmarkdown
+1/234                                    
+2/234 [todo-notes]                       
+3/234                                    
+4/234 [setup-table-helpers]              
+5/234                                    
+6/234 [setup-packages]                   
+7/234                                    
+8/234 [cohort-flow-placeholder]          
+9/234                                    
+10/234 [setup-run-config]                 
+11/234                                    
+12/234 [setup-diagnostics-output]         
+13/234                                    
+14/234 [setup-diagnostics-helpers]        
+15/234                                    
+16/234 [setup-model-diagrams]             
+17/234                                    
+18/234 [setup-shapviz]                    
+19/234                                    
+20/234 [runtime-hooks]                    
+21/234                                    
+22/234 [seed-escrow]                      
+23/234                                    
+24/234 [gt-pdf-helper]                    
+25/234                                    
+26/234 [stage1-start]                     
+27/234                                    
+28/234 [load-trinetx-data]                
+29/234                                    
+30/234 [propensity-config]                
+31/234                                    
+32/234 [build-subset-data]                
+33/234                                    
+34/234 [schema-normalize]                 
+35/234                                    
+36/234 [run-metadata]                     
+37/234                                    
+38/234 [codebook-export-full]             
+39/234                                    
+40/234 [derive-death-60d]                 
+41/234                                    
+42/234 [death-60d-summary]                
+43/234                                    
+44/234 [derive-table1-cohorts]            
+45/234                                    
+46/234 [float-barrier-table1abg]          
+47/234                                    
+48/234 [export-table1a-table1b-word]      
+49/234                                    
+50/234 [table1-everyone-abg-vbg]          
+51/234                                    
+52/234 [float-barrier-table1-everyone]    
+53/234                                    
+54/234 [co2-category-definitions]         
+55/234                                    
+56/234 [binary-hypercapnia-check]         
+57/234                                    
+58/234 [tbl2-co2-cohorts]                 
+59/234                                    
+60/234 [float-barrier-table2]             
+61/234                                    
+62/234 [tbl2-outcome-panel]               
+63/234                                    
+64/234 [export-table1-tbl2-word]          
+65/234                                    
+66/234 [or-data-three-level-unweighted]   
+67/234                                    
+68/234 [or-plot-three-level-unweighted]   
+69/234                                    
+70/234 [rcs-abg-data-prep]                
+71/234                                    
+72/234 [rcs-abg-unweighted-models]        
+73/234                                    
+74/234 [rcs-vbg-data-prep]                
+75/234                                    
+76/234 [rcs-vbg-unweighted-models]        
+77/234                                    
+78/234 [float-barrier-spline-unweighted]  
+79/234                                    
+80/234 [encode-encounter-type]            
+81/234                                    
+82/234 [ipw-abg-weighting]                
+83/234                                    
+84/234 [ipw-abg-rcs-models]               
+85/234                                    
+86/234 [ipw-abg-rcs-trimmed]              
+87/234                                    
+88/234 [ipw-vbg-workflow]                 
+89/234                                    
+90/234 [ipw-three-level-pco2-all]         
+91/234                                    
+92/234 [propensity-histograms-conditional]
+93/234                                    
+94/234 [propensity-histograms-all]        
+95/234                                    
+96/234 [shap-top10-ipw-gbm]               
+97/234                                    
+98/234 [loveplot-ipw-gbm]                 
+99/234                                    
+100/234 [shap-top10-ipw-gbm-display]       
+101/234                                    
+102/234 [stage2-cleanup]                   
+103/234                                    
+104/234 [mi-packages]                      
+105/234                                    
+106/234 [mi-settings]                      
+107/234                                    
+108/234 [mi-missing-summary]               
+109/234                                    
+110/234 [mi-ps-helpers]                    
+111/234                                    
+112/234 [mi-missing-structure]             
+113/234                                    
+114/234 [float-barrier-missingness]        
+115/234                                    
+116/234 [missingness-drivers]              
+117/234                                    
+118/234 [mi-prep]                          
+119/234                                    
+120/234 [type-invariants]                  
+121/234                                    
+122/234 [mi-exec]                          
