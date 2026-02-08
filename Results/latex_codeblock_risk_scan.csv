@@ -1,0 +1,6 @@
+"line_no","n_chars","line_preview","run_id","run_ts"
+3407,554,"IPW done using Gradient Boosting Methods (GBM) - a type of decision-tree based machine learning. ""***Random forests and GBM are designed to automatically include relevant interactions for variables in","20260208_095917","2026-02-08 09:59:17.934826"
+3490,256,"These are covariate-adjusted outcome models (outcome \~ spline(CO2) + X), fit separately for ABG and VBG cohorts using survey::svyglm with robust (design-based) SEs. Spline curves are shown as odds ra","20260208_095917","2026-02-08 09:59:17.934826"
+6499,246,"MI propensity scores use logistic regression with restricted cubic splines (`rms::rcs`, 4 knots by default) for continuous covariates; the same covariate set used in non‑MI models is reused here (`cov","20260208_095917","2026-02-08 09:59:17.934826"
+7637,367,"Within each imputation, fit covariate‑adjusted CO2 spline outcome models **only in the measured cohort** (has_abg==1 for PaCO2; has_vbg==1 for VBG CO2), using IPSW weights to address nonrandom testing","20260208_095917","2026-02-08 09:59:17.934826"
+9873,236,"  ""- Impute -> single-pass per‑imputation loop (weights, target balance, 3‑level outcomes, spline outcomes) -> pool curves and coefficients with Rubin’s rules (chunk: `mi-single-pass`; downstream MI d","20260208_095917","2026-02-08 09:59:17.934826"

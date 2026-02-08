@@ -3,8 +3,8 @@ title: "ABG‑VBG Analysis"
 author: "Brian Locke, Anila Mehta"
 editor: visual
 params:
-  run_mode: "full" # options: "pilot" or "full"
-  pilot_frac: 0.05 # used only when run_mode == "pilot"
+  run_mode: "pilot" # options: "pilot" or "full"
+  pilot_frac: 0.01 # used only when run_mode == "pilot"
   mi_batch_threshold_pilot: 5000 # pilot-only batching threshold
   mi_batch_threshold_full: 200000 # full-run batching threshold
   sample_seed: 20251206
@@ -16,6 +16,9 @@ format:
     number-sections: true
     pdf-engine: lualatex
     mainfont: "Latin Modern Roman"
+    code-block-bg: false
+    include-in-header:
+      - tex/pandoc-code-wrap.tex
     geometry: 
       - landscape
       - margin=0.8in
@@ -42,7 +45,7 @@ execute:
 # TODO (external script): generate cohort derivation flow diagram (CONSORT/STROBE-style) and save to Results/cohort_flow.(png|pdf); include here when available.
 ```
 
-# Data Pre-processing
+# Data Pre-Processing and Unweighted Analyses
 
 This code pulls in the master database (a STATA file) and does some initial cleaning - this will only need to be run once, and then the data can be accessed in the usual way.
 
@@ -1403,6 +1406,138 @@ loveplot_style <- function(df_in, title_text) {
     ggplot2::theme(legend.position = "top")
 }
 
+CO2_RATE_OUTCOMES <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
+CO2_RATE_OUTCOME_LABELS <- c(
+  imv_proc = "IMV",
+  niv_proc = "NIV",
+  death_60d = "Death (60d)",
+  hypercap_resp_failure = "Hypercapnic RF"
+)
+
+compute_co2_bin_rates <- function(df, co2_var, outcomes, outcome_labels,
+                                  weight_var = NULL, q = c(0.02, 0.98),
+                                  bin_width = 1, cohort_label = NA_character_) {
+  assert_is_df(df, context = paste0("compute_co2_bin_rates(", co2_var, ")"))
+  stopifnot(co2_var %in% names(df))
+  stopifnot(all(outcomes %in% names(df)))
+  stopifnot(length(q) == 2L, q[1] < q[2], is.finite(bin_width), bin_width > 0)
+  if (!is.null(weight_var)) stopifnot(weight_var %in% names(df))
+
+  co2_vals <- suppressWarnings(as.numeric(df[[co2_var]]))
+  keep <- is.finite(co2_vals)
+  if (!any(keep)) {
+    return(tibble::tibble(
+      cohort = character(), outcome = character(), outcome_label = character(),
+      bin_lo = numeric(), bin_mid = numeric(), n_bin = integer(), rate = numeric()
+    ))
+  }
+
+  q_lohi <- stats::quantile(co2_vals[keep], probs = q, na.rm = TRUE, names = FALSE)
+  keep <- keep & co2_vals >= q_lohi[1] & co2_vals <= q_lohi[2]
+  if (!is.null(weight_var)) {
+    w <- suppressWarnings(as.numeric(df[[weight_var]]))
+    keep <- keep & is.finite(w) & !is.na(w) & (w > 0)
+  }
+  if (!any(keep)) {
+    return(tibble::tibble(
+      cohort = character(), outcome = character(), outcome_label = character(),
+      bin_lo = numeric(), bin_mid = numeric(), n_bin = integer(), rate = numeric()
+    ))
+  }
+
+  d <- df[keep, , drop = FALSE]
+  d$co2_work <- co2_vals[keep]
+  d$bin_lo <- floor(d$co2_work / bin_width) * bin_width
+  d$bin_mid <- d$bin_lo + (bin_width / 2)
+  if (!is.null(weight_var)) {
+    d$w_work <- suppressWarnings(as.numeric(d[[weight_var]]))
+  }
+
+  rate_rows <- lapply(outcomes, function(outcome_nm) {
+    y <- suppressWarnings(as.numeric(d[[outcome_nm]] == 1))
+    y[is.na(d[[outcome_nm]])] <- NA_real_
+    tmp <- d[, c("bin_lo", "bin_mid"), drop = FALSE]
+    tmp$y <- y
+    if (!is.null(weight_var)) tmp$w <- d$w_work
+    if (!is.null(weight_var)) {
+      tmp <- tmp[is.finite(tmp$w) & !is.na(tmp$w) & !is.na(tmp$y), , drop = FALSE]
+    } else {
+      tmp <- tmp[!is.na(tmp$y), , drop = FALSE]
+    }
+    if (!nrow(tmp)) return(NULL)
+
+    if (!is.null(weight_var)) {
+      out <- tmp |>
+        dplyr::group_by(bin_lo, bin_mid) |>
+        dplyr::summarise(
+          n_bin = dplyr::n(),
+          rate = ifelse(sum(w, na.rm = TRUE) > 0, sum(y * w, na.rm = TRUE) / sum(w, na.rm = TRUE), NA_real_),
+          .groups = "drop"
+        )
+    } else {
+      out <- tmp |>
+        dplyr::group_by(bin_lo, bin_mid) |>
+        dplyr::summarise(
+          n_bin = dplyr::n(),
+          rate = mean(y, na.rm = TRUE),
+          .groups = "drop"
+        )
+    }
+
+    out |>
+      dplyr::mutate(
+        cohort = cohort_label,
+        outcome = outcome_nm,
+        outcome_label = dplyr::if_else(
+          outcome_nm %in% names(outcome_labels),
+          as.character(outcome_labels[[outcome_nm]]),
+          outcome_nm
+        )
+      ) |>
+      dplyr::select(cohort, outcome, outcome_label, bin_lo, bin_mid, n_bin, rate)
+  })
+
+  dplyr::bind_rows(rate_rows)
+}
+
+pool_mi_bin_rates <- function(rate_df_all_imps) {
+  assert_is_df(rate_df_all_imps, context = "pool_mi_bin_rates")
+  stopifnot("imp" %in% names(rate_df_all_imps))
+  rate_df_all_imps |>
+    dplyr::group_by(cohort, outcome, outcome_label, bin_lo, bin_mid) |>
+    dplyr::summarise(
+      n_bin = mean(n_bin, na.rm = TRUE),
+      rate = mean(rate, na.rm = TRUE),
+      n_imp_contrib = sum(is.finite(rate)),
+      .groups = "drop"
+    )
+}
+
+plot_co2_bin_rate_panel <- function(rate_df, title, x_label, vline_at) {
+  assert_is_df(rate_df, context = "plot_co2_bin_rate_panel")
+  stopifnot(all(c("bin_mid", "n_bin", "rate", "outcome_label") %in% names(rate_df)))
+  lbl_levels <- unname(CO2_RATE_OUTCOME_LABELS[CO2_RATE_OUTCOMES])
+  rate_df$outcome_label <- factor(rate_df$outcome_label, levels = lbl_levels)
+
+  ggplot2::ggplot(rate_df, ggplot2::aes(x = bin_mid, y = rate)) +
+    ggplot2::geom_point(color = "#2C7FB8", alpha = 0.8, size = 1.2) +
+    ggplot2::geom_smooth(
+      ggplot2::aes(weight = n_bin),
+      method = "loess", span = 0.5, se = FALSE,
+      color = "#D95F0E", linewidth = 0.8
+    ) +
+    ggplot2::geom_vline(xintercept = vline_at, linetype = "dashed", color = "grey40") +
+    ggplot2::facet_wrap(~ outcome_label, ncol = 2, scales = "free_y") +
+    ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    ggplot2::labs(
+      title = title,
+      x = x_label,
+      y = "Observed outcome rate",
+      caption = paste0("Points are 1-mmHg bins; LOESS span = 0.5; dashed line at ", vline_at, " mmHg.")
+    ) +
+    ggplot2::theme_minimal(base_size = 10)
+}
+
 compute_or_axis_spec <- function(df_list, lo_col = "conf.low", hi_col = "conf.high",
                                  min_pow = -6, max_pow = 6,
                                  default_limits = c(0.25, 16)) {
@@ -1593,6 +1728,33 @@ plot_or_safe <- function(df, plot_name, axis_spec,
   }
   p
 }
+```
+
+```{r latex-codeblock-risk-scan}
+#| include: true
+#| message: false
+# Purpose: preflight scan for very long source lines that can stress LaTeX code-block rendering.
+qmd_src_scan <- resolve_current_qmd()
+qmd_lines <- readLines(qmd_src_scan, warn = FALSE)
+risk_threshold <- 220L
+line_nchars <- nchar(qmd_lines, type = "chars", allowNA = FALSE, keepNA = FALSE)
+risk_idx <- which(line_nchars > risk_threshold)
+risk_df <- if (length(risk_idx)) {
+  data.frame(
+    line_no = risk_idx,
+    n_chars = line_nchars[risk_idx],
+    line_preview = substr(qmd_lines[risk_idx], 1, 200),
+    stringsAsFactors = FALSE
+  )
+} else {
+  data.frame(
+    line_no = integer(),
+    n_chars = integer(),
+    line_preview = character(),
+    stringsAsFactors = FALSE
+  )
+}
+write_csv_safely(risk_df, results_path("latex_codeblock_risk_scan.csv"), row_names = FALSE)
 ```
 
 ```{r setup-model-diagrams}
@@ -2959,6 +3121,53 @@ print_plot_once(unw_p_or, "or-plot-three-level-unweighted", width = 7.5, height 
 
 ```
 
+## Observed outcome rates by CO2 bin (unweighted)
+
+```{r co2-binned-rates-unweighted}
+#| code-block-title: "Observed outcome rates by CO2 bin (unweighted)"
+#| fig-pos: "H"
+# Purpose: summarize raw event rates in 1-mmHg CO2 bins to inspect local jumps.
+co2_rate_unw_abg <- compute_co2_bin_rates(
+  df = subset_data |> dplyr::filter(has_abg == 1),
+  co2_var = "paco2",
+  outcomes = CO2_RATE_OUTCOMES,
+  outcome_labels = CO2_RATE_OUTCOME_LABELS,
+  weight_var = NULL,
+  q = c(0.02, 0.98),
+  bin_width = 1,
+  cohort_label = "ABG"
+)
+co2_rate_unw_vbg <- compute_co2_bin_rates(
+  df = subset_data |> dplyr::filter(has_vbg == 1),
+  co2_var = "vbg_co2",
+  outcomes = CO2_RATE_OUTCOMES,
+  outcome_labels = CO2_RATE_OUTCOME_LABELS,
+  weight_var = NULL,
+  q = c(0.02, 0.98),
+  bin_width = 1,
+  cohort_label = "VBG"
+)
+
+write_csv_safely(co2_rate_unw_abg, results_path("co2_binned_rates_unweighted_abg.csv"), row_names = FALSE)
+write_csv_safely(co2_rate_unw_vbg, results_path("co2_binned_rates_unweighted_vbg.csv"), row_names = FALSE)
+
+p_co2_rate_unw_abg <- plot_co2_bin_rate_panel(
+  co2_rate_unw_abg,
+  title = "Observed outcome rates by ABG CO2 bin (unweighted)",
+  x_label = "ABG CO2 (mmHg)",
+  vline_at = 45
+)
+p_co2_rate_unw_vbg <- plot_co2_bin_rate_panel(
+  co2_rate_unw_vbg,
+  title = "Observed outcome rates by VBG CO2 bin (unweighted)",
+  x_label = "VBG CO2 (mmHg)",
+  vline_at = 50
+)
+
+print_plot_once(p_co2_rate_unw_abg, "co2-binned-rates-unweighted-abg", width = 8.5, height = 6.0)
+print_plot_once(p_co2_rate_unw_vbg, "co2-binned-rates-unweighted-vbg", width = 8.5, height = 6.0)
+```
+
 ## Restricted cubic spline regressions (unweighted)
 
 Spline curves are shown as odds ratios relative to CO2_ref (midpoint of the normal range), holding covariates at the reference profile.
@@ -3193,7 +3402,7 @@ print_plot_once(unw_vbg_panel, "spline-unweighted-vbg", width = 8.5, height = 6)
 float_barrier("section")
 ```
 
-# Inverse Propensity Weighting
+# Inverse Propensity Weighting (GBM)
 
 IPW done using Gradient Boosting Methods (GBM) - a type of decision-tree based machine learning. "***Random forests and GBM are designed to automatically include relevant interactions for variables included in the model.*** As such, using a GBM to estimate the PS model, can reduce model misspecification, since ***the analyst is not required to identify relevant interactions or nonlinearities."*** from this citation: PMID: [39947224](https://pubmed.ncbi.nlm.nih.gov/39947224/). PMCID: [PMC11825193](https://pmc.ncbi.nlm.nih.gov/articles/PMC11825193/).
 
@@ -3805,6 +4014,55 @@ print_plot_once(ipw_p_or, "or-plot-three-level-weighted", width = 7.5, height = 
 
 ```
 
+### Observed outcome rates by CO2 bin (IPSW, non-MI)
+
+```{r co2-binned-rates-ipw-nonmi}
+#| code-block-title: "Observed outcome rates by CO2 bin (IPSW, non-MI)"
+#| fig-pos: "H"
+# Purpose: summarize weighted event rates in 1-mmHg bins for the non-MI IPSW analyses.
+stopifnot(all(c("w_abg", "w_vbg") %in% names(subset_data)))
+
+co2_rate_ipw_abg <- compute_co2_bin_rates(
+  df = subset_data |> dplyr::filter(has_abg == 1),
+  co2_var = "paco2",
+  outcomes = CO2_RATE_OUTCOMES,
+  outcome_labels = CO2_RATE_OUTCOME_LABELS,
+  weight_var = "w_abg",
+  q = c(0.02, 0.98),
+  bin_width = 1,
+  cohort_label = "ABG"
+)
+co2_rate_ipw_vbg <- compute_co2_bin_rates(
+  df = subset_data |> dplyr::filter(has_vbg == 1),
+  co2_var = "vbg_co2",
+  outcomes = CO2_RATE_OUTCOMES,
+  outcome_labels = CO2_RATE_OUTCOME_LABELS,
+  weight_var = "w_vbg",
+  q = c(0.02, 0.98),
+  bin_width = 1,
+  cohort_label = "VBG"
+)
+
+write_csv_safely(co2_rate_ipw_abg, results_path("co2_binned_rates_ipw_abg.csv"), row_names = FALSE)
+write_csv_safely(co2_rate_ipw_vbg, results_path("co2_binned_rates_ipw_vbg.csv"), row_names = FALSE)
+
+p_co2_rate_ipw_abg <- plot_co2_bin_rate_panel(
+  co2_rate_ipw_abg,
+  title = "Observed outcome rates by ABG CO2 bin (IPSW, non-MI)",
+  x_label = "ABG CO2 (mmHg)",
+  vline_at = 45
+)
+p_co2_rate_ipw_vbg <- plot_co2_bin_rate_panel(
+  co2_rate_ipw_vbg,
+  title = "Observed outcome rates by VBG CO2 bin (IPSW, non-MI)",
+  x_label = "VBG CO2 (mmHg)",
+  vline_at = 50
+)
+
+print_plot_once(p_co2_rate_ipw_abg, "co2-binned-rates-ipw-abg", width = 8.5, height = 6.0)
+print_plot_once(p_co2_rate_ipw_vbg, "co2-binned-rates-ipw-vbg", width = 8.5, height = 6.0)
+```
+
 ## Propensity score diagnostics
 
 Plotting propensity scores
@@ -4101,7 +4359,7 @@ invisible(gc())
 append_mem_snapshot("stage2", "cleanup", "post")
 ```
 
-# Multiple Imputation Analysis
+# Multiple Imputation (and logistic IPSW)
 
 added 12/6/2025
 
@@ -8088,6 +8346,81 @@ invisible(gc())
 append_mem_snapshot("stage1", "cleanup", "post")
 ```
 
+## Observed outcome rates by CO2 bin (MI + IPSW)
+
+```{r co2-binned-rates-mi-ipw}
+#| code-block-title: "Observed outcome rates by CO2 bin (MI + IPSW)"
+#| fig-pos: "H"
+# Purpose: pool weighted 1-mmHg bin rates across imputations using summary-only objects.
+stopifnot(exists("imp"), imp$m > 0)
+stopifnot(exists("get_imp"), exists("get_mi_weight"))
+
+co2_rate_mi_rows_abg <- vector("list", imp$m)
+co2_rate_mi_rows_vbg <- vector("list", imp$m)
+
+for (i in seq_len(imp$m)) {
+  d_i <- get_imp(i)
+  w_abg_i <- get_mi_weight("ABG", i)
+  w_vbg_i <- get_mi_weight("VBG", i)
+
+  d_abg_i <- d_i[, c("has_abg", "paco2", CO2_RATE_OUTCOMES), drop = FALSE]
+  d_abg_i$w_rate <- w_abg_i
+  d_vbg_i <- d_i[, c("has_vbg", "vbg_co2", CO2_RATE_OUTCOMES), drop = FALSE]
+  d_vbg_i$w_rate <- w_vbg_i
+
+  co2_rate_mi_rows_abg[[i]] <- compute_co2_bin_rates(
+    df = d_abg_i |> dplyr::filter(has_abg == 1),
+    co2_var = "paco2",
+    outcomes = CO2_RATE_OUTCOMES,
+    outcome_labels = CO2_RATE_OUTCOME_LABELS,
+    weight_var = "w_rate",
+    q = c(0.02, 0.98),
+    bin_width = 1,
+    cohort_label = "ABG"
+  ) |> dplyr::mutate(imp = i)
+
+  co2_rate_mi_rows_vbg[[i]] <- compute_co2_bin_rates(
+    df = d_vbg_i |> dplyr::filter(has_vbg == 1),
+    co2_var = "vbg_co2",
+    outcomes = CO2_RATE_OUTCOMES,
+    outcome_labels = CO2_RATE_OUTCOME_LABELS,
+    weight_var = "w_rate",
+    q = c(0.02, 0.98),
+    bin_width = 1,
+    cohort_label = "VBG"
+  ) |> dplyr::mutate(imp = i)
+
+  rm(d_i, d_abg_i, d_vbg_i, w_abg_i, w_vbg_i)
+  invisible(gc(FALSE))
+}
+
+co2_rate_mi_abg <- pool_mi_bin_rates(dplyr::bind_rows(co2_rate_mi_rows_abg))
+co2_rate_mi_vbg <- pool_mi_bin_rates(dplyr::bind_rows(co2_rate_mi_rows_vbg))
+
+write_csv_safely(co2_rate_mi_abg, results_path("co2_binned_rates_mi_ipw_abg.csv"), row_names = FALSE)
+write_csv_safely(co2_rate_mi_vbg, results_path("co2_binned_rates_mi_ipw_vbg.csv"), row_names = FALSE)
+
+p_co2_rate_mi_abg <- plot_co2_bin_rate_panel(
+  co2_rate_mi_abg,
+  title = paste0("Observed outcome rates by ABG CO2 bin (MI + IPSW, m = ", imp$m, ")"),
+  x_label = "ABG CO2 (mmHg)",
+  vline_at = 45
+)
+p_co2_rate_mi_vbg <- plot_co2_bin_rate_panel(
+  co2_rate_mi_vbg,
+  title = paste0("Observed outcome rates by VBG CO2 bin (MI + IPSW, m = ", imp$m, ")"),
+  x_label = "VBG CO2 (mmHg)",
+  vline_at = 50
+)
+
+print_plot_once(p_co2_rate_mi_abg, "co2-binned-rates-mi-ipw-abg", width = 8.5, height = 6.0)
+print_plot_once(p_co2_rate_mi_vbg, "co2-binned-rates-mi-ipw-vbg", width = 8.5, height = 6.0)
+
+rm(co2_rate_mi_rows_abg, co2_rate_mi_rows_vbg, co2_rate_mi_abg, co2_rate_mi_vbg,
+   p_co2_rate_mi_abg, p_co2_rate_mi_vbg)
+invisible(gc(FALSE))
+```
+
 ## Manuscript outputs summary
 
 ```{r manuscript-outputs}
@@ -8524,7 +8857,6 @@ non_mi_ipw_outputs <- tibble::tribble(
   "abg_shared_spline", "figure", "spline-ipw-abg-shared.png",
   "overlay_spline", "figure", "spline-ipw-overlay-abg-vbg.png",
   "propensity_hist_tested", "figure", "propensity-histograms-conditional.png",
-  "propensity_hist_all", "figure", "propensity-histograms-all.png",
   "shap_top10_plot", "figure", "shap-top10-ipw-gbm-abg-vbg.png",
   "shap_top10_abg", "table_csv", "shap_top10_ipw_gbm_abg.csv",
   "shap_top10_vbg", "table_csv", "shap_top10_ipw_gbm_vbg.csv",
@@ -8537,7 +8869,7 @@ non_mi_ipw_outputs <- tibble::tribble(
 mi_ipw_outputs <- tibble::tribble(
   ~parity_key, ~artifact_type, ~artifact_name,
   "threelevel_or", "figure", "or-plot-mi-weighted.png",
-  "overlay_spline", "figure", "ipw-rcs-overlay-mi-abg-vbg-1.png",
+  "overlay_spline", "figure", "ipw-rcs-overlay-mi-abg-vbg*.png",
   "propensity_hist_tested", "figure", "propensity-histograms-mi-logistic.png",
   "shap_top10_plot", "figure", "shap-top10-mi-logistic-abg-vbg.png",
   "shap_top10_abg", "table_csv", "shap_top10_mi_logistic_abg.csv",
@@ -8545,14 +8877,17 @@ mi_ipw_outputs <- tibble::tribble(
   "love_plot", "figure", "loveplot-mi-logistic-abg-vbg.png",
   "love_plot_data", "table_csv", "loveplot_mi_logistic_data.csv",
   "threelevel_table", "table_csv", "mi_threelevel_results.csv",
-  "threelevel_table_pool", "table_csv", "table3_mi_pool.csv",
   "ps_model_store_abg", "diagnostic_rds", "mi_logistic_ps_abg_list.rds",
   "ps_model_store_vbg", "diagnostic_rds", "mi_logistic_ps_vbg_list.rds"
 )
 
 artifact_exists <- function(name, type) {
   if (is.na(name) || !nzchar(name)) return(FALSE)
-  if (type == "figure") return(file.exists(results_path("figs", name)))
+  if (type == "figure") {
+    fig_path <- results_path("figs", name)
+    if (grepl("[*?\\[]", name)) return(length(Sys.glob(fig_path)) > 0)
+    return(file.exists(fig_path))
+  }
   file.exists(results_path(name))
 }
 
@@ -8584,6 +8919,13 @@ parity_tbl <- dplyr::full_join(
 
 write_csv_safely(parity_tbl, results_path("ipw_output_parity.csv"), row_names = FALSE)
 
+parity_unknown <- parity_tbl |>
+  dplyr::filter(parity_status == "unknown")
+write_csv_safely(parity_unknown, results_path("ipw_output_parity_unknown.csv"), row_names = FALSE)
+if (RUN_MODE == "full" && nrow(parity_unknown) > 0) {
+  stop("Parity audit has unknown rows; see ", results_path("ipw_output_parity_unknown.csv"))
+}
+
 parity_one_sided <- parity_tbl |>
   dplyr::filter(parity_status != "both")
 
@@ -8598,7 +8940,7 @@ render_table_pdf_maybe(
 )
 ```
 
-## Diagnostics
+# Diagnostics and Exports
 
 ```{r diagnostics-inputs}
 #| include: true
@@ -8875,28 +9217,84 @@ stab_file <- results_path("mi_m_stability.csv")
 write_csv_safely(stab_df, stab_file, row_names = FALSE)
 
 # FMI / relative efficiency for a representative unweighted model
-cap_fmi <- capture_warnings(
-  summary(mice::pool(with(imp, glm(imv_proc ~ has_abg + age_at_encounter + sex,
-                                  family = binomial())))),
-  context = make_context(
-    stage = "diagnostics",
-    component = "mi_fmi_glm",
-    analysis_variant = "mi",
-    model_type = "glm",
-    group = NA_character_,
-    outcome = "imv_proc",
-    imputation = NA_integer_,
-    batch = NA_integer_
+append_mem_snapshot("diagnostics", "mi_fmi_glm", "pre")
+# This diagnostic previously used with(imp, glm(...)) which can materialize large
+# completed-data objects. We pool a single coefficient via pool.scalar() instead.
+fmi_formula <- imv_proc ~ has_abg + age_at_encounter + sex
+fmi_vars <- all.vars(fmi_formula)
+qhat <- rep(NA_real_, imp$m)
+uhat <- rep(NA_real_, imp$m)
+for (i in seq_len(imp$m)) {
+  d_i <- mice::complete(imp, action = i)
+  d_i <- d_i[, intersect(fmi_vars, names(d_i)), drop = FALSE]
+  if (!all(c("imv_proc", "has_abg", "age_at_encounter", "sex") %in% names(d_i))) {
+    next
+  }
+  cap_fit <- capture_warnings(
+    glm(
+      formula = fmi_formula,
+      data = d_i,
+      family = binomial(),
+      model = FALSE,
+      x = FALSE,
+      y = FALSE
+    ),
+    context = make_context(
+      stage = "diagnostics",
+      component = "mi_fmi_glm",
+      analysis_variant = "mi",
+      model_type = "glm",
+      group = NA_character_,
+      outcome = "imv_proc",
+      imputation = i,
+      batch = NA_integer_
+    )
   )
-)
-append_warnings(cap_fmi$warnings)
-fmi_tab <- cap_fmi$value
-fmi_abg <- fmi_tab |> filter(term == "has_abg")
-if (is.null(fmi_tab) || !"fmi" %in% names(fmi_tab)) {
-  warning("FMI not available from mice::pool() summary; leaving FMI as NA.", call. = FALSE)
-  fmi_abg <- fmi_abg |> mutate(fmi = NA_real_)
+  append_warnings(cap_fit$warnings)
+  fit_i <- cap_fit$value
+  if (!is.null(fit_i)) {
+    coef_i <- stats::coef(fit_i)
+    vcov_i <- tryCatch(stats::vcov(fit_i), error = function(e) NULL)
+    if (
+      "has_abg" %in% names(coef_i) &&
+      !is.null(vcov_i) &&
+      "has_abg" %in% rownames(vcov_i) &&
+      "has_abg" %in% colnames(vcov_i)
+    ) {
+      qhat[i] <- unname(coef_i[["has_abg"]])
+      uhat[i] <- unname(vcov_i["has_abg", "has_abg"])
+    }
+  }
+  rm(list = intersect(c("d_i", "cap_fit", "fit_i", "coef_i", "vcov_i"), ls()))
+  invisible(gc(FALSE))
+}
+ok <- is.finite(qhat) & is.finite(uhat) & uhat > 0
+if (sum(ok) >= 2) {
+  ps <- mice::pool.scalar(
+    Q = qhat[ok],
+    U = uhat[ok],
+    n = sum(subset_data$has_abg == 1, na.rm = TRUE),
+    k = 1
+  )
+  fmi_abg <- tibble::tibble(
+    term = "has_abg",
+    estimate = ps$qbar,
+    std.error = sqrt(ps$t),
+    fmi = ps$fmi,
+    m_used = sum(ok)
+  )
+} else {
+  warning("FMI not available from pooled scalar diagnostic; leaving FMI as NA.", call. = FALSE)
+  fmi_abg <- tibble::tibble(
+    term = "has_abg",
+    estimate = NA_real_,
+    std.error = NA_real_,
+    fmi = NA_real_,
+    m_used = sum(ok)
+  )
 }
 fmi_abg$rel_eff <- if (is.finite(fmi_abg$fmi[1])) 1 / (1 + fmi_abg$fmi[1] / M_IMP) else NA_real_
+append_mem_snapshot("diagnostics", "mi_fmi_glm", "post")
 ```
 
 ### MI maxit sensitivity (sampled)
@@ -9807,6 +10205,7 @@ write_csv_safely(get_imp_df, results_path("get_imp_usage.csv"), row_names = FALS
 # Purpose: diagnostics completeness.
 expected_diag <- c(
   "runtime_log.csv", "runtime_summary.csv", "runtime_summary_top15.csv",
+  "latex_codeblock_risk_scan.csv",
   "warnings_log.csv", "mi_warnings_log.csv", "mi_info_log.csv",
   "diagnostics_summary.csv", "diagnostics_missingness.csv",
   "diagnostics_missingness-by-strata.csv",
@@ -9946,19 +10345,56 @@ pdf_file <- file.path(
 )
 pdf_file <- normalizePath(pdf_file, winslash = "/", mustWork = FALSE)
 scan_out <- results_path("pdf_hygiene_scan.csv")
-pdftotext_bin <- Sys.which("pdftotext")
-if (!nzchar(pdftotext_bin) || !file.exists(pdf_file)) {
-  write_csv_safely(data.frame(line = character()), scan_out, row_names = FALSE)
-} else {
-  tmp_txt <- tempfile(fileext = ".txt")
-  system2(pdftotext_bin, c(pdf_file, tmp_txt))
-  txt <- readLines(tmp_txt, warn = FALSE)
-  bad <- txt[grepl("/Users/|[A-Z]:\\\\\\", txt)]
-  scan_df <- data.frame(line = bad, stringsAsFactors = FALSE)
-  write_csv_safely(scan_df, scan_out, row_names = FALSE)
-  if (RUN_MODE == "full" && nrow(scan_df) > 0) {
-    stop("PDF hygiene scan detected absolute paths; see ", scan_out)
+scanner <- "none"
+scan_status <- "skipped_pdf_missing"
+txt <- character()
+
+if (file.exists(pdf_file)) {
+  scan_status <- "scanned"
+  # "pdftotext" is a system binary (Poppler), not an R package.
+  # Fallback to pdftools::pdf_text() when the binary is unavailable.
+  pdftotext_bin <- Sys.which("pdftotext")
+
+  if (nzchar(pdftotext_bin)) {
+    scanner <- "pdftotext"
+    tmp_txt <- tempfile(fileext = ".txt")
+    scan_ok <- tryCatch({
+      system2(pdftotext_bin, c(pdf_file, tmp_txt), stdout = FALSE, stderr = FALSE)
+      file.exists(tmp_txt)
+    }, error = function(e) FALSE)
+    if (isTRUE(scan_ok)) {
+      txt <- readLines(tmp_txt, warn = FALSE)
+    }
   }
+
+  if (length(txt) == 0 && requireNamespace("pdftools", quietly = TRUE)) {
+    scanner <- "pdftools"
+    txt <- tryCatch(
+      unlist(pdftools::pdf_text(pdf_file), use.names = FALSE),
+      error = function(e) character()
+    )
+  }
+
+  if (length(txt) == 0) scan_status <- "skipped_no_scanner"
+}
+
+# Match real absolute paths and avoid false hits from the code regex itself.
+path_pattern <- "(/Users/[A-Za-z0-9._-]+/[A-Za-z0-9._/ -]+)|([A-Za-z]:\\\\[^[:space:]]+)"
+bad <- if (length(txt)) txt[grepl(path_pattern, txt)] else character()
+n_bad <- length(bad)
+scan_df <- data.frame(
+  scan_status = scan_status,
+  scanner = scanner,
+  line = if (n_bad > 0) bad else "",
+  stringsAsFactors = FALSE
+)
+write_csv_safely(scan_df, scan_out, row_names = FALSE)
+
+if (RUN_MODE == "full" && scan_status != "scanned") {
+  stop("PDF hygiene scan unavailable (no scanner found); see ", scan_out)
+}
+if (RUN_MODE == "full" && n_bad > 0) {
+  stop("PDF hygiene scan detected absolute paths; see ", scan_out)
 }
 ```
 
