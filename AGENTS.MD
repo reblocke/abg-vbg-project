@@ -16,6 +16,22 @@
 - Avoid `attach()`, `setwd()`, and `<<-`. Use explicit data references.
 - Use explicit namespaces in package-like code when ambiguity is possible, e.g. `dplyr::mutate`.
 
+## Figure styling (publication-ready `ggplot2`)
+- Default to a clean publication theme (do not leave figures in raw `theme_gray()` defaults). Prefer a project-level theme helper for consistency across figures.
+- Define final figure dimensions first (single-column vs double-column) and tune text sizes for that physical output size.
+- Use readable typography at final size (generally at least 8 pt), and keep title/subtitle/caption hierarchy subtle and consistent.
+- Keep plots data-first: remove non-essential background elements and heavy grid lines; keep only guides that improve interpretation.
+- Use colorblind-safe palettes and avoid red/green-only contrasts. For critical grouping, add redundant encodings (`linetype`, `shape`) alongside color.
+- Prefer direct labels for lines/series when practical; if using legends, keep labels concise and place the legend to minimize eye travel.
+- Make geoms legible in print: avoid very thin lines/ticks and overly small points; tune `linewidth`, `size`, and `alpha` deliberately.
+- Axis labels must include units where relevant, and scale formatting should avoid unnecessary precision.
+- Figure captions should state what is shown, sample/context, and how uncertainty is represented (e.g., CI, SE, SD).
+- Export with explicit `ggsave()` settings:
+  - Use vector output (`.pdf`/`.svg`) for line art and most journal figures.
+  - Use high-resolution raster (`.tiff`/`.png`, typically 300-600 dpi) when journal requirements call for raster formats.
+  - Always set explicit `width`, `height`, `units`, and `dpi`; never rely on IDE default export size.
+- Keep styling consistent across manuscript and supplement (same fonts, base sizes, line weights, and palette rules), unless journal guidelines require otherwise.
+
 ## Code design and readability (optimize for humans first)
 The primary performance constraint in most analysis code is *developer time* (maintenance, review, debugging),
 not CPU time. Default to **clarity and correctness**, and only “pay” complexity when profiling shows it is needed.
@@ -116,6 +132,7 @@ is “fast enough” without compromising clarity.
 - Do not introduce performance-driven complexity (Rcpp, `data.table` by-reference mutation, custom C/C++ code) unless profiling demonstrates a real bottleneck and the trade-off is justified in comments.
 
 ## References (background, for humans)
+- https://jaquent.github.io/2026/02/creating-actually-publication-ready-figures-for-journals-using-ggplot2/
 - https://www.blasbenito.com/2025/12/19/r-code-optimization-design-readability/
 - https://www.blasbenito.com/2025/12/18/r-code-optimization-foundations-principles/
 - https://www.blasbenito.com/2025/12/20/r-code-optimization-hardware-performance/
