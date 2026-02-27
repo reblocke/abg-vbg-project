@@ -3,8 +3,8 @@ title: "ABG‑VBG Analysis"
 author: "Brian Locke, Anila Mehta"
 editor: visual
 params:
-  run_mode: "pilot" # options: "pilot" or "full"
-  pilot_frac: 0.01 # used only when run_mode == "pilot"
+  run_mode: "full" # options: "pilot" or "full"
+  pilot_frac: 0.05 # used only when run_mode == "pilot"
   mi_batch_threshold_pilot: 5000 # pilot-only batching threshold
   mi_batch_threshold_full: 200000 # full-run batching threshold
   sample_seed: 20251206

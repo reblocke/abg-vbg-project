@@ -1,11 +1,11 @@
 # Diagnostics Audit
 
 ## Executive Summary
-- Run mode: pilot; pilot_frac: 0.01; m: 80; maxit: 20
-- Runtime total (sec): 339.773
+- Run mode: full; pilot_frac: 1; m: 80; maxit: 20
+- Runtime total (sec): 45498.285
 - MI batch status: batches=40; m_batch=2; failures=0
-- Balance: ABG max|SMD|=0.116; VBG max|SMD|=0.086
-- Separation flags: 1182 / 1324
+- Balance: ABG max|SMD|=0.091; VBG max|SMD|=0.043
+- Separation flags: 166 / 1324
 
 ## Artifact Inventory (Found / Missing)
 
@@ -34,40 +34,39 @@
 
 ## Runtime Top Steps
 
-- mi_single_pass: 142.520 sec
-- mice_batch_8: 5.446 sec
-- mice_batch_29: 5.209 sec
-- mice_batch_25: 5.203 sec
-- mice_batch_24: 5.128 sec
-- mice_batch_19: 5.100 sec
-- mice_batch_1: 5.092 sec
-- mice_batch_20: 5.019 sec
-- mice_batch_26: 5.017 sec
-- mice_batch_10: 5.015 sec
+- mi_single_pass: 7518.720 sec
+- mice_batch_30: 2335.205 sec
+- mice_batch_7: 1957.536 sec
+- mice_batch_9: 1755.778 sec
+- mice_batch_38: 1719.142 sec
+- mice_batch_5: 1677.715 sec
+- mice_batch_36: 1610.069 sec
+- mice_batch_23: 1481.484 sec
+- mice_batch_33: 1389.823 sec
+- mice_batch_25: 1339.309 sec
 
 ## MI Health
 
 - Smoke test failed: FALSE
-- Predictor width max mm_cols: 33.000
+- Predictor width max mm_cols: 34.000
 - Chain diagnostics issue: FALSE (numeric_names=FALSE; drift_tail_na_frac=0.000)
 - MI warnings rows: 0
 
 ## Balance
 
-- ABG max |SMD|: 0.116
-- VBG max |SMD|: 0.086
+- ABG max |SMD|: 0.091
+- VBG max |SMD|: 0.043
 
 ## Outcome Fits
 
 Top separation counts (analysis_variant/group/outcome):
-- mi_ipw / ABG / death_60d: 160
-- mi_ipw / VBG / death_60d: 160
-- mi_ipw / ABG / hypercap_resp_failure: 160
-- mi_ipw / VBG / hypercap_resp_failure: 160
-- mi_ipw / ABG / imv_proc: 160
-- mi_ipw / ABG / niv_proc: 160
+- mi_ipw / ABG / hypercap_resp_failure: 80
+- mi_ipw / ABG / niv_proc: 80
+- ipw / ABG / hypercap_resp_failure:  2
+- ipw / ABG / niv_proc:  2
+- unweighted / ABG / hypercap_resp_failure:  1
+- unweighted / ABG / niv_proc:  1
 
 ## Issues (prioritized)
 
-- [high] Balance: ABG max|SMD|=0.116 (Results/balance_target_imp_summary.csv)
-- [high] Outcome: sep_flag TRUE for 1182 / 1324 fits (Results/model_fit_diagnostics.csv)
+- [high] Outcome: sep_flag TRUE for 166 / 1324 fits (Results/model_fit_diagnostics.csv)
