@@ -1,160 +1,116 @@
 # ABG vs VBG Project
 
-> Project with Anila Khan on the clinical / scientific significance of arterial blood gases (ABG) vs venous blood gases (VBG).  
-> Repository: https://github.com/reblocke/abg-vbg-project
+Retrospective clinical analysis comparing prognostic associations of hypercapnia measured by arterial blood gas (ABG) and venous blood gas (VBG), implemented in R + Quarto.
 
-## Links & identifiers
+Repository: <https://github.com/reblocke/abg-vbg-project>
 
-- Paper (recommended): **TODO** (add DOI / journal URL / preprint)
-- Code (this repo): https://github.com/reblocke/abg-vbg-project
-- Reproducible release for the paper: **TODO** (create a GitHub Release and archive it to Zenodo to obtain a DOI)
+## Current status (as of February 27, 2026)
 
-## Cite this work
+- Active analysis notebook: `Code Drafts/ABG-VBG analysis 2025-12-11.qmd`
+- Secondary working notebook (logistic-focused branch): `Code Drafts/logistic/ABG VBG analysis logistic full run 2026-2-6.qmd`
+- Reproducible render entrypoint: `scripts/render_pdf.sh`
+- Latest manuscript draft: `Drafts/02-17-2026 ABG_VBG_RoughDraft.docx`
+- Latest manuscript draft state: rough draft with placeholder sections (e.g., abstract and some figure/table insert points still marked TODO in the `.docx`)
 
-If you use this repository, please cite the accompanying paper (**TODO**) and/or the software release.
+## Quick start (reproduce analysis PDF)
 
-- See: [`CITATION.cff`](./CITATION.cff)
-
-## Quick start (reproduce the main results)
-
-> This repository appears to be an R/RStudio-based analysis project (it includes an `.Rproj` file).  
-> The exact “one command” pipeline targets may need to be filled in once the analysis scripts are finalized.
-
-### 1) Open the project
-
-- Open `abg-vbg-project.Rproj` in RStudio.
-
-### 2) Restore the analysis environment (required)
-
-This project uses `renv` as the source of truth for R package reproducibility.
+1. Open `abg-vbg-project.Rproj` in RStudio (or run commands from repo root).
+2. Restore the R environment:
 
 ```r
 renv::restore()
 ```
 
-Before long renders, run the preflight checker:
+3. Run environment preflight:
 
 ```bash
 Rscript -e "source('scripts/check_env.R')"
 ```
 
-### 3) Run the analysis
-
-Main PDF render:
+4. Render the main notebook:
 
 ```bash
 quarto render "Code Drafts/ABG-VBG analysis 2025-12-11.qmd" --to pdf
 ```
 
-Reproducible wrapper (preflight + render):
+Or use the wrapper (preflight + render):
 
 ```bash
 ./scripts/render_pdf.sh
 ```
 
-Expected outputs (examples):
-- Generated tables/figures: `Results/`
-- Intermediate datasets: `data/processed/` (recommended)
+Pilot render example:
 
-## Data access
+```bash
+quarto render "Code Drafts/ABG-VBG analysis 2025-12-11.qmd" --to pdf -P run_mode:pilot -P pilot_frac:0.05
+```
 
-- Location in repo: `data/`
-- Data provenance: **TODO** (describe data source(s), versions, and any inclusion/exclusion criteria)
-- Sensitive / human-subjects data: **DO NOT** commit PHI/PII. If any data are restricted, document:
-  - how to request access,
-  - what a reuser can run without access (e.g., a synthetic or de-identified sample),
-  - and the expected directory layout for restricted files.
+## Repository audit snapshot
 
-If you add any non-trivial datasets, also add:
-- [`DATA_ACCESS.md`](./DATA_ACCESS.md) (template included in this repo)
+- Quarto notebooks (`.qmd`): 20 total
+- Active notebooks: 2 (listed above)
+- Archived notebook history: `Code Drafts/Prior versions/`
+- R scripts (`.R`): 3 (`R/diagnostics_audit.R`, `scripts/check_env.R`, `renv/activate.R`)
+- Render shell script: `scripts/render_pdf.sh`
+- Generated outputs: `Results/` (tables, diagnostics, plot files, run logs)
 
-## Environment
+## Main notebook coverage
 
-**Recommended to document once known:**
-- R version (e.g., `R 4.3.x`)
-- OS tested (macOS / Windows / Linux)
-- Required system libraries (if any; e.g., `libxml2`, `openssl`)
-- Hardware notes (if any)
+`Code Drafts/ABG-VBG analysis 2025-12-11.qmd` includes:
 
-Environment capture options:
-- `renv` (required for R): `renv.lock`
-- Container (optional): `Dockerfile` / `rocker/*` base image
+- Cohort setup and schema/type normalization from TriNetX-derived extracts in `data/`
+- Unweighted ABG/VBG outcome analyses
+- Non-MI IPSW using GBM propensity models
+- MI + IPSW analyses with pooled estimates
+- Restricted cubic spline outcome modeling
+- Diagnostics export and audit outputs (CSV + figures) to `Results/`
+- Manuscript-oriented output tables (`Results/Table1.docx`, `Results/Table2.docx`, plus companion CSVs)
 
-Python helper tooling (optional):
-- Use `uv` only for Python sidecar scripts (for example, PDF parsing helpers).
-- `uv` does not replace `renv`; it complements it in mixed-language workflows.
+## Manuscript mapping notes
 
-## Repository layout
+Latest manuscript draft reviewed: `Drafts/02-17-2026 ABG_VBG_RoughDraft.docx`.
 
-Top-level folders seen in the repo:
+The current draft narrative (ABG/VBG hypercapnia associations, IPSW, MI, spline analyses) is directionally aligned with the active Quarto workflow. For figure/table assembly, use this mapping:
 
-- `Code Drafts/` — exploratory scripts and early analysis drafts
-- `Drafts/` — manuscript / report drafts (e.g., Rmd/Quarto)
-- `Results/` — generated outputs (figures, tables, exports)
-- `data/` — raw and/or intermediate data
+- Baseline tables: `Results/Table1.docx`, `Results/Table2.docx`, `Results/Table1_ABG_VBG.docx`
+- Core adjusted 3-level OR summary: `Results/table_summary_adjusted_threelevel.csv` and cohort-specific split CSVs
+- Non-MI and MI diagnostics/plots: `Results/figs/` with lookup in `Results/plot_registry.csv`
+- Supplement diagnostics tables: `Results/diagnostics_summary.csv`, `Results/diagnostics_audit.md`, `Results/diagnostics_audit_issues.csv`
 
-**Recommendation:** consider adopting a standard split like:
-- `src/` (reusable functions), `analysis/` (entrypoint scripts), `outputs/` (generated), `data/raw` vs `data/processed`
+Note: figure filenames in `Results/figs/` can include chunk index suffixes; use `Results/plot_registry.csv` as the canonical crosswalk.
 
-## Workflow overview (recommended)
+## Data access and governance
 
-**TODO:** Replace with the real pipeline once finalized.
+- Data source context: TriNetX data under data use agreement (per manuscript draft)
+- Individual-level patient data are restricted and not shareable in this repository
+- Keep PHI/PII out of version control
+- Additional access notes/template: `DATA_ACCESS.md`
 
-1. Import / assemble study dataset(s) → `data/raw/`
-2. Clean / derive analysis-ready dataset(s) → `data/processed/`
-3. Run primary analyses → `Results/`
-4. Render manuscript / report artifacts → `Results/` (or `Drafts/` build directory)
+## Reproducibility and checks
 
-## Results mapping (paper ↔ code)
+- Dependency lockfile: `renv.lock`
+- Preflight check before long renders: `Rscript -e "source('scripts/check_env.R')"`
+- No `testthat` suite is currently present in this repository
 
-**TODO:** Fill this table so a reviewer can reproduce each paper artifact.
+## Project structure
 
-| Paper item | Script / notebook | Command | Output path |
-|---|---|---|---|
-| Fig 1 | `...` | `Rscript ...` | `Results/...` |
-| Table 1 | `...` | `Rscript ...` | `Results/...` |
+- `Code Drafts/`: active and historical Quarto analysis notebooks
+- `Drafts/`: manuscript and abstract drafts
+- `Results/`: generated figures/tables/diagnostics/logs
+- `data/`: project data inputs (restricted/raw-derived)
+- `scripts/`: reproducibility helper scripts
+- `R/`: standalone R helper(s)
 
-## Quality checks / tests (optional but recommended)
+## Citation, license, and support
 
-If you add automated checks, document them here. Suggested options:
-- `testthat` for R unit tests (`tests/`)
-- A small “smoke test” dataset in `data/example/` for fast CI runs
+- Citation metadata: `CITATION.cff`
+- Code license: MIT (`LICENSE`)
+- Contributing guide: `CONTRIBUTING.md`
+- Support: `SUPPORT.md`
+- Code of conduct: `CODE_OF_CONDUCT.md`
+- Acknowledgements: `ACKNOWLEDGEMENTS.md`
 
-## License
+## Maintainers
 
-- Code: MIT (see [`LICENSE`](./LICENSE))
-
-If you add data, figures, or manuscripts, consider explicitly licensing those too
-(e.g., CC BY 4.0 for text/figures), as they may differ from the software license.
-
-## Funding & acknowledgements
-
-- Funding sources: **TODO** (add grant numbers / institutional support)
-- Acknowledgements: see [`ACKNOWLEDGEMENTS.md`](./ACKNOWLEDGEMENTS.md)
-
-## Contributing & support
-
-- Contributing guidelines: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
-- Support / questions: [`SUPPORT.md`](./SUPPORT.md)
-- Code of conduct: [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
-
-## Security
-
-If you discover a security or privacy issue, please follow [`SECURITY.md`](./SECURITY.md).
-
-## Maintainers / contact
-
-- Maintainer: Brian Locke (GitHub: `reblocke`) — please open an issue in this repository.
-- Co-investigator / collaborator: Anila Khan (add preferred contact if desired)
-
----
-
-### Checklist to finish this README for a publication
-
-- [ ] Add the manuscript title + DOI/preprint link
-- [ ] Create a tagged release matching the paper
-- [ ] Add a Zenodo (or equivalent) archived DOI for the release
-- [ ] Add a one-command reproducibility target (`make all` / `Rscript run_all.R`)
-- [ ] Fill Results mapping table for all figures/tables
-- [ ] Add data provenance + access notes
-- [x] Pin dependencies (`renv.lock`)
+- Brian Locke (`reblocke`)
+- Anila Mehta / collaborators listed in manuscript drafts
