@@ -1,0 +1,7 @@
+The following package(s) are in an inconsistent state:
+
+ package  installed recorded used
+ pdftools y         n        y   
+ qpdf     y         n        y   
+
+See `?renv::status` for advice on resolving these issues.
