@@ -528,7 +528,46 @@ cleanup_diagnostics_outputs <- function() {
   }
 }
 
+keep_mi_transient_outputs <- function() {
+  flag <- tolower(Sys.getenv("KEEP_MI_TRANSIENT", unset = ""))
+  isTRUE(getOption("abgvbg.keep_mi_transient", FALSE)) ||
+    flag %in% c("1", "true", "yes", "y")
+}
+
+cleanup_mi_transient_outputs <- function() {
+  if (keep_mi_transient_outputs()) return(invisible(FALSE))
+
+  transient_files <- c(
+    results_path("mi_abg_vbg_mids.rds"),
+    results_path("subset_data_pre_mi.rds"),
+    results_path("mi_logistic_ps_abg_list.rds"),
+    results_path("mi_logistic_ps_vbg_list.rds")
+  )
+  transient_dirs <- c(
+    results_path("mi_weights")
+  )
+
+  existing_files <- transient_files[file.exists(transient_files)]
+  if (length(existing_files)) {
+    safe_root <- normalizePath(results_dir, winslash = "/", mustWork = FALSE)
+    del_paths <- normalizePath(existing_files, winslash = "/", mustWork = FALSE)
+    stopifnot(all(startsWith(del_paths, safe_root)))
+    fs::file_delete(existing_files)
+  }
+
+  existing_dirs <- transient_dirs[dir.exists(transient_dirs)]
+  if (length(existing_dirs)) {
+    safe_root <- normalizePath(results_dir, winslash = "/", mustWork = FALSE)
+    del_paths <- normalizePath(existing_dirs, winslash = "/", mustWork = FALSE)
+    stopifnot(all(startsWith(del_paths, safe_root)))
+    fs::dir_delete(existing_dirs)
+  }
+
+  invisible(length(existing_files) + length(existing_dirs) > 0L)
+}
+
 cleanup_diagnostics_outputs()
+cleanup_mi_transient_outputs()
 # Ensure any stale Results artifacts from prior runs are removed
 stale_patterns <- c(
   "^missingness_by_strata\\.csv$",
@@ -10864,4 +10903,10 @@ scan_df <- data.frame(
   stringsAsFactors = FALSE
 )
 write_csv_safely(scan_df, results_path("numbering_hygiene_scan.csv"), row_names = FALSE)
+```
+
+```{r mi-transient-cleanup}
+#| include: true
+# Purpose: remove transient MI scratch artifacts after a successful render.
+cleanup_mi_transient_outputs()
 ```
