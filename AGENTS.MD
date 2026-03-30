@@ -16,6 +16,14 @@
 - Avoid `attach()`, `setwd()`, and `<<-`. Use explicit data references.
 - Use explicit namespaces in package-like code when ambiguity is possible, e.g. `dplyr::mutate`.
 
+## Codex skills
+- For R work in this repo, explicitly route through the installed Codex skills `$r-core`, `$r-ecosystem`, and `$r-extensions` when relevant.
+- Use `$r-core` for base R syntax, vectors, data frames, function design, package or session management, file I/O, and debugging.
+- Use `$r-ecosystem` for tidyverse workflows, `ggplot2`, Quarto, R Markdown, and other package-centric R tasks.
+- Use `$r-extensions` for package authoring, `roxygen2`, `testthat`, `rlang` metaprogramming, profiling, and native-code extension work.
+- Default to `$r-core` plus `$r-ecosystem` for most analysis and reporting tasks in this repository.
+- Only invoke `$r-extensions` when the task genuinely involves advanced R development tooling or package-level infrastructure.
+
 ## Figure styling (publication-ready `ggplot2`)
 - Default to a clean publication theme (do not leave figures in raw `theme_gray()` defaults). Prefer a project-level theme helper for consistency across figures.
 - Define final figure dimensions first (single-column vs double-column) and tune text sizes for that physical output size.
