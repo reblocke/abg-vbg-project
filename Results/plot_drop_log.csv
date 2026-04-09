@@ -1,3 +1,0 @@
-"plot","reason","n_dropped","n_before","n_after","stage","extra","run_id","run_ts"
-"shap-top10-ipw-gbm-abg-vbg","duplicate_figure",1,NA,NA,"plot_registry","/Users/reblocke/Research/abg-vbg-project/Results/figs/shap-top10-ipw-gbm-abg-vbg.png","20260409_132423","2026-04-09 13:24:23.302076"
-"shap-top10-mi-logistic-abg-vbg","duplicate_figure",1,NA,NA,"plot_registry","/Users/reblocke/Research/abg-vbg-project/Results/figs/shap-top10-mi-logistic-abg-vbg.png","20260409_132423","2026-04-09 13:24:23.302076"

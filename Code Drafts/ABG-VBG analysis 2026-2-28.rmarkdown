@@ -13608,3 +13608,4 @@ write_csv_safely(scan_df, results_path("numbering_hygiene_scan.csv"), row_names 
 # Purpose: remove transient MI scratch artifacts after a successful render.
 cleanup_mi_transient_outputs()
 ```
+

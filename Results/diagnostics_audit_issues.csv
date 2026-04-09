@@ -1,3 +1,0 @@
-"severity","component","evidence_file","evidence_snippet","why_it_matters","recommended_fix","run_id","run_ts"
-"high","Balance","Results/balance_target_imp_summary.csv","ABG max|SMD|=0.108","ABG target balance exceeds 0.10 threshold across imputations.","Revisit GBM tuning, covariate set, or truncation to improve ABG balance.","20260409_132423","2026-04-09 13:24:23.302076"
-"high","Outcome","Results/model_fit_diagnostics.csv","sep_flag TRUE for 540 / 692 fits","High rate of separation/near-separation can bias ORs and CIs.","Inspect flagged outcomes; consider penalized fits or check data sparsity.","20260409_132423","2026-04-09 13:24:23.302076"
