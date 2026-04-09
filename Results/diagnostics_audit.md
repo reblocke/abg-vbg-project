@@ -1,21 +1,73 @@
-run_id: 20260301_131122 run_ts: 2026-03-01 13:11:22.14127
 # Diagnostics Audit
 
-## A1. MI workflow
-- Impute -> single-pass per‑imputation loop (weights, target balance, 3‑level outcomes, spline outcomes) -> pool curves and coefficients with Rubin’s rules (chunk: `mi-single-pass`; downstream MI display chunks read those objects).
-## A2. MI settings
-- m = 80, maxit = 20, seed = 20251206; treatments/outcomes/PaCO2/VBG CO2 are not imputed but are predictors (`mi-exec`).
-## A3. Propensity weighting
-- Unimputed weighting uses WeightIt with method = "gbm" and balance-based stopping (stop.method = "smd.max"); no AUC-based tuning (`propensity-config`, `ipw-abg-weighting`, `ipw-vbg-workflow`).
-- MI weighting uses logistic PS with restricted cubic splines (glm + rcs); no SHAP is computed for MI.
-## A4. One-sided IPSW + truncation
-- Weights are 1/ps for observed tests (ABG or VBG), truncated only for very small propensities (ps floor = 1st percentile), then stabilized by the mean; controls receive weight 1 for balance diagnostics only.
-## A5. Robust variance
-- Outcome models are survey::svyglm with svydesign (robust SEs), using spline(CO2) + X adjustment; ABG and VBG are fit separately within the measured cohort.
-## A6. Pooling
-- mitools::MIcombine pools coefficients and robust vcov from svyglm; spline curves are pooled pointwise on log-OR (relative to CO2_ref) and on eta for predicted-probability curves (helpers defined in `mi-single-pass`).
+## Executive Summary
+- Run mode: pilot; pilot_frac: 0.01; m: 20; maxit: 5
+- Runtime total (sec): 238.139
+- MI batch status: batches=10; m_batch=2; failures=0
+- Balance: ABG max|SMD|=0.108; VBG max|SMD|=0.079
+- Separation flags: 540 / 692
 
-## Potential mismatches / risks
-- Target balance diagnostics compare weighted treated cohort to the full analytic sample (no treated-vs-control balance).
-- MI stability across m uses subsets of the first m imputations from the main mids object (not full re-imputation at each m).
-- Unweighted analyses remain earlier in the notebook for context; primary inference is based on weighted spline models.
+## Artifact Inventory (Found / Missing)
+
+- runtime_log.csv: present
+- runtime_summary.csv: present
+- runtime_summary_top15.csv: present
+- warnings_log.csv: present
+- mi_warnings_log.csv: present
+- mice_smoketest.log: present
+- mice_batches_log.csv: present
+- mice_chain_diagnostics.csv: present
+- mice_pred_width_preflight.csv: present
+- mice_logged_events_raw.csv: present
+- mice_logged_events_summary.csv: present
+- mice_spec.rds: present
+- mi_outcome_fit_diagnostics.csv: present
+- model_fit_diagnostics.csv: present
+- mi_spline_curve_abg.csv: present
+- mi_spline_curve_vbg.csv: present
+- balance_target_imp_summary.csv: present
+- balance_max_smd_by_imp.csv: present
+- weight_summary.csv: present
+- ps_overlap_summary.csv: present
+- diagnostics_summary.csv: present
+- plot_drop_log.csv: present
+
+## Runtime Top Steps
+
+- mi_single_pass: 178.157 sec
+- mice_batch_1: 7.995 sec
+- mice_batch_9: 6.686 sec
+- mice_batch_10: 6.292 sec
+- mice_batch_6: 6.213 sec
+- mice_batch_4: 5.842 sec
+- mice_batch_5: 5.830 sec
+- mice_batch_7: 5.667 sec
+- mice_batch_8: 5.483 sec
+- mice_batch_3: 5.011 sec
+
+## MI Health
+
+- Smoke test failed: FALSE
+- Predictor width max mm_cols: 33.000
+- Chain diagnostics issue: FALSE (numeric_names=FALSE; drift_tail_na_frac=0.000)
+- MI warnings rows: 0
+
+## Balance
+
+- ABG max |SMD|: 0.108
+- VBG max |SMD|: 0.079
+
+## Outcome Fits
+
+Top separation counts (analysis_variant/group/outcome):
+- mi_ipw / ABG / death_60d: 40
+- mi_ipw / VBG / death_60d: 40
+- mi_unweighted / VBG / death_60d: 40
+- mi_ipw / ABG / hypercap_resp_failure: 40
+- mi_unweighted / ABG / hypercap_resp_failure: 40
+- mi_ipw / VBG / hypercap_resp_failure: 40
+
+## Issues (prioritized)
+
+- [high] Balance: ABG max|SMD|=0.108 (Results/balance_target_imp_summary.csv)
+- [high] Outcome: sep_flag TRUE for 540 / 692 fits (Results/model_fit_diagnostics.csv)

@@ -42,7 +42,6 @@ execute:
 # P1: ABG residual imbalance >0.10 — consider redefining target population / stratified standardization / overlap restriction.
 # P3: Separation/nonconvergence in adjusted outcome models — consider penalized logistic / level collapsing, and define reporting policy.
 # TODO consider adding discontinuity (at 45 mmHg CO2 on ABG and 50 mmHg CO2 on VBG; start with raw binning and LOESS to evaluate if there's a jump, then consider regression discontinuity or similar if so).
-# TODO (external script): generate cohort derivation flow diagram (CONSORT/STROBE-style) and save to Results/cohort_flow.(png|pdf); include here when available.
 ```
 
 # Data Pre-Processing and Unweighted Analyses
@@ -243,6 +242,102 @@ render_table_pdf_maybe <- function(df, caption, file_stub,
   }
   invisible(NULL)
 }
+
+write_standalone_table_pdf <- function(df, caption, file_stub,
+                                       wide = FALSE,
+                                       digits = 2,
+                                       max_cols = 6,
+                                       landscape = NULL) {
+  stopifnot(is.data.frame(df))
+  out_csv <- results_path(paste0(file_stub, ".csv"))
+  write_csv_safely(df, out_csv, row_names = FALSE)
+
+  if (is.null(landscape)) landscape <- (wide || ncol(df) > max_cols)
+  use_longtable <- nrow(df) > 40
+  n_cols <- ncol(df)
+  parts <- if (n_cols <= max_cols) list(df) else {
+    idx <- split(seq_len(n_cols), ceiling(seq_len(n_cols) / max_cols))
+    lapply(idx, function(ii) df[, ii, drop = FALSE])
+  }
+
+  build_kbl <- function(df_part, cap) {
+    cap <- escape_latex_text(strip_manual_table_number(cap))
+    kbl <- knitr::kable(
+      df_part,
+      format = "latex",
+      booktabs = TRUE,
+      longtable = use_longtable,
+      caption = cap,
+      digits = digits
+    )
+    kbl <- kableExtra::kable_styling(
+      kbl,
+      latex_options = if (use_longtable) c("repeat_header") else c("hold_position", "scale_down"),
+      font_size = if (ncol(df_part) > max_cols || wide) 6 else 7,
+      full_width = FALSE,
+      position = "center"
+    )
+    if (landscape) kbl <- kableExtra::landscape(kbl)
+    as.character(kbl)
+  }
+
+  table_blocks <- if (length(parts) == 1L) {
+    build_kbl(parts[[1]], caption)
+  } else {
+    letters_part <- LETTERS[seq_along(parts)]
+    unlist(lapply(seq_along(parts), function(i) {
+      cap_i <- paste0(caption, " (Part ", letters_part[i], ")")
+      build_kbl(parts[[i]], cap_i)
+    }))
+  }
+
+  tex_doc <- c(
+    "\\documentclass{article}",
+    "\\usepackage[margin=0.75in]{geometry}",
+    "\\usepackage{booktabs}",
+    "\\usepackage{longtable}",
+    "\\usepackage{pdflscape}",
+    "\\usepackage{float}",
+    "\\usepackage{graphicx}",
+    "\\begin{document}",
+    table_blocks,
+    "\\end{document}"
+  )
+
+  build_dir <- fs::path(tempdir(), paste0("table_pdf_", file_stub))
+  fs::dir_create(build_dir, recurse = TRUE)
+  tex_file <- fs::path(build_dir, paste0(file_stub, ".tex"))
+  writeLines(tex_doc, tex_file, useBytes = TRUE)
+
+  latex_log <- tryCatch(
+    system2(
+      "pdflatex",
+      args = c(
+        "-interaction=nonstopmode",
+        "-halt-on-error",
+        "-output-directory", build_dir,
+        tex_file
+      ),
+      stdout = TRUE,
+      stderr = TRUE
+    ),
+    error = function(e) stop("Standalone table PDF render failed for ", file_stub, ": ", conditionMessage(e))
+  )
+  latex_status <- attr(latex_log, "status")
+  if (!is.null(latex_status) && latex_status != 0) {
+    stop(
+      "Standalone table PDF render failed for ", file_stub, " via pdflatex. Last log lines: ",
+      paste(utils::tail(latex_log, 20), collapse = " | ")
+    )
+  }
+  pdf_file <- sub("\\.tex$", ".pdf", tex_file)
+  if (!file.exists(pdf_file)) {
+    stop("Standalone table PDF render failed for ", file_stub, ": expected PDF not found at ", pdf_file)
+  }
+  out_pdf <- results_path(paste0(file_stub, ".pdf"))
+  fs::file_copy(pdf_file, out_pdf, overwrite = TRUE)
+  invisible(out_pdf)
+}
 ```
 
 Package dependencies are managed via `renv` for reproducibility. Use `renv::restore()` before rendering.
@@ -258,7 +353,7 @@ Package dependencies are managed via `renv` for reproducibility. Use `renv::rest
 # Consolidated package management ------------------------------------------------
 seed_pkgs <- c(
   "Matrix", "WeightIt", "broom", "cobalt", "codebookr", "dagitty", "digest",
-  "dplyr", "fastshap", "flextable", "fs", "future", "future.apply", "gbm",
+  "consort", "dplyr", "fastshap", "flextable", "fs", "future", "future.apply", "gbm",
   "ggdag", "ggplot2", "gt", "gtsummary", "haven", "here", "kableExtra",
   "knitr", "labelled", "lubridate", "mice", "miceadds", "mitools", "naniar",
   "officer", "parallel", "patchwork", "pdftools", "progressr", "purrr",
@@ -344,24 +439,264 @@ fs::dir_create(fig_dir, recurse = TRUE)
 knitr::opts_chunk$set(
   fig.path   = fig_path,
   dev        = "ragg_png",
-  dpi        = 200
+  dpi = 300
 )
 # on macOS and some setups this prevents device headaches
 options(bitmapType = "cairo")
 ```
 
-```{r cohort-flow-placeholder}
-#| echo: true
+```{r cohort-flow-helpers}
+#| include: false
 #| message: false
 #| warning: false
-# Purpose: cohort flow placeholder.
+# Purpose: cohort flow helpers.
+format_count <- function(x) {
+  format(as.integer(x), big.mark = ",", trim = TRUE, scientific = FALSE)
+}
+
+cohort_flow_input_path <- fs::path(data_dir_name, "full_db.dta")
+cohort_flow_cols <- c("encounter_type", "has_abg", "has_vbg", "paco2", "vbg_co2")
+
+read_cohort_flow_input <- function(path, cols = cohort_flow_cols) {
+  stopifnot(file.exists(path))
+  haven::read_dta(path, col_select = dplyr::all_of(cols))
+}
+
+compute_cohort_flow_counts <- function(df) {
+  encounter_type_num <- suppressWarnings(as.integer(df$encounter_type))
+  if (anyNA(encounter_type_num)) {
+    stop(
+      "Cohort flow count input has missing encounter_type values (n = ",
+      sum(is.na(encounter_type_num)), ")."
+    )
+  }
+
+  has_abg_num <- suppressWarnings(as.integer(df$has_abg))
+  has_vbg_num <- suppressWarnings(as.integer(df$has_vbg))
+  has_abg_num[is.na(has_abg_num)] <- 0L
+  has_vbg_num[is.na(has_vbg_num)] <- 0L
+
+  analytic_flag <- encounter_type_num != 1L
+  has_abg_flag <- analytic_flag & has_abg_num == 1L
+  has_vbg_flag <- analytic_flag & has_vbg_num == 1L
+  both_flag <- has_abg_flag & has_vbg_flag
+  abg_only_flag <- has_abg_flag & !has_vbg_flag
+  vbg_only_flag <- has_vbg_flag & !has_abg_flag
+  neither_flag <- analytic_flag & !has_abg_flag & !has_vbg_flag
+  abg_paco2_flag <- has_abg_flag & !is.na(df$paco2)
+  vbg_co2_flag <- has_vbg_flag & !is.na(df$vbg_co2)
+
+  analytic_n <- sum(analytic_flag, na.rm = TRUE)
+  stopifnot(sum(abg_only_flag, na.rm = TRUE) + sum(vbg_only_flag, na.rm = TRUE) +
+              sum(both_flag, na.rm = TRUE) + sum(neither_flag, na.rm = TRUE) == analytic_n)
+  stopifnot(sum(abg_only_flag, na.rm = TRUE) + sum(both_flag, na.rm = TRUE) ==
+              sum(has_abg_flag, na.rm = TRUE))
+  stopifnot(sum(vbg_only_flag, na.rm = TRUE) + sum(both_flag, na.rm = TRUE) ==
+              sum(has_vbg_flag, na.rm = TRUE))
+
+  list(
+    total_extracted = nrow(df),
+    excluded_ambulatory = sum(encounter_type_num == 1L, na.rm = TRUE),
+    analytic_ed_inpatient = analytic_n,
+    abg_tested = sum(has_abg_flag, na.rm = TRUE),
+    vbg_tested = sum(has_vbg_flag, na.rm = TRUE),
+    both_abg_vbg = sum(both_flag, na.rm = TRUE),
+    abg_only = sum(abg_only_flag, na.rm = TRUE),
+    vbg_only = sum(vbg_only_flag, na.rm = TRUE),
+    neither_abg_nor_vbg = sum(neither_flag, na.rm = TRUE),
+    abg_with_paco2 = sum(abg_paco2_flag, na.rm = TRUE),
+    vbg_with_vbg_co2 = sum(vbg_co2_flag, na.rm = TRUE)
+  )
+}
+
+decorate_weighted_comparability <- function(built_graph, weighted_nodes,
+                                            label_text,
+                                            band_gp = grid::gpar(
+                                              fill = grDevices::adjustcolor("grey92", alpha.f = 0.92),
+                                              col = "grey82",
+                                              lwd = 0.8
+                                            ),
+                                            text_gp = grid::gpar(col = "grey25", cex = 0.8),
+                                            band_x = grid::unit(0.5, "npc"),
+                                            band_y = grid::unit(0.13, "npc"),
+                                            band_width = grid::unit(0.82, "npc"),
+                                            band_height = grid::unit(0.18, "npc"),
+                                            label_y = grid::unit(0.06, "npc")) {
+  stopifnot(inherits(built_graph, "gTree"))
+  stopifnot(length(weighted_nodes) == 2L)
+
+  band_rect <- grid::roundrectGrob(
+    x = band_x,
+    y = band_y,
+    width = band_width,
+    height = band_height,
+    r = grid::unit(2.5, "mm"),
+    gp = band_gp,
+    name = "weighted_comparability_band"
+  )
+  band_label <- grid::textGrob(
+    label = label_text,
+    x = band_x,
+    y = label_y,
+    just = "center",
+    gp = text_gp,
+    name = "weighted_comparability_label"
+  )
+
+  list(
+    built_graph = built_graph,
+    pre_draw = NULL,
+    post_draw = function() {
+      grid::grid.draw(band_rect)
+      grid::grid.draw(band_label)
+    }
+  )
+}
+
+save_cohort_flow_outputs <- function(graph, png_file, pdf_file,
+                                     width_mm = 180, height_mm = 150,
+                                     dpi = 600, bg = "white",
+                                     decorate_fn = NULL) {
+  width_in <- width_mm / 25.4
+  height_in <- height_mm / 25.4
+  draw_graph <- function() {
+    built_graph <- consort::build_grid(graph)
+    decoration <- NULL
+    if (!is.null(decorate_fn)) {
+      decoration <- decorate_fn(built_graph)
+      if (inherits(decoration, "gTree")) {
+        built_graph <- decoration
+        decoration <- NULL
+      } else if (is.list(decoration) && inherits(decoration$built_graph, "gTree")) {
+        built_graph <- decoration$built_graph
+      }
+    }
+    grid::grid.newpage()
+    if (is.list(decoration) && is.function(decoration$pre_draw)) {
+      decoration$pre_draw()
+    }
+    grid::grid.draw(built_graph)
+    if (is.list(decoration) && is.function(decoration$post_draw)) {
+      decoration$post_draw()
+    }
+  }
+
+  fs::dir_create(fs::path_dir(png_file), recurse = TRUE)
+  fs::dir_create(fs::path_dir(pdf_file), recurse = TRUE)
+
+  ragg::agg_png(
+    filename = png_file,
+    width = width_mm,
+    height = height_mm,
+    units = "mm",
+    res = dpi,
+    background = bg
+  )
+  draw_graph()
+  grDevices::dev.off()
+
+  if (capabilities("cairo")) {
+    grDevices::cairo_pdf(
+      filename = pdf_file,
+      width = width_in,
+      height = height_in,
+      bg = bg
+    )
+  } else {
+    grDevices::pdf(
+      file = pdf_file,
+      width = width_in,
+      height = height_in,
+      bg = bg
+    )
+  }
+  draw_graph()
+  grDevices::dev.off()
+
+  stopifnot(file.exists(png_file), file.exists(pdf_file))
+  invisible(list(png = png_file, pdf = pdf_file))
+}
+
+cohort_flow_input <- read_cohort_flow_input(cohort_flow_input_path)
+cohort_flow_counts <- compute_cohort_flow_counts(cohort_flow_input)
+rm(cohort_flow_input)
+```
+
+```{r cohort-flow-figure}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-cap: "Cohort flow diagram for the extracted 2022 encounter cohort, ambulatory exclusion, analytic ED/inpatient cohort, and ABG- and VBG-tested subcohorts, each weighted to the same analytic target cohort. Some encounters had both ABG and VBG testing (n = 55,049)."
+#| fig-alt: "Flow diagram showing the extracted 2022 encounter cohort, ambulatory exclusions, the analytic emergency department or inpatient cohort, tested ABG and VBG subcohorts, and separate weighted pseudo-populations."
+# Purpose: cohort flow figure.
 flow_png <- results_path("cohort_flow.png")
 flow_pdf <- results_path("cohort_flow.pdf")
-if (file.exists(flow_png) || file.exists(flow_pdf)) {
-  knitr::include_graphics(if (file.exists(flow_png)) flow_png else flow_pdf)
-} else {
-  cat("Cohort flow diagram will be generated externally and inserted here in the final manuscript packet.\n")
-}
+
+top_box <- paste0(
+  "Extracted 2022 encounter cohort\n",
+  "(n = ", format_count(cohort_flow_counts$total_extracted), ")"
+)
+
+screening_side <- paste0(
+  "Ambulatory encounters excluded\n",
+  "(n = ", format_count(cohort_flow_counts$excluded_ambulatory), ")"
+)
+
+analytic_base_box <- paste0(
+  "Analytic ED or inpatient encounter cohort\n",
+  "(n = ", format_count(cohort_flow_counts$analytic_ed_inpatient), ")"
+)
+
+split_boxes <- c(
+  paste0(
+    "ABG-tested encounters\n",
+    "(n = ", format_count(cohort_flow_counts$abg_tested), ")"
+  ),
+  paste0(
+    "VBG-tested encounters\n",
+    "(n = ", format_count(cohort_flow_counts$vbg_tested), ")"
+  )
+)
+
+weighted_box <- paste0(
+  "ABG-weighted pseudo-population\n",
+  "standardized to target analytic cohort"
+)
+weighted_boxes <- c(
+  weighted_box,
+  paste0(
+    "VBG-weighted pseudo-population\n",
+    "standardized to target analytic cohort"
+  )
+)
+
+cohort_flow_graph <- consort::add_box(txt = top_box, text_width = 34) |>
+  consort::add_side_box(txt = screening_side, text_width = 30) |>
+  consort::add_box(txt = analytic_base_box, text_width = 34) |>
+  consort::add_split(txt = split_boxes, text_width = 24) |>
+  consort::add_box(
+    txt = weighted_boxes,
+    text_width = 28,
+    box_gp = grid::gpar(fill = "grey90", col = "grey45", lwd = 0.9)
+  )
+
+weighted_nodes <- attr(cohort_flow_graph, "nodes.current")
+stopifnot(length(weighted_nodes) == 2L)
+
+save_cohort_flow_outputs(
+  cohort_flow_graph,
+  flow_png,
+  flow_pdf,
+  decorate_fn = function(built_graph) {
+    decorate_weighted_comparability(
+      built_graph,
+      weighted_nodes = weighted_nodes,
+      label_text = "Conditionally comparable after weighting on propensity covariates"
+    )
+  }
+)
+flow_include <- if (knitr::is_latex_output() && file.exists(flow_pdf)) flow_pdf else flow_png
+knitr::include_graphics(flow_include)
 ```
 
 ```{r setup-run-config}
@@ -1217,8 +1552,50 @@ pooled_mi_vcov_check <- function(pooled) {
   invisible(TRUE)
 }
 
-save_diag_plot <- function(p, file, width = 8, height = 6, dpi = 200) {
-  ggplot2::ggsave(filename = file, plot = p, width = width, height = height, dpi = dpi)
+theme_pub <- function(base_size = 10, base_family = "", legend_position = "top") {
+  ggplot2::theme_minimal(base_size = base_size, base_family = base_family) +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(face = "bold", hjust = 0, size = ggplot2::rel(1.05)),
+      plot.subtitle = ggplot2::element_text(color = "grey20"),
+      plot.caption = ggplot2::element_text(size = ggplot2::rel(0.85), color = "grey25", hjust = 0),
+      axis.title = ggplot2::element_text(color = "grey10"),
+      axis.text = ggplot2::element_text(color = "grey10"),
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.grid.major.x = ggplot2::element_blank(),
+      panel.grid.major.y = ggplot2::element_line(color = "grey85", linewidth = 0.25),
+      axis.line = ggplot2::element_line(color = "grey25", linewidth = 0.25),
+      axis.ticks = ggplot2::element_line(color = "grey25", linewidth = 0.25),
+      legend.position = legend_position,
+      legend.title = ggplot2::element_text(face = "bold"),
+      legend.background = ggplot2::element_blank(),
+      legend.key = ggplot2::element_blank(),
+      strip.background = ggplot2::element_rect(fill = "grey95", color = "grey80", linewidth = 0.25),
+      strip.text = ggplot2::element_text(face = "bold")
+    )
+}
+
+save_diag_plot <- function(p, file, width = 8, height = 6, units = "in", dpi = 300, bg = "white") {
+  if (grepl("\\.pdf$", file, ignore.case = TRUE)) {
+    ggplot2::ggsave(
+      filename = file,
+      plot = p,
+      width = width,
+      height = height,
+      units = units,
+      device = grDevices::cairo_pdf,
+      bg = bg
+    )
+    return(invisible(file))
+  }
+  ggplot2::ggsave(
+    filename = file,
+    plot = p,
+    width = width,
+    height = height,
+    units = units,
+    dpi = dpi,
+    bg = bg
+  )
   invisible(file)
 }
 
@@ -1267,25 +1644,46 @@ register_plot_file <- function(plot_name, file, run_id = diag_run_id, run_ts = d
   TRUE
 }
 
-print_plot_once <- function(p, plot_name, width = 8, height = 6, dpi = 200) {
-  file <- results_path("figs", paste0(plot_name, ".png"))
-  save_diag_plot(p, file, width = width, height = height, dpi = dpi)
-  if (register_plot_file(plot_name, file)) {
+print_plot_once <- function(p, plot_name, width = 8, height = 6, dpi = 300) {
+  file_png <- results_path("figs", paste0(plot_name, ".png"))
+  file_pdf <- results_path("figs", paste0(plot_name, ".pdf"))
+  save_diag_plot(p, file_png, width = width, height = height, dpi = dpi)
+  save_diag_plot(p, file_pdf, width = width, height = height, dpi = dpi)
+  display_file <- if (knitr::is_latex_output()) file_pdf else file_png
+  if (register_plot_file(plot_name, file_png)) {
     mark_float_emitted()
-    knitr::include_graphics(file)
+    knitr::include_graphics(display_file)
   } else {
     invisible(NULL)
   }
 }
 
-print_plot_force <- function(p, plot_name, width = 8, height = 6, dpi = 200) {
+write_plot_alias <- function(plot_name, alias_name) {
+  copied <- character(0)
+  for (ext in c("png", "pdf")) {
+    src <- results_path("figs", paste0(plot_name, ".", ext))
+    dst <- results_path("figs", paste0(alias_name, ".", ext))
+    if (file.exists(src)) {
+      fs::file_copy(src, dst, overwrite = TRUE)
+      copied <- c(copied, dst)
+    }
+  }
+  if (!length(copied)) {
+    stop("No plot artifact found for alias source: ", plot_name)
+  }
+  invisible(copied)
+}
+
+print_plot_force <- function(p, plot_name, width = 8, height = 6, dpi = 300) {
   # Use this for key publication figures that must always appear in the PDF.
   # We still register file metadata, but we never suppress the on-page display.
-  file <- results_path("figs", paste0(plot_name, ".png"))
-  save_diag_plot(p, file, width = width, height = height, dpi = dpi)
-  register_plot_file(plot_name, file)
+  file_png <- results_path("figs", paste0(plot_name, ".png"))
+  file_pdf <- results_path("figs", paste0(plot_name, ".pdf"))
+  save_diag_plot(p, file_png, width = width, height = height, dpi = dpi)
+  save_diag_plot(p, file_pdf, width = width, height = height, dpi = dpi)
+  register_plot_file(plot_name, file_png)
   mark_float_emitted()
-  knitr::include_graphics(file)
+  knitr::include_graphics(if (knitr::is_latex_output()) file_pdf else file_png)
 }
 
 term_to_parent_feature <- function(term, feature_names) {
@@ -1438,7 +1836,7 @@ plot_shap_top10_two_panel <- function(df_top, title_text, x_label) {
       y = NULL
     ) +
     ggplot2::scale_y_discrete(labels = function(x) sub("^[0-9]+\\.\\s*", "", x)) +
-    ggplot2::theme_minimal(base_size = 10)
+    theme_pub(base_size = 10)
 }
 
 add_overall_love_rows <- function(df_in, overall_label = "Overall (mean |SMD|)") {
@@ -1509,7 +1907,7 @@ loveplot_style <- function(df_in, title_text) {
       y = NULL,
       color = "Sample"
     ) +
-    ggplot2::theme_minimal(base_size = 10) +
+    theme_pub(base_size = 10) +
     ggplot2::theme(legend.position = "top")
 }
 
@@ -1642,7 +2040,7 @@ plot_co2_bin_rate_panel <- function(rate_df, title, x_label, vline_at) {
       y = "Observed outcome rate",
       caption = paste0("Points are 1-mmHg bins; LOESS span = 0.5; dashed line at ", vline_at, " mmHg.")
     ) +
-    ggplot2::theme_minimal(base_size = 10)
+    theme_pub(base_size = 10)
 }
 
 compute_or_axis_spec <- function(df_list, lo_col = "conf.low", hi_col = "conf.high",
@@ -1708,6 +2106,540 @@ prob_axis_scale <- function(spec, accuracy = 1) {
     ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = accuracy)),
     ggplot2::coord_cartesian(ylim = spec$limits)
   )
+}
+
+KEY_RESULTS_OUTCOME_LEVELS <- c("IMV", "NIV", "Death (60d)", "Hypercapnic RF")
+KEY_RESULTS_OUTCOME_MAP <- c(
+  imv_proc = "IMV",
+  niv_proc = "NIV",
+  death_60d = "Death (60d)",
+  hypercap_resp_failure = "Hypercapnic RF",
+  IMV = "IMV",
+  NIV = "NIV",
+  Death60d = "Death (60d)",
+  HCRF = "Hypercapnic RF",
+  "Death (60d)" = "Death (60d)",
+  "Hypercapnic RF" = "Hypercapnic RF"
+)
+KEY_RESULTS_GROUP_LEVELS <- c("ABG", "VBG")
+KEY_RESULTS_GROUP_COLORS <- c("ABG" = "#F8766D", "VBG" = "#00BFC4")
+KEY_RESULTS_GROUP_LINETYPES <- c("ABG" = "solid", "VBG" = "longdash")
+KEY_RESULTS_FIG_WIDTH <- 10.5
+KEY_RESULTS_FIG_HEIGHT <- 11
+
+normalize_key_results_outcome <- function(x, context = "key-results") {
+  out_chr <- as.character(x)
+  mapped <- dplyr::recode(out_chr, !!!KEY_RESULTS_OUTCOME_MAP, .default = NA_character_)
+  bad <- is.na(mapped)
+  if (any(bad)) {
+    stop(
+      context, ": unmapped outcome labels: ",
+      paste(sort(unique(out_chr[bad])), collapse = ", ")
+    )
+  }
+  factor(mapped, levels = KEY_RESULTS_OUTCOME_LEVELS)
+}
+
+normalize_key_results_group <- function(x, context = "key-results") {
+  grp <- factor(as.character(x), levels = KEY_RESULTS_GROUP_LEVELS)
+  if (any(is.na(grp))) {
+    stop(
+      context, ": unmapped group labels: ",
+      paste(sort(unique(as.character(x)[is.na(grp)])), collapse = ", ")
+    )
+  }
+  grp
+}
+
+normalize_key_results_or_df <- function(df, group = NULL, co2_col = "co2",
+                                        outcome_col = "outcome",
+                                        or_col = "OR", lcl_col = "LCL", ucl_col = "UCL",
+                                        context = "key-results OR") {
+  assert_is_df(df, context = context)
+  stopifnot(outcome_col %in% names(df), or_col %in% names(df),
+            lcl_col %in% names(df), ucl_col %in% names(df))
+  if (!co2_col %in% names(df)) stop(context, ": missing CO2 column ", co2_col)
+  group_vec <- if ("group" %in% names(df)) df$group else rep(group, nrow(df))
+  if (is.null(group_vec)) stop(context, ": group must be supplied or present in data.")
+
+  out <- tibble::tibble(
+    group = normalize_key_results_group(group_vec, context = context),
+    outcome = normalize_key_results_outcome(df[[outcome_col]], context = context),
+    co2 = suppressWarnings(as.numeric(df[[co2_col]])),
+    OR = suppressWarnings(as.numeric(df[[or_col]])),
+    LCL = suppressWarnings(as.numeric(df[[lcl_col]])),
+    UCL = suppressWarnings(as.numeric(df[[ucl_col]]))
+  ) |>
+    dplyr::filter(is.finite(co2), is.finite(OR), is.finite(LCL), is.finite(UCL),
+                  OR > 0, LCL > 0, UCL > 0)
+
+  if (!nrow(out)) stop(context, ": no finite OR rows after filtering.")
+  out
+}
+
+normalize_key_results_prob_df <- function(df, group = NULL, co2_col = "co2",
+                                          outcome_col = "outcome",
+                                          p_col = "p", lcl_col = "p_LCL", ucl_col = "p_UCL",
+                                          context = "key-results probability") {
+  assert_is_df(df, context = context)
+  stopifnot(outcome_col %in% names(df), p_col %in% names(df),
+            lcl_col %in% names(df), ucl_col %in% names(df))
+  if (!co2_col %in% names(df)) stop(context, ": missing CO2 column ", co2_col)
+  group_vec <- if ("group" %in% names(df)) df$group else rep(group, nrow(df))
+  if (is.null(group_vec)) stop(context, ": group must be supplied or present in data.")
+
+  out <- tibble::tibble(
+    group = normalize_key_results_group(group_vec, context = context),
+    outcome = normalize_key_results_outcome(df[[outcome_col]], context = context),
+    co2 = suppressWarnings(as.numeric(df[[co2_col]])),
+    p = suppressWarnings(as.numeric(df[[p_col]])),
+    p_LCL = suppressWarnings(as.numeric(df[[lcl_col]])),
+    p_UCL = suppressWarnings(as.numeric(df[[ucl_col]]))
+  ) |>
+    dplyr::filter(
+      is.finite(co2), is.finite(p), is.finite(p_LCL), is.finite(p_UCL),
+      dplyr::between(p, 0, 1), dplyr::between(p_LCL, 0, 1), dplyr::between(p_UCL, 0, 1)
+    )
+
+  if (!nrow(out)) stop(context, ": no finite probability rows after filtering.")
+  out
+}
+
+bind_key_results_or_curves <- function(curve_list, group, co2_col, context = "key-results OR") {
+  stopifnot(is.list(curve_list), length(curve_list) > 0L, !is.null(names(curve_list)))
+  dplyr::bind_rows(lapply(names(curve_list), function(outcome_nm) {
+    curve_df <- curve_list[[outcome_nm]]
+    curve_df$outcome <- outcome_nm
+    normalize_key_results_or_df(
+      curve_df,
+      group = group,
+      co2_col = co2_col,
+      context = context
+    )
+  }))
+}
+
+bind_key_results_prob_curves <- function(curve_list, group, co2_col,
+                                         context = "key-results probability") {
+  stopifnot(is.list(curve_list), length(curve_list) > 0L, !is.null(names(curve_list)))
+  dplyr::bind_rows(lapply(names(curve_list), function(outcome_nm) {
+    curve_df <- curve_list[[outcome_nm]]
+    curve_df$outcome <- outcome_nm
+    normalize_key_results_prob_df(
+      curve_df,
+      group = group,
+      co2_col = co2_col,
+      context = context
+    )
+  }))
+}
+
+build_key_results_or_column <- function(or_df, column_title = "Odds ratio",
+                                        x_label = "CO2 (mmHg)",
+                                        show_row_labels = TRUE) {
+  axis_spec <- compute_or_axis_spec(list(or_df), lo_col = "LCL", hi_col = "UCL")
+  ggplot2::ggplot(
+    or_df,
+    ggplot2::aes(x = co2, y = OR, color = group, fill = group, linetype = group)
+  ) +
+    ggplot2::geom_ribbon(
+      ggplot2::aes(ymin = LCL, ymax = UCL),
+      alpha = 0.15,
+      color = NA,
+      show.legend = FALSE
+    ) +
+    ggplot2::geom_line(linewidth = 0.6) +
+    ggplot2::geom_hline(yintercept = 1, linetype = "dashed", color = "grey40") +
+    ggplot2::facet_grid(outcome ~ ., scales = "free_x", switch = "y") +
+    ggplot2::scale_color_manual(values = KEY_RESULTS_GROUP_COLORS) +
+    ggplot2::scale_fill_manual(values = KEY_RESULTS_GROUP_COLORS) +
+    ggplot2::scale_linetype_manual(values = KEY_RESULTS_GROUP_LINETYPES) +
+    or_axis_scale(axis_spec) +
+    ggplot2::labs(
+      title = column_title,
+      x = x_label,
+      y = "Odds ratio (log scale)",
+      color = NULL,
+      linetype = NULL
+    ) +
+    theme_pub(base_size = 10) +
+    ggplot2::theme(
+      legend.position = "top",
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
+      strip.placement = "outside",
+      strip.background = ggplot2::element_rect(fill = "grey95", color = NA),
+      strip.text.y.left = if (show_row_labels) {
+        ggplot2::element_text(angle = 0, face = "bold")
+      } else {
+        ggplot2::element_blank()
+      },
+      strip.text.y = ggplot2::element_blank()
+    )
+}
+
+build_key_results_prob_column <- function(prob_df, column_title = "Predicted probability",
+                                          x_label = "CO2 (mmHg)",
+                                          show_row_labels = FALSE) {
+  axis_spec <- compute_prob_axis_spec(list(prob_df), lo_col = "p_LCL", hi_col = "p_UCL")
+  ggplot2::ggplot(
+    prob_df,
+    ggplot2::aes(x = co2, y = p, color = group, fill = group, linetype = group)
+  ) +
+    ggplot2::geom_ribbon(
+      ggplot2::aes(ymin = p_LCL, ymax = p_UCL),
+      alpha = 0.15,
+      color = NA,
+      show.legend = FALSE
+    ) +
+    ggplot2::geom_line(linewidth = 0.6) +
+    ggplot2::facet_grid(outcome ~ ., scales = "free_x", switch = "y") +
+    ggplot2::scale_color_manual(values = KEY_RESULTS_GROUP_COLORS) +
+    ggplot2::scale_fill_manual(values = KEY_RESULTS_GROUP_COLORS) +
+    ggplot2::scale_linetype_manual(values = KEY_RESULTS_GROUP_LINETYPES) +
+    prob_axis_scale(axis_spec) +
+    ggplot2::labs(
+      title = column_title,
+      x = x_label,
+      y = "Predicted probability",
+      color = NULL,
+      linetype = NULL
+    ) +
+    theme_pub(base_size = 10) +
+    ggplot2::theme(
+      legend.position = "top",
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
+      strip.placement = "outside",
+      strip.background = ggplot2::element_blank(),
+      strip.text.y.left = if (show_row_labels) {
+        ggplot2::element_text(angle = 0, face = "bold")
+      } else {
+        ggplot2::element_blank()
+      },
+      strip.text.y = ggplot2::element_blank()
+    )
+}
+
+build_key_results_figure <- function(or_df, prob_df, figure_title, figure_caption) {
+  or_plot <- build_key_results_or_column(or_df, show_row_labels = TRUE)
+  prob_plot <- build_key_results_prob_column(prob_df, show_row_labels = FALSE)
+  (or_plot | prob_plot) +
+    patchwork::plot_layout(guides = "collect", widths = c(1, 1)) +
+    patchwork::plot_annotation(
+      title = figure_title,
+      caption = figure_caption,
+      theme = ggplot2::theme(
+        plot.title = ggplot2::element_text(face = "bold", hjust = 0.5),
+        plot.caption = ggplot2::element_text(hjust = 0)
+      )
+    ) &
+    ggplot2::theme(legend.position = "top")
+}
+
+or_axis_scale_x <- function(spec) {
+  list(
+    ggplot2::scale_x_log10(
+      breaks = spec$breaks,
+      labels = scales::number_format(accuracy = 0.01)
+    ),
+    ggplot2::coord_cartesian(xlim = spec$limits)
+  )
+}
+
+prob_axis_scale_x <- function(spec, accuracy = 1) {
+  list(
+    ggplot2::scale_x_continuous(labels = scales::percent_format(accuracy = accuracy)),
+    ggplot2::coord_cartesian(xlim = spec$limits)
+  )
+}
+
+CAT3_KEY_RESULTS_METHOD_LEVELS <- c(
+  "Crude",
+  "Adjusted",
+  "Imputed",
+  "Weighted and adjusted",
+  "GBM-weighted"
+)
+CAT3_KEY_RESULTS_CONTRAST_LEVELS <- c("Low vs normal", "High vs normal")
+CAT3_KEY_RESULTS_CATEGORY_LEVELS <- c("Low", "Normal", "High")
+CAT3_KEY_RESULTS_GROUP_SHAPES <- c("ABG" = 16, "VBG" = 17)
+CAT3_KEY_RESULTS_FIG_WIDTH <- 10.5
+CAT3_KEY_RESULTS_FIG_HEIGHT <- 11
+CAT3_FOREST_DODGE_OFFSET <- 0.16
+
+normalize_cat3_key_results_method <- function(x, context = "categorical key-results") {
+  method <- factor(as.character(x), levels = CAT3_KEY_RESULTS_METHOD_LEVELS)
+  if (any(is.na(method))) {
+    stop(
+      context, ": unmapped methods: ",
+      paste(sort(unique(as.character(x)[is.na(method)])), collapse = ", ")
+    )
+  }
+  method
+}
+
+normalize_cat3_key_results_contrast <- function(x, context = "categorical key-results") {
+  contrast <- factor(as.character(x), levels = CAT3_KEY_RESULTS_CONTRAST_LEVELS)
+  if (any(is.na(contrast))) {
+    stop(
+      context, ": unmapped contrasts: ",
+      paste(sort(unique(as.character(x)[is.na(contrast)])), collapse = ", ")
+    )
+  }
+  contrast
+}
+
+normalize_cat3_key_results_category <- function(x, context = "categorical key-results") {
+  category <- factor(as.character(x), levels = CAT3_KEY_RESULTS_CATEGORY_LEVELS)
+  if (any(is.na(category))) {
+    stop(
+      context, ": unmapped categories: ",
+      paste(sort(unique(as.character(x)[is.na(category)])), collapse = ", ")
+    )
+  }
+  category
+}
+
+map_cat3_term_contrast <- function(term) {
+  term_chr <- gsub("`", "", as.character(term))
+  exposure <- dplyr::case_when(
+    grepl("^pco2_cat_abg", term_chr) ~ sub("^pco2_cat_abg", "", term_chr),
+    grepl("^pco2_cat_vbg", term_chr) ~ sub("^pco2_cat_vbg", "", term_chr),
+    grepl("^co2_cat", term_chr) ~ sub("^co2_cat", "", term_chr),
+    TRUE ~ term_chr
+  )
+  dplyr::case_when(
+    grepl("Low$", exposure) ~ "Low vs normal",
+    grepl("High$", exposure) ~ "High vs normal",
+    TRUE ~ NA_character_
+  )
+}
+
+compact_cat3_fit <- function(fit_obj, context = "categorical probability prediction") {
+  if (inherits(fit_obj, "glm") || inherits(fit_obj, "svyglm")) {
+    return(list(coef = stats::coef(fit_obj), vcov = stats::vcov(fit_obj)))
+  }
+  if (is.list(fit_obj) && !is.null(fit_obj$coef) && !is.null(fit_obj$vcov)) {
+    return(fit_obj)
+  }
+  stop(context, ": unsupported fit object class: ", paste(class(fit_obj), collapse = ", "))
+}
+
+normalize_cat3_key_results_or_df <- function(df, method,
+                                             outcome_col = "outcome",
+                                             group_col = "group",
+                                             term_col = "term",
+                                             or_col = "OR",
+                                             lcl_col = "LCL",
+                                             ucl_col = "UCL",
+                                             context = "categorical key-results OR") {
+  assert_is_df(df, context = context)
+  assert_has_cols(df, c(outcome_col, group_col, term_col, or_col, lcl_col, ucl_col), context = context)
+
+  out <- tibble::tibble(
+    method = normalize_cat3_key_results_method(method, context = context),
+    group = normalize_key_results_group(df[[group_col]], context = context),
+    outcome = normalize_key_results_outcome(df[[outcome_col]], context = context),
+    contrast = normalize_cat3_key_results_contrast(
+      map_cat3_term_contrast(df[[term_col]]),
+      context = context
+    ),
+    OR = suppressWarnings(as.numeric(df[[or_col]])),
+    LCL = suppressWarnings(as.numeric(df[[lcl_col]])),
+    UCL = suppressWarnings(as.numeric(df[[ucl_col]]))
+  ) |>
+    dplyr::filter(is.finite(OR), is.finite(LCL), is.finite(UCL), OR > 0, LCL > 0, UCL > 0)
+
+  if (!nrow(out)) stop(context, ": no finite OR rows after filtering.")
+  out
+}
+
+normalize_cat3_key_results_prob_df <- function(df, method,
+                                               outcome_col = "outcome",
+                                               group_col = "group",
+                                               category_col = "category",
+                                               p_col = "p",
+                                               lcl_col = "p_LCL",
+                                               ucl_col = "p_UCL",
+                                               context = "categorical key-results probability") {
+  assert_is_df(df, context = context)
+  assert_has_cols(df, c(outcome_col, group_col, category_col, p_col, lcl_col, ucl_col), context = context)
+
+  out <- tibble::tibble(
+    method = normalize_cat3_key_results_method(method, context = context),
+    group = normalize_key_results_group(df[[group_col]], context = context),
+    outcome = normalize_key_results_outcome(df[[outcome_col]], context = context),
+    category = normalize_cat3_key_results_category(df[[category_col]], context = context),
+    p = suppressWarnings(as.numeric(df[[p_col]])),
+    p_LCL = suppressWarnings(as.numeric(df[[lcl_col]])),
+    p_UCL = suppressWarnings(as.numeric(df[[ucl_col]]))
+  ) |>
+    dplyr::filter(
+      is.finite(p), is.finite(p_LCL), is.finite(p_UCL),
+      dplyr::between(p, 0, 1),
+      dplyr::between(p_LCL, 0, 1),
+      dplyr::between(p_UCL, 0, 1)
+    )
+
+  if (!nrow(out)) stop(context, ": no finite probability rows after filtering.")
+  out
+}
+
+format_or_ci_export <- function(estimate, lcl, ucl, digits = 2) {
+  sprintf(
+    paste0("%.", digits, "f (%.", digits, "f, %.", digits, "f)"),
+    estimate, lcl, ucl
+  )
+}
+
+build_supplement_threelevel_table <- function(df, method,
+                                              outcome_col = "outcome",
+                                              group_col = "group",
+                                              term_col = "term",
+                                              or_col = "estimate",
+                                              lcl_col = "conf.low",
+                                              ucl_col = "conf.high",
+                                              context = "supplement three-level table") {
+  normalize_cat3_key_results_or_df(
+    df,
+    method = method,
+    outcome_col = outcome_col,
+    group_col = group_col,
+    term_col = term_col,
+    or_col = or_col,
+    lcl_col = lcl_col,
+    ucl_col = ucl_col,
+    context = context
+  ) |>
+    dplyr::transmute(
+      group = as.character(group),
+      outcome = as.character(outcome),
+      contrast = as.character(contrast),
+      OR = OR,
+      LCL = LCL,
+      UCL = UCL,
+      `OR (95% CI)` = format_or_ci_export(OR, LCL, UCL)
+    ) |>
+    dplyr::arrange(
+      factor(group, levels = KEY_RESULTS_GROUP_LEVELS),
+      factor(outcome, levels = KEY_RESULTS_OUTCOME_LEVELS),
+      factor(contrast, levels = CAT3_KEY_RESULTS_CONTRAST_LEVELS)
+    )
+}
+
+build_cat3_or_column <- function(or_df, column_title = "Odds ratio", show_row_labels = TRUE) {
+  axis_spec <- compute_or_axis_spec(or_df, lo_col = "LCL", hi_col = "UCL")
+  n_contrasts <- length(CAT3_KEY_RESULTS_CONTRAST_LEVELS)
+
+  plot_df <- or_df |>
+    dplyr::mutate(
+      contrast = normalize_cat3_key_results_contrast(contrast, context = "build_cat3_or_column"),
+      y_base = as.numeric(contrast),
+      y = y_base + dplyr::if_else(group == "ABG", -CAT3_FOREST_DODGE_OFFSET, CAT3_FOREST_DODGE_OFFSET)
+    )
+
+  ggplot2::ggplot(plot_df, ggplot2::aes(x = OR, y = y, color = group, shape = group)) +
+    ggplot2::geom_segment(
+      ggplot2::aes(x = LCL, xend = UCL, yend = y),
+      linewidth = 0.45,
+      alpha = 0.9
+    ) +
+    ggplot2::geom_point(size = 1.8) +
+    ggplot2::geom_vline(xintercept = 1, linetype = "dashed", color = "grey40") +
+    ggplot2::facet_grid(outcome ~ ., switch = "y") +
+    ggplot2::scale_y_continuous(
+      breaks = seq_len(n_contrasts),
+      labels = CAT3_KEY_RESULTS_CONTRAST_LEVELS,
+      limits = c(n_contrasts + 0.5, 0.5)
+    ) +
+    ggplot2::scale_color_manual(values = KEY_RESULTS_GROUP_COLORS) +
+    ggplot2::scale_shape_manual(values = CAT3_KEY_RESULTS_GROUP_SHAPES) +
+    or_axis_scale_x(axis_spec) +
+    ggplot2::labs(
+      title = column_title,
+      x = "Odds ratio (log scale)",
+      y = NULL,
+      color = NULL,
+      shape = NULL
+    ) +
+    theme_pub(base_size = 10) +
+    ggplot2::theme(
+      legend.position = "top",
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
+      strip.placement = "outside",
+      strip.background = ggplot2::element_rect(fill = "grey95", color = NA),
+      strip.text.y.left = if (show_row_labels) {
+        ggplot2::element_text(angle = 0, face = "bold")
+      } else {
+        ggplot2::element_blank()
+      },
+      strip.text.y = ggplot2::element_blank()
+    )
+}
+
+build_cat3_prob_column <- function(prob_df, column_title = "Predicted probability",
+                                   show_row_labels = FALSE) {
+  axis_spec <- compute_prob_axis_spec(prob_df, lo_col = "p_LCL", hi_col = "p_UCL")
+  n_categories <- length(CAT3_KEY_RESULTS_CATEGORY_LEVELS)
+
+  plot_df <- prob_df |>
+    dplyr::mutate(
+      category = normalize_cat3_key_results_category(category, context = "build_cat3_prob_column"),
+      y_base = as.numeric(category),
+      y = y_base + dplyr::if_else(group == "ABG", -CAT3_FOREST_DODGE_OFFSET, CAT3_FOREST_DODGE_OFFSET)
+    )
+
+  ggplot2::ggplot(plot_df, ggplot2::aes(x = p, y = y, color = group, shape = group)) +
+    ggplot2::geom_segment(
+      ggplot2::aes(x = p_LCL, xend = p_UCL, yend = y),
+      linewidth = 0.45,
+      alpha = 0.9
+    ) +
+    ggplot2::geom_point(size = 1.8) +
+    ggplot2::facet_grid(outcome ~ ., switch = "y") +
+    ggplot2::scale_y_continuous(
+      breaks = seq_len(n_categories),
+      labels = CAT3_KEY_RESULTS_CATEGORY_LEVELS,
+      limits = c(n_categories + 0.5, 0.5)
+    ) +
+    ggplot2::scale_color_manual(values = KEY_RESULTS_GROUP_COLORS) +
+    ggplot2::scale_shape_manual(values = CAT3_KEY_RESULTS_GROUP_SHAPES) +
+    prob_axis_scale_x(axis_spec) +
+    ggplot2::labs(
+      title = column_title,
+      x = "Predicted probability",
+      y = NULL,
+      color = NULL,
+      shape = NULL
+    ) +
+    theme_pub(base_size = 10) +
+    ggplot2::theme(
+      legend.position = "top",
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
+      strip.placement = "outside",
+      strip.background = ggplot2::element_blank(),
+      strip.text.y.left = if (show_row_labels) {
+        ggplot2::element_text(angle = 0, face = "bold")
+      } else {
+        ggplot2::element_blank()
+      },
+      strip.text.y = ggplot2::element_blank()
+    )
+}
+
+assemble_cat3_key_results_figure <- function(or_df, prob_df, figure_title, figure_caption) {
+  or_plot <- build_cat3_or_column(or_df, show_row_labels = TRUE)
+  prob_plot <- build_cat3_prob_column(prob_df, show_row_labels = FALSE)
+  (or_plot | prob_plot) +
+    patchwork::plot_layout(guides = "collect", widths = c(1, 1)) +
+    patchwork::plot_annotation(
+      title = figure_title,
+      caption = figure_caption,
+      theme = ggplot2::theme(
+        plot.title = ggplot2::element_text(face = "bold", hjust = 0.5),
+        plot.caption = ggplot2::element_text(hjust = 0)
+      )
+    ) &
+    ggplot2::theme(legend.position = "top")
 }
 
 map_or_exposure <- function(df, plot_name) {
@@ -1851,7 +2783,7 @@ ggplot2::geom_point(
       shape = if (!is.null(shape_var)) "PCO2 category" else NULL,
       caption = caption
     ) +
-    ggplot2::theme_minimal(base_size = 9) +
+    theme_pub(base_size = 9) +
     ggplot2::theme(
       plot.caption = ggplot2::element_text(hjust = 0),
       axis.text.x = ggplot2::element_text(angle = 15, hjust = 1),
@@ -1976,7 +2908,7 @@ save_model_diagram <- function(name, fml, width = NULL, height = NULL) {
     )
 
   file <- fs::path(model_diagram_dir, paste0(.make_safe_name(name), ".png"))
-  ggplot2::ggsave(file, p, width = width, height = height, dpi = 200)
+  save_diag_plot(file = file, p = p, width = width, height = height, dpi = 300)
   if (isTRUE(show_model_diagrams)) print(p)
   file
 }
@@ -2589,25 +3521,29 @@ json_lines <- c(
 writeLines(json_lines, results_path("run_config.json"))
 ```
 
-Codebook exported to `r pretty_path(results_path("codebookr.docx"))`.
+Codebook artifact path: `r pretty_path(results_path("codebookr.docx"))`. Generation is skipped in pilot mode to keep notebook validation renders fast.
 
 ```{r codebook-export-full}
-#| code-block-title: "Generate codebook for full dataset"
+#| code-block-title: "Generate codebook"
 #| include: true
 #| echo: true
 #| results: "hide"
 #| message: false
 #| warning: false
 # Purpose: codebook export full.
-study_codebook <- codebookr::codebook(
-  stata_data,
-  title = "Full TrinetX",
-  subtitle = "Dataset Documentation",
-  description = "This dataset contains patient-level records from the TrinetX database. 
-                 It has been processed and converted from the original Stata file."
-)
-codebook_file <- results_path("codebookr.docx")
-print(study_codebook, codebook_file)
+if (identical(RUN_MODE, "pilot")) {
+  message("Skipping codebookr.docx generation in pilot mode.")
+} else {
+  study_codebook <- codebookr::codebook(
+    stata_data,
+    title = "Full TrinetX",
+    subtitle = "Dataset Documentation",
+    description = "This dataset contains patient-level records from the TrinetX database. 
+                   It has been processed and converted from the original Stata file."
+  )
+  codebook_file <- results_path("codebookr.docx")
+  print(study_codebook, codebook_file)
+}
 ```
 
 ### Outcome Variable Creation
@@ -2953,6 +3889,83 @@ tbl1 <- gtsummary::tbl_merge(
   tab_spanner = c("**ABG status**", "**VBG status**")
 )
 
+# Export machine-readable Table 1 artifacts from the same gtsummary objects
+# used for manuscript rendering, so the notebook remains the single source
+# of truth for final table outputs.
+clean_gts_text <- function(x) {
+  x <- as.character(x)
+  x <- gsub("\\*\\*", "", x)
+  x <- gsub("\\s*<br\\s*/?>\\s*", " ", x, perl = TRUE)
+  x <- gsub("\\s*\\n\\s*", " ", x, perl = TRUE)
+  trimws(x)
+}
+
+extract_tbl_summary_csv <- function(tbl, panel_name) {
+  body <- tbl$table_body |>
+    dplyr::select(
+      dplyr::any_of(c("variable", "var_type", "row_type", "var_label", "label")),
+      dplyr::starts_with("stat_")
+    ) |>
+    dplyr::mutate(row_id = dplyr::row_number())
+
+  header_map <- tbl$table_styling$header |>
+    dplyr::filter(grepl("^stat_", .data$column)) |>
+    dplyr::transmute(
+      column = .data$column,
+      group_label = clean_gts_text(.data$label)
+    )
+
+  body |>
+    tidyr::pivot_longer(
+      cols = dplyr::starts_with("stat_"),
+      names_to = "column",
+      values_to = "stat"
+    ) |>
+    dplyr::left_join(header_map, by = "column") |>
+    dplyr::mutate(
+      panel = panel_name,
+      var_label = clean_gts_text(.data$var_label),
+      label = clean_gts_text(.data$label)
+    ) |>
+    dplyr::select(
+      .data$row_id, .data$panel, .data$variable, .data$var_type,
+      .data$row_type, .data$var_label, .data$label,
+      .data$group_label, .data$stat
+    ) |>
+    tidyr::pivot_wider(names_from = .data$group_label, values_from = .data$stat) |>
+    dplyr::arrange(.data$row_id)
+}
+
+tbl1_abg_csv <- extract_tbl_summary_csv(tbl1_abg, "ABG status")
+tbl1_vbg_csv <- extract_tbl_summary_csv(tbl1_vbg, "VBG status")
+
+table1_key_cols <- c("row_id", "variable", "var_type", "row_type", "var_label", "label")
+stopifnot(identical(
+  tbl1_abg_csv[, table1_key_cols, drop = FALSE],
+  tbl1_vbg_csv[, table1_key_cols, drop = FALSE]
+))
+stopifnot(identical(tbl1_abg_csv$Everyone, tbl1_vbg_csv$Everyone))
+
+abg_group_cols <- setdiff(names(tbl1_abg_csv), c(table1_key_cols, "panel", "Everyone"))
+vbg_group_cols <- setdiff(names(tbl1_vbg_csv), c(table1_key_cols, "panel", "Everyone"))
+stopifnot(length(abg_group_cols) == 2L, length(vbg_group_cols) == 2L)
+
+tbl1_combined_csv <- tbl1_abg_csv |>
+  dplyr::select(
+    .data$row_id, .data$panel, .data$variable, .data$var_type, .data$row_type,
+    .data$var_label, .data$label, .data$Everyone, dplyr::all_of(abg_group_cols)
+  ) |>
+  dplyr::left_join(
+    tbl1_vbg_csv |>
+      dplyr::select(.data$row_id, dplyr::all_of(vbg_group_cols)),
+    by = "row_id"
+  ) |>
+  dplyr::select(-.data$row_id)
+
+write_csv_safely(tbl1_abg_csv, results_path("table1_abg_status.csv"), row_names = FALSE)
+write_csv_safely(tbl1_vbg_csv, results_path("table1_vbg_status.csv"), row_names = FALSE)
+write_csv_safely(tbl1_combined_csv, results_path("table1_combined.csv"), row_names = FALSE)
+
 tbl1_abg_pdf <- to_pdf_table(tbl1_abg, font_size = 7, landscape = FALSE, label_col_width = "2.0in",
                              longtable = TRUE)
 tbl1_vbg_pdf <- to_pdf_table(tbl1_vbg, font_size = 7, landscape = FALSE, label_col_width = "2.0in",
@@ -3137,7 +4150,11 @@ print(tbl2_vbg)
 float_barrier("section")
 ```
 
-```{r tbl2-outcome-panel, echo=FALSE, message=FALSE, warning=FALSE}
+```{r}
+#| label: tbl2-outcome-panel
+#| echo: false
+#| message: false
+#| warning: false
 #| code-block-title: "Table 2a: crude outcomes by CO2 category"
 #| results: "asis"
 # Purpose: tbl2 outcome panel.
@@ -3235,18 +4252,61 @@ Three groups using low/normal/high CO2 categories
 stopifnot(all(c("pco2_cat_abg", "pco2_cat_vbg") %in% names(subset_data)))
 
 
-run_logit <- function(data, outcome, exposure, group_name, adj_vars = NULL, model_type = "Crude") {
-  f <- if (length(adj_vars)) {
-    reformulate(c(exposure, adj_vars), response = outcome)
-  } else {
-    as.formula(paste(outcome, "~", exposure))
+fit_cat3_model <- function(data, outcome, cat_var, group_name,
+                           adj_vars = NULL,
+                           analysis_variant = "unweighted",
+                           weight_var = NULL,
+                           treat_var = NULL) {
+  stopifnot(outcome %in% names(data), cat_var %in% names(data))
+  if (!is.null(weight_var)) stopifnot(weight_var %in% names(data))
+  if (!is.null(treat_var)) stopifnot(treat_var %in% names(data))
+
+  dat <- data
+  if (!is.null(treat_var)) {
+    dat <- dat |>
+      dplyr::filter(.data[[treat_var]] == 1)
   }
+
+  keep_vars <- unique(c(outcome, cat_var, adj_vars, weight_var))
+  dat <- dat |>
+    dplyr::select(dplyr::all_of(keep_vars)) |>
+    dplyr::mutate(
+      !!cat_var := stats::relevel(
+        factor(.data[[cat_var]], levels = CO2_CAT_LEVELS),
+        ref = "Normal"
+      ),
+      !!outcome := to01(.data[[outcome]])
+    ) |>
+    dplyr::filter(!is.na(.data[[cat_var]]), !is.na(.data[[outcome]]))
+
+  if (nrow(dat) == 0L || dplyr::n_distinct(dat[[outcome]]) < 2L) {
+    stop("fit_cat3_model: insufficient outcome variation after filtering for ", group_name, " / ", outcome)
+  }
+
+  rhs_terms <- c(cat_var, adj_vars)
+  f <- stats::reformulate(rhs_terms, response = outcome)
+  fit_call <- if (is.null(weight_var)) {
+    function() glm(f, data = dat, family = binomial, control = glm.control(maxit = 50))
+  } else {
+    dat <- dat |>
+      dplyr::mutate(.wt_cat3 = suppressWarnings(as.numeric(.data[[weight_var]]))) |>
+      dplyr::filter(is.finite(.wt_cat3), .wt_cat3 > 0)
+    if (nrow(dat) == 0L) {
+      stop("fit_cat3_model: no rows with finite positive weights for ", group_name, " / ", outcome)
+    }
+    function() {
+      design <- survey::svydesign(ids = ~1, weights = ~.wt_cat3, data = dat)
+      survey::svyglm(f, design = design, family = quasibinomial(),
+                     control = glm.control(maxit = 50))
+    }
+  }
+
   fit_res <- fit_with_diagnostics(
-    function() glm(f, data = data, family = binomial, control = glm.control(maxit = 50)),
+    fit_call,
     context = make_context(
       stage = "outcome",
       component = "cat3",
-      analysis_variant = "unweighted",
+      analysis_variant = analysis_variant,
       model_type = "cat3",
       group = group_name,
       outcome = outcome,
@@ -3256,16 +4316,32 @@ run_logit <- function(data, outcome, exposure, group_name, adj_vars = NULL, mode
   )
   append_outcome_diag(fit_res$diag)
   if (is.null(fit_res$fit)) {
-    stop("run_logit: model fit failed for outcome=", outcome,
-         " exposure=", exposure, " group=", group_name)
+    stop("fit_cat3_model: model fit failed for outcome=", outcome,
+         " cat_var=", cat_var, " group=", group_name)
   }
-  tidy(fit_res$fit, exponentiate = TRUE, conf.int = TRUE) %>%
-    filter(term != "(Intercept)", startsWith(term, exposure)) %>%
-    mutate(
+  fit_res$fit
+}
+
+extract_cat3_or_terms <- function(fit_obj, outcome, cat_var, group_name, model_type) {
+  broom::tidy(fit_obj, exponentiate = TRUE, conf.int = TRUE) |>
+    dplyr::filter(term != "(Intercept)", startsWith(term, cat_var)) |>
+    dplyr::mutate(
       outcome = outcome,
-      group   = group_name,
-      model   = model_type
+      group = group_name,
+      model = model_type
     )
+}
+
+run_logit <- function(data, outcome, exposure, group_name, adj_vars = NULL, model_type = "Crude") {
+  fit_obj <- fit_cat3_model(
+    data = data,
+    outcome = outcome,
+    cat_var = exposure,
+    group_name = group_name,
+    adj_vars = adj_vars,
+    analysis_variant = if (length(adj_vars)) "unweighted" else "crude"
+  )
+  extract_cat3_or_terms(fit_obj, outcome, exposure, group_name, model_type)
 }
 
 outcomes_unw <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
@@ -3282,17 +4358,92 @@ unw_three_level_forms <- list(
 )
 register_model_diagrams(unw_three_level_forms)
 
+crude_cat3_fits_abg <- setNames(lapply(
+  outcomes_unw,
+  function(o) fit_cat3_model(
+    subset_data, o, "pco2_cat_abg", "ABG",
+    adj_vars = NULL,
+    analysis_variant = "crude"
+  )
+), outcomes_unw)
+crude_cat3_fits_vbg <- setNames(lapply(
+  outcomes_unw,
+  function(o) fit_cat3_model(
+    subset_data, o, "pco2_cat_vbg", "VBG",
+    adj_vars = NULL,
+    analysis_variant = "crude"
+  )
+), outcomes_unw)
+
+adjusted_cat3_fits_abg <- setNames(lapply(
+  outcomes_unw,
+  function(o) fit_cat3_model(
+    subset_data, o, "pco2_cat_abg", "ABG",
+    adj_vars = adj_core,
+    analysis_variant = "unweighted"
+  )
+), outcomes_unw)
+adjusted_cat3_fits_vbg <- setNames(lapply(
+  outcomes_unw,
+  function(o) fit_cat3_model(
+    subset_data, o, "pco2_cat_vbg", "VBG",
+    adj_vars = adj_core,
+    analysis_variant = "unweighted"
+  )
+), outcomes_unw)
+
 unw_results_crude <- bind_rows(
-  lapply(outcomes_unw, function(o) run_logit(subset_data, o, "pco2_cat_abg", "ABG")),
-  lapply(outcomes_unw, function(o) run_logit(subset_data, o, "pco2_cat_vbg", "VBG"))
+  lapply(outcomes_unw, function(o) extract_cat3_or_terms(crude_cat3_fits_abg[[o]], o, "pco2_cat_abg", "ABG", "Crude")),
+  lapply(outcomes_unw, function(o) extract_cat3_or_terms(crude_cat3_fits_vbg[[o]], o, "pco2_cat_vbg", "VBG", "Crude"))
 )
 unw_results_adj <- bind_rows(
-  lapply(outcomes_unw, function(o) run_logit(subset_data, o, "pco2_cat_abg", "ABG", adj_core, "Adjusted")),
-  lapply(outcomes_unw, function(o) run_logit(subset_data, o, "pco2_cat_vbg", "VBG", adj_core, "Adjusted"))
+  lapply(outcomes_unw, function(o) extract_cat3_or_terms(adjusted_cat3_fits_abg[[o]], o, "pco2_cat_abg", "ABG", "Adjusted")),
+  lapply(outcomes_unw, function(o) extract_cat3_or_terms(adjusted_cat3_fits_vbg[[o]], o, "pco2_cat_vbg", "VBG", "Adjusted"))
 )
 
 unw_threelevel_results <- unw_results_adj %>%
   mutate(method = "Unweighted adjusted")
+
+```
+
+```{r supplement-table-s2-crude}
+#| include: true
+#| message: false
+# Purpose: standalone Supplementary Table S2 export for crude categorical associations.
+table_s2_crude_threelevel <- build_supplement_threelevel_table(
+  unw_results_crude,
+  method = "Crude",
+  outcome_col = "outcome",
+  group_col = "group",
+  term_col = "term",
+  or_col = "estimate",
+  lcl_col = "conf.low",
+  ucl_col = "conf.high",
+  context = "Supplementary Table S2"
+)
+
+write_standalone_table_pdf(
+  table_s2_crude_threelevel,
+  caption = "Crude associations of pCO2 category with clinical outcomes by ABG and VBG",
+  file_stub = "table_s2_crude_threelevel",
+  wide = TRUE,
+  digits = 2
+)
+
+render_table_pdf_maybe(
+  table_s2_crude_threelevel,
+  caption = "Crude associations of pCO2 category with clinical outcomes by ABG and VBG",
+  file_stub = "table_s2_crude_threelevel",
+  wide = TRUE,
+  digits = 2,
+  show = SHOW_LOW_VALUE_TABLES
+)
+
+```
+
+```{r or-data-three-level-unweighted-post-s2}
+#| include: true
+# Purpose: resume unweighted categorical OR assembly after Supplementary Table S2 export.
 
 unw_combined_or_df <- unw_results_adj %>%
   mutate(
@@ -3438,15 +4589,17 @@ grid_abg_unw <- grid_abg_info_unw$grid
 ref_idx_abg_unw <- grid_abg_info_unw$ref_idx
 co2_ref_abg_unw <- grid_abg_info_unw$co2_ref
 
-fit_spline_glm <- function(outcome, co2_var, data, group_label) {
+fit_spline_glm <- function(outcome, co2_var, data, group_label,
+                           adj_vars = adj_core,
+                           analysis_variant = "unweighted") {
   fit_res <- fit_with_diagnostics(
-    function() glm(make_spline_fml(outcome, co2_var, adj_core),
+    function() glm(make_spline_fml(outcome, co2_var, adj_vars),
                    data = data, family = binomial,
                    control = glm.control(maxit = 50)),
     context = make_context(
       stage = "outcome",
       component = "spline",
-      analysis_variant = "unweighted",
+      analysis_variant = analysis_variant,
       model_type = "spline",
       group = group_label,
       outcome = outcome,
@@ -3458,10 +4611,10 @@ fit_spline_glm <- function(outcome, co2_var, data, group_label) {
   fit_res$fit
 }
 
-fit_imv <- fit_spline_glm("imv_proc", "paco2", subset_data_abg, "ABG")
-fit_niv <- fit_spline_glm("niv_proc", "paco2", subset_data_abg, "ABG")
-fit_death <- fit_spline_glm("death_60d", "paco2", subset_data_abg, "ABG")
-fit_hcrf <- fit_spline_glm("hypercap_resp_failure", "paco2", subset_data_abg, "ABG")
+fit_imv <- fit_spline_glm("imv_proc", "paco2", subset_data_abg, "ABG", adj_vars = adj_core)
+fit_niv <- fit_spline_glm("niv_proc", "paco2", subset_data_abg, "ABG", adj_vars = adj_core)
+fit_death <- fit_spline_glm("death_60d", "paco2", subset_data_abg, "ABG", adj_vars = adj_core)
+fit_hcrf <- fit_spline_glm("hypercap_resp_failure", "paco2", subset_data_abg, "ABG", adj_vars = adj_core)
 if (any(vapply(list(fit_imv, fit_niv, fit_death, fit_hcrf), is.null, logical(1)))) {
   stop("Unweighted ABG spline fits failed; see model_fit_diagnostics.csv.")
 }
@@ -3510,10 +4663,10 @@ grid_vbg_unw <- grid_vbg_info_unw$grid
 ref_idx_vbg_unw <- grid_vbg_info_unw$ref_idx
 co2_ref_vbg_unw <- grid_vbg_info_unw$co2_ref
 
-fit_imv_vbg <- fit_spline_glm("imv_proc", "vbg_co2", subset_data_vbg, "VBG")
-fit_niv_vbg <- fit_spline_glm("niv_proc", "vbg_co2", subset_data_vbg, "VBG")
-fit_death_vbg <- fit_spline_glm("death_60d", "vbg_co2", subset_data_vbg, "VBG")
-fit_hcrf_vbg <- fit_spline_glm("hypercap_resp_failure", "vbg_co2", subset_data_vbg, "VBG")
+fit_imv_vbg <- fit_spline_glm("imv_proc", "vbg_co2", subset_data_vbg, "VBG", adj_vars = adj_core)
+fit_niv_vbg <- fit_spline_glm("niv_proc", "vbg_co2", subset_data_vbg, "VBG", adj_vars = adj_core)
+fit_death_vbg <- fit_spline_glm("death_60d", "vbg_co2", subset_data_vbg, "VBG", adj_vars = adj_core)
+fit_hcrf_vbg <- fit_spline_glm("hypercap_resp_failure", "vbg_co2", subset_data_vbg, "VBG", adj_vars = adj_core)
 if (any(vapply(list(fit_imv_vbg, fit_niv_vbg, fit_death_vbg, fit_hcrf_vbg), is.null, logical(1)))) {
   stop("Unweighted VBG spline fits failed; see model_fit_diagnostics.csv.")
 }
@@ -3535,7 +4688,7 @@ plot_imv <- ggplot(pred_imv, aes(x = paco2, y = OR)) +
   or_axis_scale(axis_unw_common) +
   labs(title = "Intubation (adjusted)", x = "PaCO2 (mmHg)",
        y = paste0("Odds ratio (ref PaCO2 = ", co2_ref_abg_unw, "; log scale)")) +
-  theme_minimal()
+  theme_pub()
 
 plot_niv <- ggplot(pred_niv, aes(x = paco2, y = OR)) +
   geom_line(color = "green", linewidth = 1.2) +
@@ -3544,7 +4697,7 @@ plot_niv <- ggplot(pred_niv, aes(x = paco2, y = OR)) +
   or_axis_scale(axis_unw_common) +
   labs(title = "NIV (adjusted)", x = "PaCO2 (mmHg)",
        y = paste0("Odds ratio (ref PaCO2 = ", co2_ref_abg_unw, "; log scale)")) +
-  theme_minimal()
+  theme_pub()
 
 plot_death <- ggplot(pred_death, aes(x = paco2, y = OR)) +
   geom_line(color = "red", linewidth = 1.2) +
@@ -3553,7 +4706,7 @@ plot_death <- ggplot(pred_death, aes(x = paco2, y = OR)) +
   or_axis_scale(axis_unw_common) +
   labs(title = "Death (60d, adjusted)", x = "PaCO2 (mmHg)",
        y = paste0("Odds ratio (ref PaCO2 = ", co2_ref_abg_unw, "; log scale)")) +
-  theme_minimal()
+  theme_pub()
 
 plot_hcrf <- ggplot(pred_hcrf, aes(x = paco2, y = OR)) +
   geom_line(color = "purple", linewidth = 1.2) +
@@ -3562,7 +4715,7 @@ plot_hcrf <- ggplot(pred_hcrf, aes(x = paco2, y = OR)) +
   or_axis_scale(axis_unw_common) +
   labs(title = "Hypercapnic RF (adjusted)", x = "PaCO2 (mmHg)",
        y = paste0("Odds ratio (ref PaCO2 = ", co2_ref_abg_unw, "; log scale)")) +
-  theme_minimal()
+  theme_pub()
 
 plot_imv_vbg <- ggplot(pred_imv_vbg, aes(x = vbg_co2, y = OR)) +
   geom_line(color = "blue") +
@@ -3571,7 +4724,7 @@ plot_imv_vbg <- ggplot(pred_imv_vbg, aes(x = vbg_co2, y = OR)) +
   or_axis_scale(axis_unw_common) +
   labs(title = "IMV (adjusted)", x = "VBG CO2 (mmHg)",
        y = paste0("Odds ratio (ref VBG CO2 = ", co2_ref_vbg_unw, "; log scale)")) +
-  theme_minimal()
+  theme_pub()
 
 plot_niv_vbg <- ggplot(pred_niv_vbg, aes(x = vbg_co2, y = OR)) +
   geom_line(color = "green") +
@@ -3580,7 +4733,7 @@ plot_niv_vbg <- ggplot(pred_niv_vbg, aes(x = vbg_co2, y = OR)) +
   or_axis_scale(axis_unw_common) +
   labs(title = "NIV (adjusted)", x = "VBG CO2 (mmHg)",
        y = paste0("Odds ratio (ref VBG CO2 = ", co2_ref_vbg_unw, "; log scale)")) +
-  theme_minimal()
+  theme_pub()
 
 plot_death_vbg <- ggplot(pred_death_vbg, aes(x = vbg_co2, y = OR)) +
   geom_line(color = "red") +
@@ -3589,7 +4742,7 @@ plot_death_vbg <- ggplot(pred_death_vbg, aes(x = vbg_co2, y = OR)) +
   or_axis_scale(axis_unw_common) +
   labs(title = "Death (60d, adjusted)", x = "VBG CO2 (mmHg)",
        y = paste0("Odds ratio (ref VBG CO2 = ", co2_ref_vbg_unw, "; log scale)")) +
-  theme_minimal()
+  theme_pub()
 
 plot_hcrf_vbg <- ggplot(pred_hcrf_vbg, aes(x = vbg_co2, y = OR)) +
   geom_line(color = "purple") +
@@ -3598,7 +4751,7 @@ plot_hcrf_vbg <- ggplot(pred_hcrf_vbg, aes(x = vbg_co2, y = OR)) +
   or_axis_scale(axis_unw_common) +
   labs(title = "Hypercapnic RF (adjusted)", x = "VBG CO2 (mmHg)",
        y = paste0("Odds ratio (ref VBG CO2 = ", co2_ref_vbg_unw, "; log scale)")) +
-  theme_minimal()
+  theme_pub()
 
 unw_abg_panel <- (plot_imv | plot_niv) / (plot_death | plot_hcrf) +
   plot_annotation(caption = paste0("Reference PaCO2 = ", co2_ref_abg_unw, " mmHg"))
@@ -3630,7 +4783,7 @@ plot_prob_abg <- function(dat, title_txt) {
       y = "Predicted probability",
       caption = paste0("Conditional on reference covariate profile X_ref; ref PaCO2 = ", co2_ref_abg_unw, " mmHg")
     ) +
-    theme_minimal()
+    theme_pub()
 }
 
 plot_prob_vbg <- function(dat, title_txt) {
@@ -3644,7 +4797,7 @@ plot_prob_vbg <- function(dat, title_txt) {
       y = "Predicted probability",
       caption = paste0("Conditional on reference covariate profile X_ref; ref VBG CO2 = ", co2_ref_vbg_unw, " mmHg")
     ) +
-    theme_minimal()
+    theme_pub()
 }
 
 unw_abg_prob_panel <- (plot_prob_abg(pred_imv, "IMV (adjusted)") |
@@ -3923,7 +5076,7 @@ plt <- function(dat, title)
     or_axis_scale(axis_abg_ipw_trim) +
     labs(title = title, x = xlab,
          y = paste0("Odds ratio (ref = ", ABG_CO2_REF, "; log scale)")) +
-    theme_minimal()
+    theme_pub()
 
 ipw_abg_panel <- (patchwork::wrap_plots(
   plt(pred_imv_abg,   "IMV"),
@@ -3955,7 +5108,7 @@ plt_prob <- function(dat, title)
       x = xlab,
       y = "Predicted probability"
     ) +
-    theme_minimal()
+    theme_pub()
 
 ipw_abg_prob_panel <- (patchwork::wrap_plots(
   plt_prob(pred_imv_abg,   "IMV"),
@@ -4117,7 +5270,7 @@ plt <- function(dat, title)
     or_axis_scale(axis_ipw_common) +
     labs(title = title, x = xlab,
          y = paste0("Odds ratio (ref = ", VBG_CO2_REF, "; log scale)")) +
-    theme_minimal()
+    theme_pub()
 
 ipw_vbg_panel <- (patchwork::wrap_plots(
   plt(pred_imv_vbg,   "IMV"),
@@ -4140,7 +5293,7 @@ plt_prob_vbg <- function(dat, title)
     geom_ribbon(aes(ymin = p_LCL, ymax = p_UCL), alpha = 0.2, fill = "#d95f02") +
     prob_axis_scale(axis_ipw_common_prob) +
     labs(title = title, x = xlab, y = "Predicted probability") +
-    theme_minimal()
+    theme_pub()
 
 ipw_vbg_prob_panel <- (patchwork::wrap_plots(
   plt_prob_vbg(pred_imv_vbg,   "IMV"),
@@ -4168,7 +5321,7 @@ plt_abg <- function(dat, title)
     or_axis_scale(axis_ipw_common) +
     labs(title = title, x = xlab_abg,
          y = paste0("Odds ratio (ref = ", ABG_CO2_REF, "; log scale)")) +
-    theme_minimal()
+    theme_pub()
 
 ipw_abg_shared_panel <- (patchwork::wrap_plots(
   plt_abg(pred_imv_abg,   "IMV"),
@@ -4191,7 +5344,7 @@ plt_prob_abg <- function(dat, title)
     geom_ribbon(aes(ymin = p_LCL, ymax = p_UCL), alpha = 0.2, fill = "#1f77b4") +
     prob_axis_scale(axis_ipw_common_prob) +
     labs(title = title, x = xlab_abg, y = "Predicted probability") +
-    theme_minimal()
+    theme_pub()
 
 ipw_abg_shared_prob_panel <- (patchwork::wrap_plots(
   plt_prob_abg(pred_imv_abg,   "IMV"),
@@ -4247,7 +5400,7 @@ ipw_overlay_plot <- ggplot(ipw_curve_overlay, aes(x = co2, y = OR, color = group
     y = paste0("Odds ratio (ref: ABG ", ABG_CO2_REF, ", VBG ", VBG_CO2_REF, "; log scale)"),
     caption = paste0("Reference CO2: ABG ", ABG_CO2_REF, " mmHg; VBG ", VBG_CO2_REF, " mmHg")
   ) +
-  theme_minimal(base_size = 10)
+  theme_pub(base_size = 10)
 
 print_plot_once(ipw_overlay_plot, "spline-ipw-overlay-abg-vbg", width = 8.5, height = 6.5)
 
@@ -4291,7 +5444,7 @@ ipw_overlay_prob_plot <- ggplot(ipw_curve_overlay_prob, aes(x = co2, y = p, colo
       ABG_CO2_REF, " mmHg; VBG ", VBG_CO2_REF, " mmHg"
     )
   ) +
-  theme_minimal(base_size = 10)
+  theme_pub(base_size = 10)
 
 print_plot_once(ipw_overlay_prob_plot, "spline-ipw-overlay-abg-vbg-prob", width = 8.5, height = 6.5)
 
@@ -4314,56 +5467,18 @@ stopifnot(all(c("pco2_cat_abg", "pco2_cat_vbg") %in% names(subset_data)))
 # ── 2. Function: weighted logistic regression & OR extraction ───────────────
 run_weighted_or <- function(data, outcome, cat_var, weight_var, group_name,
                             treat_var, adj_vars) {
-  stopifnot(!is.null(treat_var))
-  stopifnot(!is.null(adj_vars))
-  dat <- data %>%
-    filter(
-      .data[[treat_var]] == 1,
-      !is.na(.data[[cat_var]]),
-      !is.na(.data[[outcome]]),
-      !is.na(.data[[weight_var]]),
-      .data[[weight_var]] > 0
-    ) %>%
-    mutate(
-      !!cat_var := factor(.data[[cat_var]],
-                          levels = CO2_CAT_LEVELS)
-    ) %>%
-    droplevels()
-
-  design <- svydesign(
-    ids = ~1,
-    weights = as.formula(paste0("~", weight_var)),
-    data = dat
+  fit_obj <- fit_cat3_model(
+    data = data,
+    outcome = outcome,
+    cat_var = cat_var,
+    group_name = group_name,
+    adj_vars = adj_vars,
+    analysis_variant = "ipw",
+    weight_var = weight_var,
+    treat_var = treat_var
   )
 
-  rhs_terms <- c(cat_var, adj_vars)
-  fml <- stats::reformulate(rhs_terms, response = outcome)
-  fit_res <- fit_with_diagnostics(
-    function() svyglm(fml, design = design, family = quasibinomial(),
-                      control = glm.control(maxit = 50)),
-    context = make_context(
-      stage = "outcome",
-      component = "cat3",
-      analysis_variant = "ipw",
-      model_type = "cat3",
-      group = group_name,
-      outcome = outcome,
-      imputation = NA_integer_,
-      batch = NA_integer_
-    )
-  )
-  append_outcome_diag(fit_res$diag)
-  if (is.null(fit_res$fit)) {
-    stop("run_weighted_or: model fit failed for outcome=", outcome,
-         " cat_var=", cat_var, " group=", group_name)
-  }
-
-  tidy(fit_res$fit, exponentiate = TRUE, conf.int = TRUE) %>%
-    filter(term != "(Intercept)", startsWith(term, cat_var)) %>%
-    mutate(
-      group    = group_name,
-      outcome  = outcome
-    )
+  extract_cat3_or_terms(fit_obj, outcome, cat_var, group_name, "GBM-weighted")
 }
 
 # ── 3. Run across outcomes & cohorts ────────────────────────────────────────
@@ -4381,17 +5496,83 @@ ipw_three_level_forms <- list(
 )
 register_model_diagrams(ipw_three_level_forms)
 
+gbm_cat3_fits_abg <- setNames(lapply(
+  outcomes_ipw,
+  function(outcome) fit_cat3_model(
+    subset_data,
+    outcome,
+    "pco2_cat_abg",
+    "ABG",
+    adj_vars = adj_core,
+    analysis_variant = "ipw",
+    weight_var = "w_abg",
+    treat_var = "has_abg"
+  )
+), outcomes_ipw)
+gbm_cat3_fits_vbg <- setNames(lapply(
+  outcomes_ipw,
+  function(outcome) fit_cat3_model(
+    subset_data,
+    outcome,
+    "pco2_cat_vbg",
+    "VBG",
+    adj_vars = adj_core,
+    analysis_variant = "ipw",
+    weight_var = "w_vbg",
+    treat_var = "has_vbg"
+  )
+), outcomes_ipw)
+
 ipw_combined_or_df <- bind_rows(
-  lapply(outcomes_ipw, function(out)
-    run_weighted_or(subset_data, out, "pco2_cat_abg",  "w_abg",      "ABG",
-                    treat_var = "has_abg", adj_vars = adj_core)),
-  lapply(outcomes_ipw, function(out)
-    run_weighted_or(subset_data, out, "pco2_cat_vbg",  "w_vbg",      "VBG",
-                    treat_var = "has_vbg", adj_vars = adj_core))
+  lapply(outcomes_ipw, function(outcome)
+    extract_cat3_or_terms(gbm_cat3_fits_abg[[outcome]], outcome, "pco2_cat_abg", "ABG", "GBM-weighted")),
+  lapply(outcomes_ipw, function(outcome)
+    extract_cat3_or_terms(gbm_cat3_fits_vbg[[outcome]], outcome, "pco2_cat_vbg", "VBG", "GBM-weighted"))
 )
 
 ipw_threelevel_results <- ipw_combined_or_df %>%
   mutate(method = "IPW adjusted")
+
+```
+
+```{r supplement-table-s3-gbm}
+#| include: true
+#| message: false
+# Purpose: standalone Supplementary Table S3 export for GBM-weighted categorical associations.
+table_s3_gbm_threelevel <- build_supplement_threelevel_table(
+  ipw_threelevel_results,
+  method = "GBM-weighted",
+  outcome_col = "outcome",
+  group_col = "group",
+  term_col = "term",
+  or_col = "estimate",
+  lcl_col = "conf.low",
+  ucl_col = "conf.high",
+  context = "Supplementary Table S3"
+)
+
+write_standalone_table_pdf(
+  table_s3_gbm_threelevel,
+  caption = "Gradient-boosted propensity-weighted associations of pCO2 category with clinical outcomes by ABG and VBG",
+  file_stub = "table_s3_gbm_threelevel",
+  wide = TRUE,
+  digits = 2
+)
+
+render_table_pdf_maybe(
+  table_s3_gbm_threelevel,
+  caption = "Gradient-boosted propensity-weighted associations of pCO2 category with clinical outcomes by ABG and VBG",
+  file_stub = "table_s3_gbm_threelevel",
+  wide = TRUE,
+  digits = 2,
+  show = SHOW_LOW_VALUE_TABLES
+)
+
+```
+
+```{r or-data-three-level-weighted-post-s3}
+#| include: true
+# Purpose: resume GBM-weighted categorical OR assembly after Supplementary Table S3 export.
 
 ipw_combined_or_df <- map_or_exposure(ipw_combined_or_df, "or-plot-three-level-weighted")
 ipw_combined_or_df$group <- factor(ipw_combined_or_df$group, levels = c("ABG", "VBG"))
@@ -4470,6 +5651,8 @@ Plotting propensity scores
 #| fig-width: 8.5
 #| fig-height: 5
 #| fig-pos: "H"
+#| fig-cap: "Tested-versus-untested propensity-score distributions under the gradient-boosted ABG and VBG test-ordering models."
+#| fig-alt: "Two histograms showing the gradient-boosted propensity-score distributions for tested and untested encounters in the ABG and VBG ordering models."
 # --- Propensity score histograms (ABG / VBG) ---------------------------------
 # ABG = arterial blood gas; VBG = venous blood gas
 
@@ -4496,7 +5679,7 @@ ps_dfs_cond <- list(
 df_ps_cond <- bind_rows(ps_dfs_cond) %>%
   filter(!is.na(ps), !is.na(treat)) %>%
   mutate(
-    treat     = factor(treat, levels = c(0, 1), labels = c("No Test", "Test")),
+    treat     = factor(treat, levels = c(0, 1), labels = c("Untested", "Tested")),
     ScoreType = factor(ScoreType, levels = c("ABG", "VBG"))
   )
 
@@ -4504,16 +5687,16 @@ df_ps_cond <- bind_rows(ps_dfs_cond) %>%
 p_ps_cond <- ggplot(df_ps_cond, aes(x = ps, fill = treat)) +
   geom_histogram(aes(y = after_stat(density)), alpha = 0.5,
                  position = "identity", bins = 30) +
-  scale_fill_manual(values = c("No Test" = "steelblue", "Test" = "tomato")) +
+  scale_fill_manual(values = c("Untested" = "steelblue", "Tested" = "tomato")) +
   facet_wrap(~ScoreType, scales = "free_y") +
   coord_cartesian(xlim = c(0, 1)) +
   labs(
-    title = "Propensity Score Distributions",
+    title = "Tested-versus-untested propensity-score distributions (GBM models)",
     x     = "Propensity score",
     y     = "Density",
     fill  = "Group"
   ) +
-  theme_minimal(base_size = 12)
+  theme_pub(base_size = 12)
 print_plot_once(p_ps_cond, "propensity-histograms-conditional", width = 8.5, height = 5)
 ```
 
@@ -4553,7 +5736,7 @@ ggplot(df_ps_all, aes(x = ps, fill = treat)) +
     y = "Density",
     fill = "Group"
   ) +
-  theme_minimal(base_size = 12)
+  theme_pub(base_size = 12)
 
 ```
 
@@ -4608,7 +5791,7 @@ if (RUN_SHAP && HAS_FASTSHAP) {
     )
     # Save + register; display occurs after love plot for narrative flow.
     shap_file <- results_path("figs", "shap-top10-ipw-gbm-abg-vbg.png")
-    save_diag_plot(p_shap_nonmi, shap_file, width = 9, height = 5, dpi = 200)
+    save_diag_plot(p_shap_nonmi, shap_file, width = 9, height = 5, dpi = 300)
     register_plot_file("shap-top10-ipw-gbm-abg-vbg", shap_file)
   }
 
@@ -4630,6 +5813,8 @@ if (RUN_SHAP && HAS_FASTSHAP) {
 #| fig-width: 9
 #| fig-height: 6
 #| fig-pos: "H"
+#| fig-cap: "Covariate balance after gradient-boosted propensity weighting for ABG and VBG test-ordering models. Points show absolute standardized mean differences before and after weighting; the dashed line marks |SMD| = 0.1."
+#| fig-alt: "Two-panel love plot for ABG and VBG showing absolute standardized mean differences before and after gradient-boosted propensity weighting, with a dashed threshold at 0.1."
 # Purpose: loveplot ipw gbm.
 # Produce a standard love-plot style balance display:
 # raw |SMD| vs weighted |SMD| for ABG and VBG cohorts.
@@ -4689,7 +5874,7 @@ lov_nonmi_long <- dplyr::bind_rows(
 lov_nonmi_long <- add_overall_love_rows(lov_nonmi_long)
 
 write_csv_safely(lov_nonmi_long, results_path("loveplot_ipw_gbm_data.csv"), row_names = FALSE)
-p_lov_nonmi <- loveplot_style(lov_nonmi_long, "Non-MI IPSW-GBM covariate balance")
+p_lov_nonmi <- loveplot_style(lov_nonmi_long, "Covariate balance after GBM weighting")
 print_plot_once(p_lov_nonmi, "loveplot-ipw-gbm-abg-vbg", width = 9, height = 6)
 ```
 
@@ -4699,6 +5884,8 @@ print_plot_once(p_lov_nonmi, "loveplot-ipw-gbm-abg-vbg", width = 9, height = 6)
 #| fig-width: 9
 #| fig-height: 5
 #| fig-pos: "H"
+#| fig-cap: "SHAP-style contribution summaries for the gradient-boosted ABG and VBG test-ordering models. Bars show mean absolute SHAP values."
+#| fig-alt: "Side-by-side bar charts listing the top mean absolute SHAP contributors in the ABG and VBG gradient-boosted test-ordering models."
 # Purpose: render SHAP top-10 directly from CSV to ensure PDF display.
 # Read precomputed top-10 SHAP values and re-plot deterministically.
 shap_abg_file <- results_path("shap_top10_ipw_gbm_abg.csv")
@@ -4720,10 +5907,10 @@ stopifnot(nrow(shap_plot_df) > 0)
 
 p_shap <- plot_shap_top10_two_panel(
   shap_plot_df,
-  "IPSW-GBM SHAP top contributors (ABG vs VBG)",
+  "GBM test-ordering models: SHAP-style contribution summaries",
   "Mean |SHAP value|"
 )
-print(p_shap)
+print_plot_force(p_shap, "shap-top10-ipw-gbm-abg-vbg", width = 9, height = 5)
 ```
 
 ```{r stage2-cleanup}
@@ -4732,11 +5919,8 @@ print(p_shap)
 append_mem_snapshot("stage2", "end", "post")
 stage2_rm_required <- c(
   "ipow_abg", "ipow_vbg", "w_abg", "w_vbg_ipow",
-  "subset_data_abg", "subset_data_vbg",
   "fit_imv_abg", "fit_niv_abg", "fit_death_abg", "fit_hcrf_abg",
-  "pred_imv_abg", "pred_niv_abg", "pred_death_abg", "pred_hcrf_abg",
   "fit_imv_vbg", "fit_niv_vbg", "fit_death_vbg", "fit_hcrf_vbg",
-  "pred_imv_vbg", "pred_niv_vbg", "pred_death_vbg", "pred_hcrf_vbg",
   "plt", "mkpred",
   "ipw_combined_or_df", "ipw_plot_df", "ipw_p_or", "ipw_axis_spec", "outcomes_ipw",
   "df_ps_cond", "ps_dfs_cond", "p_ps_cond",
@@ -4749,7 +5933,7 @@ stage2_rm_optional <- c(
   "plot_prob_abg", "plot_prob_vbg", "plt_prob", "plt_prob_abg", "plt_prob_vbg",
   "unw_abg_prob_panel", "unw_vbg_prob_panel",
   "ipw_abg_prob_panel", "ipw_vbg_prob_panel", "ipw_abg_shared_prob_panel",
-  "ipw_curve_abg_prob", "ipw_curve_vbg_prob", "ipw_curve_overlay_prob", "ipw_overlay_prob_plot"
+  "ipw_curve_abg_prob", "ipw_curve_vbg_prob", "ipw_overlay_prob_plot"
 )
 missing_stage2 <- setdiff(stage2_rm_required, ls())
 stopifnot(length(missing_stage2) == 0)
@@ -4789,7 +5973,7 @@ set.seed(20251206)
 
 # ensure a writable figure dir + stable device on macOS
 fs::dir_create(fig_dir, recurse = TRUE)
-knitr::opts_chunk$set(fig.path = fig_path, dev = "png", dpi = 144)
+knitr::opts_chunk$set(fig.path = fig_path, dev = "png", dpi = 300)
 options(bitmapType = "cairo")  # prevents device issues on macOS
 
 ```
@@ -4798,12 +5982,12 @@ options(bitmapType = "cairo")  # prevents device issues on macOS
 #| code-block-title: "MI settings"
 #| echo: true
 # Purpose: mi settings.
-M_IMP    <- 80
-MAXIT_MI <- 20
+M_IMP    <- if (IS_PILOT) 20L else 80L
+MAXIT_MI <- if (IS_PILOT) 5L else 20L
 MI_SEED  <- 20251206
 DEBUG_SPLINE <- FALSE
-M_IMP_TARGET <- 80
-M_IMP_MIN <- 20
+M_IMP_TARGET <- if (IS_PILOT) 20L else 80L
+M_IMP_MIN <- if (IS_PILOT) 20L else 50L
 M_IMP_STEP <- 10
 MCERR_RATIO_TARGET <- 0.10
 ALLOW_M_IMP_EARLY_STOP <- FALSE
@@ -4836,7 +6020,7 @@ FORCE_MI_BATCHED <- FALSE
 stopifnot(exists("RUN_MODE"), exists("FULL_RUN"))
 
 M_IMP <- M_IMP_TARGET
-M_IMP_MIN <- max(M_IMP_MIN, 50L)
+M_IMP_MIN <- max(M_IMP_MIN, if (IS_PILOT) 20L else 50L)
 if (isTRUE(DEBUG_SPLINE)) {
   stop("DEBUG_SPLINE must be FALSE; pilot and full runs must use the same model workflow.")
 }
@@ -5189,7 +6373,11 @@ if (nrow(model_results) > 0) {
 
 ```
 
-```{r type-invariants, echo=FALSE, message=FALSE, warning=FALSE}
+```{r}
+#| label: type-invariants
+#| echo: false
+#| message: false
+#| warning: false
 # Quick invariant checks after type normalization (fail fast before MI/weighting)
 req_outcomes <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
 missing_out  <- setdiff(req_outcomes, names(subset_data))
@@ -6531,10 +7719,10 @@ plot_obs_imp <- function(imp_obj, var, fig_dir, n_obs = 50000, n_imp = 50000) {
     )
     p <- ggplot2::ggplot(df, ggplot2::aes(x = value, color = status, fill = status)) +
       ggplot2::geom_density(alpha = 0.2, na.rm = TRUE) +
-      ggplot2::theme_minimal(base_size = 10) +
+      theme_pub(base_size = 10) +
       ggplot2::labs(title = paste("Observed vs imputed:", var), x = NULL, y = "Density")
     out_file <- fs::path(fig_dir, paste0("diag-mi-density-", .make_safe_name(var), ".png"))
-    ggplot2::ggsave(out_file, p, width = 7, height = 5, dpi = 200)
+    save_diag_plot(file = out_file, p = p, width = 7, height = 5, dpi = 300)
 
     stat_names <- c("mean", "sd", "p10", "p50", "p90", "n")
     obs_stats <- c(
@@ -6584,11 +7772,11 @@ plot_obs_imp <- function(imp_obj, var, fig_dir, n_obs = 50000, n_imp = 50000) {
                                  names_to = "status", values_to = "prop")
   p <- ggplot2::ggplot(miss_plot_df, ggplot2::aes(x = level, y = prop, fill = status)) +
     ggplot2::geom_col(position = "dodge", width = 0.7) +
-    ggplot2::theme_minimal(base_size = 10) +
+    theme_pub(base_size = 10) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 20, hjust = 1)) +
     ggplot2::labs(title = paste("Observed vs imputed:", var), x = NULL, y = "Proportion")
   out_file <- fs::path(fig_dir, paste0("diag-mi-bar-", .make_safe_name(var), ".png"))
-  ggplot2::ggsave(out_file, p, width = 7, height = 5, dpi = 200)
+  save_diag_plot(file = out_file, p = p, width = 7, height = 5, dpi = 300)
 
   return(prop_df |>
            tidyr::pivot_longer(c(observed, imputed), names_to = "status", values_to = "prop") |>
@@ -6610,7 +7798,7 @@ if (length(trace_vars)) {
       ggplot2::geom_line() +
       ggplot2::geom_point(size = 0.6) +
       ggplot2::facet_wrap(~variable, scales = "free_y") +
-      ggplot2::theme_minimal(base_size = 10) +
+      theme_pub(base_size = 10) +
       ggplot2::labs(title = "Mean imputed value by imputation", x = "Imputation", y = "Mean")
     print(p_trace)
   }
@@ -6634,14 +7822,14 @@ if (length(trace_vars)) {
   p_dens <- ggplot2::ggplot(dens_df, ggplot2::aes(x = value, color = status, fill = status)) +
     ggplot2::geom_density(alpha = 0.2, na.rm = TRUE) +
     ggplot2::facet_wrap(~variable, scales = "free") +
-    ggplot2::theme_minimal(base_size = 10) +
+    theme_pub(base_size = 10) +
     ggplot2::labs(title = "Observed vs imputed distributions (imp1)", x = NULL, y = "Density")
   print(p_dens)
 
   p_box <- ggplot2::ggplot(dens_df, ggplot2::aes(x = status, y = value, fill = status)) +
     ggplot2::geom_boxplot(outlier.size = 0.5, na.rm = TRUE) +
     ggplot2::facet_wrap(~variable, scales = "free") +
-    ggplot2::theme_minimal(base_size = 10) +
+    theme_pub(base_size = 10) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 20, hjust = 1)) +
     ggplot2::labs(title = "Observed vs imputed (imp1)", x = NULL, y = NULL)
   print(p_box)
@@ -6749,14 +7937,14 @@ if (length(vars_show)) {
       p <- ggplot(df_plot, aes(x = .data[[v]], fill = .imp_label)) +
         geom_density(alpha = 0.4, adjust = 1, na.rm = TRUE) +
         labs(title = paste("Observed vs imputed density:", v), x = v, fill = "Source") +
-        theme_minimal()
+        theme_pub()
     } else {
       df_plot <- dat_long |>
         dplyr::filter(!is.na(.data[[v]]))
       p <- ggplot(df_plot, aes(x = .data[[v]], fill = .imp_label)) +
         geom_bar(position = "fill", na.rm = TRUE) +
         labs(title = paste("Observed vs imputed proportions:", v), x = v, y = "Proportion", fill = "Source") +
-        theme_minimal() +
+        theme_pub() +
         coord_flip()
     }
     print(p)
@@ -6795,7 +7983,7 @@ if (length(vars_show)) {
           x_scale +
           labs(title = paste("Observed vs imputed:", v, "by", sv),
                x = sv, y = v, fill = "Source") +
-          theme_minimal()
+          theme_pub()
         print(p)
         out_file <- results_path(
           "figs",
@@ -6849,7 +8037,7 @@ p_top <- ggplot(miss_tbl[miss_tbl$variable %in% top_vars, ],
   geom_col() +
   coord_flip() +
   labs(title = "Top missing variables (after MI)", x = NULL, y = "% missing") +
-  theme_minimal()
+  theme_pub()
 print(p_top)
 
 # 3) Small heatmap on imputed data (rows/cols sampled)
@@ -6882,14 +8070,15 @@ Note: the MI computations below run in a single pass per imputation (weights, ba
 # Purpose: fail fast checks.
 # These checks intentionally stop early if MI state is not valid.
 # Failing here is cheaper than failing deep in long modeling loops.
-if (M_IMP < 50) {
-  stop("M_IMP must be >= 50. Current M_IMP = ", M_IMP)
+mi_min_required <- if (IS_PILOT) 20L else 50L
+if (M_IMP < mi_min_required) {
+  stop("M_IMP must be >= ", mi_min_required, ". Current M_IMP = ", M_IMP)
 }
 
 stopifnot(exists("imp"))
 
-if (imp$m < 50) {
-  stop("imp$m must be >= 50. Current imp$m = ", imp$m)
+if (imp$m < mi_min_required) {
+  stop("imp$m must be >= ", mi_min_required, ". Current imp$m = ", imp$m)
 }
 
 # Ensure no missing covariates in each imputation for WeightIt
@@ -7105,7 +8294,9 @@ target_balance_table <- function(data, treat_var, weights, covars, levels_ref = 
 
 # --- Helper: fit 3-level outcome per imputation -------------------------------
 fit_cat3_imp <- function(d, weights, outcome_var, co2_var, treat_var,
-                         low_cut, high_cut, group_label, imp_index) {
+                         low_cut, high_cut, group_label, imp_index,
+                         adj_vars = adj_core,
+                         analysis_variant = "mi_ipw") {
   # Fits one weighted categorical-CO2 outcome model for one imputation.
   stopifnot(co2_var %in% names(d))
   d[[co2_var]] <- coerce_num(d[[co2_var]])
@@ -7134,7 +8325,7 @@ fit_cat3_imp <- function(d, weights, outcome_var, co2_var, treat_var,
 
   d2[[outcome_var]] <- to01(d2[[outcome_var]])
   des <- survey::svydesign(ids = ~1, weights = ~w, data = d2)
-  fml <- stats::reformulate(c("co2_cat", adj_core), response = outcome_var)
+  fml <- stats::reformulate(c("co2_cat", adj_vars), response = outcome_var)
 
   # Fit model with diagnostics wrapper so warnings/errors are tracked in logs.
   fit_res <- fit_with_diagnostics(
@@ -7143,7 +8334,7 @@ fit_cat3_imp <- function(d, weights, outcome_var, co2_var, treat_var,
     context = make_context(
       stage = "outcome",
       component = "cat3",
-      analysis_variant = "mi_ipw",
+      analysis_variant = analysis_variant,
       model_type = "cat3",
       group = group_label,
       outcome = outcome_var,
@@ -7222,7 +8413,8 @@ fit_spline_imp <- function(data, weights, outcome, co2_var, treat_var,
                            spline_basis = SPLINE_BASIS,
                            grid_df = NULL,
                            ref_idx = NULL,
-                           imp_index = NA_integer_) {
+                           imp_index = NA_integer_,
+                           analysis_variant = "mi_ipw") {
   # Fits one weighted spline model for one imputation and (optionally)
   # returns grid-level log-OR predictions for pooling.
   spline_basis <- match.arg(spline_basis, c("ns", "rcs"))
@@ -7285,7 +8477,7 @@ fit_spline_imp <- function(data, weights, outcome, co2_var, treat_var,
     context = make_context(
       stage = "outcome",
       component = "spline",
-      analysis_variant = "mi_ipw",
+      analysis_variant = analysis_variant,
       model_type = "spline",
       group = group_label,
       outcome = outcome,
@@ -7477,6 +8669,156 @@ pool_spline_prob_curve <- function(fit_list, grid_df, co2_ref, min_ok_frac = 0.9
   )
 }
 
+# --- Pool 3-level category probabilities (Rubin pooling on eta) ----------------
+make_cat3_ref_grid <- function(ref_df = data.frame(.ref = 1), cat_var = "co2_cat") {
+  stopifnot(is.data.frame(ref_df), nrow(ref_df) > 0L, length(cat_var) == 1L, nzchar(cat_var))
+  grid <- ref_df[rep(1L, length(CO2_CAT_LEVELS)), , drop = FALSE]
+  grid[[cat_var]] <- factor(CO2_CAT_LEVELS, levels = CO2_CAT_LEVELS)
+  grid
+}
+
+predict_cat3_prob_from_compact <- function(fit_compact, grid_df, outcome_var,
+                                           cat_var = "co2_cat",
+                                           adj_vars = adj_core) {
+  stopifnot(is.list(fit_compact), !is.null(fit_compact$coef), !is.null(fit_compact$vcov))
+  stopifnot(cat_var %in% names(grid_df))
+  fml <- stats::reformulate(c(cat_var, adj_vars), response = outcome_var)
+  tt <- stats::delete.response(stats::terms(fml))
+  mm <- stats::model.matrix(tt, data = grid_df)
+  beta <- fit_compact$coef
+  V <- fit_compact$vcov
+  bn <- names(beta)
+
+  if (is.null(bn) || any(!nzchar(bn))) {
+    if (length(beta) == ncol(mm)) {
+      bn <- colnames(mm)
+      names(beta) <- bn
+    } else {
+      stop("predict_cat3_prob_from_compact: coefficient names missing and dimensions do not match.")
+    }
+  }
+
+  if (!all(bn %in% colnames(mm))) {
+    missing_cols <- setdiff(bn, colnames(mm))
+    if (length(missing_cols)) {
+      mm <- cbind(
+        mm,
+        matrix(0, nrow = nrow(mm), ncol = length(missing_cols),
+               dimnames = list(NULL, missing_cols))
+      )
+    }
+  }
+  mm <- mm[, bn, drop = FALSE]
+  stopifnot(ncol(mm) == length(beta))
+
+  eta <- as.numeric(mm %*% beta)
+  mmV <- mm %*% V
+  var_eta <- pmax(rowSums(mmV * mm), 0)
+  se_eta <- sqrt(var_eta)
+
+  data.frame(
+    grid_df,
+    eta = eta,
+    SE_eta = se_eta,
+    var_eta = var_eta,
+    p = plogis(eta),
+    p_LCL = plogis(eta - 1.96 * se_eta),
+    p_UCL = plogis(eta + 1.96 * se_eta),
+    row.names = NULL
+  )
+}
+
+pool_cat3_prob_curve <- function(fit_list, ref_df, outcome_var,
+                                 cat_var = "co2_cat",
+                                 adj_vars = adj_core, min_ok_frac = 0.9) {
+  grid_df <- make_cat3_ref_grid(ref_df, cat_var = cat_var)
+  n_grid <- nrow(grid_df)
+
+  pred_list <- lapply(fit_list, function(x) {
+    fit_compact <- NULL
+    if (inherits(x, "svyglm")) {
+      fit_compact <- list(coef = stats::coef(x), vcov = stats::vcov(x))
+    } else if (is.list(x) && !is.null(x$coef) && !is.null(x$vcov)) {
+      fit_compact <- x
+    }
+    if (is.null(fit_compact)) return(NULL)
+    tryCatch(
+      predict_cat3_prob_from_compact(
+        fit_compact,
+        grid_df,
+        outcome_var,
+        cat_var = cat_var,
+        adj_vars = adj_vars
+      ),
+      error = function(e) NULL
+    )
+  })
+
+  ok <- vapply(pred_list, function(x) {
+    is.data.frame(x) &&
+      nrow(x) == n_grid &&
+      all(c("eta", "var_eta") %in% names(x)) &&
+      length(x$eta) == n_grid &&
+      length(x$var_eta) == n_grid
+  }, logical(1))
+  m_tot <- length(ok)
+  m_ok <- sum(ok)
+  if (m_ok < ceiling(min_ok_frac * m_tot)) {
+    stop("Too many failed category-probability fits: m_ok=", m_ok, " / m_total=", m_tot)
+  }
+
+  eta_mat <- matrix(NA_real_, nrow = n_grid, ncol = m_ok)
+  var_mat <- matrix(NA_real_, nrow = n_grid, ncol = m_ok)
+  ok_idx <- which(ok)
+  for (i in seq_along(ok_idx)) {
+    pred_i <- pred_list[[ok_idx[i]]]
+    eta_mat[, i] <- pred_i$eta
+    var_mat[, i] <- pred_i$var_eta
+  }
+
+  Qbar <- rowMeans(eta_mat, na.rm = TRUE)
+  Ubar <- rowMeans(var_mat, na.rm = TRUE)
+  B <- apply(eta_mat, 1, stats::var, na.rm = TRUE)
+  Tvar <- Ubar + (1 + 1 / m_ok) * B
+  se_eta <- sqrt(pmax(Tvar, 0))
+
+  data.frame(
+    category = as.character(grid_df[[cat_var]]),
+    co2_cat = as.character(grid_df[[cat_var]]),
+    eta = Qbar,
+    SE_eta = se_eta,
+    var_eta = Tvar,
+    p = plogis(Qbar),
+    p_LCL = plogis(Qbar - 1.96 * se_eta),
+    p_UCL = plogis(Qbar + 1.96 * se_eta),
+    m_used = m_ok,
+    m_total = m_tot,
+    row.names = NULL
+  )
+}
+
+predict_cat3_prob_from_fit <- function(fit_obj, ref_df, outcome_var,
+                                       cat_var = "co2_cat",
+                                       adj_vars = adj_core) {
+  fit_compact <- compact_cat3_fit(
+    fit_obj,
+    context = paste0("predict_cat3_prob_from_fit(", outcome_var, ")")
+  )
+  grid_df <- make_cat3_ref_grid(ref_df, cat_var = cat_var)
+  pred_df <- predict_cat3_prob_from_compact(
+    fit_compact,
+    grid_df,
+    outcome_var,
+    cat_var = cat_var,
+    adj_vars = adj_vars
+  )
+  pred_df |>
+    dplyr::mutate(
+      category = as.character(.data[[cat_var]]),
+      co2_cat = as.character(.data[[cat_var]])
+    )
+}
+
 # --- Single-pass loop ---------------------------------------------------------
 cat3_outcomes <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
 cat3_labels <- c(
@@ -7540,8 +8882,12 @@ bal_rows_abg <- vector("list", imp_n)
 bal_rows_vbg <- vector("list", imp_n)
 cat3_fits_abg <- setNames(lapply(cat3_outcomes, function(x) vector("list", imp_n)), cat3_outcomes)
 cat3_fits_vbg <- setNames(lapply(cat3_outcomes, function(x) vector("list", imp_n)), cat3_outcomes)
+mi_unweighted_cat3_fits_abg <- setNames(lapply(cat3_outcomes, function(x) vector("list", imp_n)), cat3_outcomes)
+mi_unweighted_cat3_fits_vbg <- setNames(lapply(cat3_outcomes, function(x) vector("list", imp_n)), cat3_outcomes)
 spline_fits_abg <- setNames(lapply(cat3_outcomes, function(x) vector("list", imp_n)), cat3_outcomes)
 spline_fits_vbg <- setNames(lapply(cat3_outcomes, function(x) vector("list", imp_n)), cat3_outcomes)
+mi_unweighted_spline_fits_abg <- setNames(lapply(cat3_outcomes, function(x) vector("list", imp_n)), cat3_outcomes)
+mi_unweighted_spline_fits_vbg <- setNames(lapply(cat3_outcomes, function(x) vector("list", imp_n)), cat3_outcomes)
 
 cat3_diag_rows <- list()
 spline_diag_rows <- list()
@@ -7576,6 +8922,7 @@ for (i in seq_len(imp_n)) {
   saveRDS(w_vbg_i, w_path_vbg)
   saveRDS(ps_abg_i, ps_path_abg)
   saveRDS(ps_vbg_i, ps_path_vbg)
+  w_unweighted_i <- rep(1, nrow(d))
 
   # Persist compact PS metadata so downstream chunks can reload on demand.
   mi_logistic_ps_abg_list[[i]] <- list(
@@ -7621,17 +8968,43 @@ for (i in seq_len(imp_n)) {
   for (outcome_var in cat3_outcomes) {
     fit_abg_cat <- fit_cat3_imp(
       d, w_abg_i, outcome_var, "paco2", "has_abg",
-      ABG_CO2_LOW, ABG_CO2_HIGH, "ABG", i
+      ABG_CO2_LOW, ABG_CO2_HIGH, "ABG", i,
+      adj_vars = adj_core,
+      analysis_variant = "mi_ipw"
     )
     cat3_fits_abg[[outcome_var]][[i]] <- fit_abg_cat$fit
     if (!is.null(fit_abg_cat$diag)) cat3_diag_rows[[length(cat3_diag_rows) + 1L]] <- fit_abg_cat$diag
 
     fit_vbg_cat <- fit_cat3_imp(
       d, w_vbg_i, outcome_var, "vbg_co2", "has_vbg",
-      VBG_CO2_LOW, VBG_CO2_HIGH, "VBG", i
+      VBG_CO2_LOW, VBG_CO2_HIGH, "VBG", i,
+      adj_vars = adj_core,
+      analysis_variant = "mi_ipw"
     )
     cat3_fits_vbg[[outcome_var]][[i]] <- fit_vbg_cat$fit
     if (!is.null(fit_vbg_cat$diag)) cat3_diag_rows[[length(cat3_diag_rows) + 1L]] <- fit_vbg_cat$diag
+
+    fit_abg_cat_unweighted <- fit_cat3_imp(
+      d, w_unweighted_i, outcome_var, "paco2", "has_abg",
+      ABG_CO2_LOW, ABG_CO2_HIGH, "ABG", i,
+      adj_vars = adj_core,
+      analysis_variant = "mi_unweighted"
+    )
+    mi_unweighted_cat3_fits_abg[[outcome_var]][[i]] <- fit_abg_cat_unweighted$fit
+    if (!is.null(fit_abg_cat_unweighted$diag)) {
+      cat3_diag_rows[[length(cat3_diag_rows) + 1L]] <- fit_abg_cat_unweighted$diag
+    }
+
+    fit_vbg_cat_unweighted <- fit_cat3_imp(
+      d, w_unweighted_i, outcome_var, "vbg_co2", "has_vbg",
+      VBG_CO2_LOW, VBG_CO2_HIGH, "VBG", i,
+      adj_vars = adj_core,
+      analysis_variant = "mi_unweighted"
+    )
+    mi_unweighted_cat3_fits_vbg[[outcome_var]][[i]] <- fit_vbg_cat_unweighted$fit
+    if (!is.null(fit_vbg_cat_unweighted$diag)) {
+      cat3_diag_rows[[length(cat3_diag_rows) + 1L]] <- fit_vbg_cat_unweighted$diag
+    }
   }
 
   # Spline outcome models for each endpoint (ABG and VBG).
@@ -7651,6 +9024,28 @@ for (i in seq_len(imp_n)) {
     )
     spline_fits_vbg[[outcome_var]][[i]] <- spline_vbg
     if (!is.null(spline_vbg$diag)) spline_diag_rows[[length(spline_diag_rows) + 1L]] <- spline_vbg$diag
+
+    spline_abg_mi_unweighted <- fit_spline_imp(
+      d, w_unweighted_i, outcome_var, "paco2", "has_abg",
+      adj_vars = adj_core, spline_df = SPLINE_DF, spline_basis = SPLINE_BASIS,
+      grid_df = grid_abg_mi, ref_idx = ref_idx_abg_mi, imp_index = i,
+      analysis_variant = "mi_unweighted"
+    )
+    mi_unweighted_spline_fits_abg[[outcome_var]][[i]] <- spline_abg_mi_unweighted
+    if (!is.null(spline_abg_mi_unweighted$diag)) {
+      spline_diag_rows[[length(spline_diag_rows) + 1L]] <- spline_abg_mi_unweighted$diag
+    }
+
+    spline_vbg_mi_unweighted <- fit_spline_imp(
+      d, w_unweighted_i, outcome_var, "vbg_co2", "has_vbg",
+      adj_vars = adj_core, spline_df = SPLINE_DF, spline_basis = SPLINE_BASIS,
+      grid_df = grid_vbg_mi, ref_idx = ref_idx_vbg_mi, imp_index = i,
+      analysis_variant = "mi_unweighted"
+    )
+    mi_unweighted_spline_fits_vbg[[outcome_var]][[i]] <- spline_vbg_mi_unweighted
+    if (!is.null(spline_vbg_mi_unweighted$diag)) {
+      spline_diag_rows[[length(spline_diag_rows) + 1L]] <- spline_vbg_mi_unweighted$diag
+    }
   }
 
   # Store compact weight diagnostics used in report tables.
@@ -7696,7 +9091,7 @@ for (i in seq_len(imp_n)) {
   append_mem_snapshot("mi_single_pass", imp_label, "post")
 
   # Aggressive cleanup inside loop to reduce peak memory pressure.
-  rm(d, fit_abg, fit_vbg, w_abg_i, w_vbg_i, ps_abg_i, ps_vbg_i,
+  rm(d, fit_abg, fit_vbg, w_abg_i, w_vbg_i, w_unweighted_i, ps_abg_i, ps_vbg_i,
      w_path_abg, w_path_vbg, ps_path_abg, ps_path_vbg,
      mem_pre, mem_post, imp_t0, imp_t1, imp_label)
   invisible(gc())
@@ -7818,6 +9213,51 @@ vbg_cat_results <- dplyr::bind_rows(lapply(cat3_outcomes, function(outcome_var) 
       OR = estimate
     )
 }))
+mi_unweighted_abg_cat_results <- dplyr::bind_rows(lapply(cat3_outcomes, function(outcome_var) {
+  pool_terms(mi_unweighted_cat3_fits_abg[[outcome_var]], term_prefix = "co2_cat") |>
+    dplyr::mutate(
+      outcome = cat3_labels[[outcome_var]],
+      group = "ABG",
+      OR = estimate
+    )
+}))
+mi_unweighted_vbg_cat_results <- dplyr::bind_rows(lapply(cat3_outcomes, function(outcome_var) {
+  pool_terms(mi_unweighted_cat3_fits_vbg[[outcome_var]], term_prefix = "co2_cat") |>
+    dplyr::mutate(
+      outcome = cat3_labels[[outcome_var]],
+      group = "VBG",
+      OR = estimate
+    )
+}))
+
+abg_cat_prob_curves <- dplyr::bind_rows(lapply(cat3_outcomes, function(outcome_var) {
+  pool_cat3_prob_curve(cat3_fits_abg[[outcome_var]], x_ref_abg, outcome_var) |>
+    dplyr::mutate(
+      outcome = cat3_labels[[outcome_var]],
+      group = "ABG"
+    )
+}))
+vbg_cat_prob_curves <- dplyr::bind_rows(lapply(cat3_outcomes, function(outcome_var) {
+  pool_cat3_prob_curve(cat3_fits_vbg[[outcome_var]], x_ref_vbg, outcome_var) |>
+    dplyr::mutate(
+      outcome = cat3_labels[[outcome_var]],
+      group = "VBG"
+    )
+}))
+mi_unweighted_abg_cat_prob_curves <- dplyr::bind_rows(lapply(cat3_outcomes, function(outcome_var) {
+  pool_cat3_prob_curve(mi_unweighted_cat3_fits_abg[[outcome_var]], x_ref_abg, outcome_var) |>
+    dplyr::mutate(
+      outcome = cat3_labels[[outcome_var]],
+      group = "ABG"
+    )
+}))
+mi_unweighted_vbg_cat_prob_curves <- dplyr::bind_rows(lapply(cat3_outcomes, function(outcome_var) {
+  pool_cat3_prob_curve(mi_unweighted_cat3_fits_vbg[[outcome_var]], x_ref_vbg, outcome_var) |>
+    dplyr::mutate(
+      outcome = cat3_labels[[outcome_var]],
+      group = "VBG"
+    )
+}))
 
 abg_spline <- list(
   curves = dplyr::bind_rows(lapply(cat3_outcomes, function(outcome_var) {
@@ -7848,12 +9288,55 @@ vbg_spline <- list(
   }))
 )
 
+mi_unweighted_abg_spline <- list(
+  curves = dplyr::bind_rows(lapply(cat3_outcomes, function(outcome_var) {
+    pool_spline_curve(
+      mi_unweighted_spline_fits_abg[[outcome_var]],
+      grid_abg_mi,
+      ref_idx_abg_mi,
+      co2_ref_abg_mi
+    ) |>
+      dplyr::mutate(outcome = outcome_var, group = "ABG")
+  })),
+  prob_curves = dplyr::bind_rows(lapply(cat3_outcomes, function(outcome_var) {
+    pool_spline_prob_curve(
+      mi_unweighted_spline_fits_abg[[outcome_var]],
+      grid_abg_mi,
+      co2_ref_abg_mi
+    ) |>
+      dplyr::mutate(outcome = outcome_var, group = "ABG")
+  }))
+)
+mi_unweighted_vbg_spline <- list(
+  curves = dplyr::bind_rows(lapply(cat3_outcomes, function(outcome_var) {
+    pool_spline_curve(
+      mi_unweighted_spline_fits_vbg[[outcome_var]],
+      grid_vbg_mi,
+      ref_idx_vbg_mi,
+      co2_ref_vbg_mi
+    ) |>
+      dplyr::mutate(outcome = outcome_var, group = "VBG")
+  })),
+  prob_curves = dplyr::bind_rows(lapply(cat3_outcomes, function(outcome_var) {
+    pool_spline_prob_curve(
+      mi_unweighted_spline_fits_vbg[[outcome_var]],
+      grid_vbg_mi,
+      co2_ref_vbg_mi
+    ) |>
+      dplyr::mutate(outcome = outcome_var, group = "VBG")
+  }))
+)
+
 abg_curves <- abg_spline$curves
 abg_prob_curves <- abg_spline$prob_curves
 abg_coefs  <- abg_spline$coefs
 vbg_curves <- vbg_spline$curves
 vbg_prob_curves <- vbg_spline$prob_curves
 vbg_coefs  <- vbg_spline$coefs
+mi_unweighted_abg_curves <- mi_unweighted_abg_spline$curves
+mi_unweighted_abg_prob_curves <- mi_unweighted_abg_spline$prob_curves
+mi_unweighted_vbg_curves <- mi_unweighted_vbg_spline$curves
+mi_unweighted_vbg_prob_curves <- mi_unweighted_vbg_spline$prob_curves
 
 write_csv_safely(abg_curves, results_path("mi_spline_curve_abg.csv"), row_names = FALSE)
 write_csv_safely(abg_prob_curves, results_path("mi_spline_prob_curve_abg.csv"), row_names = FALSE)
@@ -7861,6 +9344,8 @@ write_csv_safely(abg_coefs,  results_path("mi_spline_coef_abg.csv"), row_names =
 write_csv_safely(vbg_curves, results_path("mi_spline_curve_vbg.csv"), row_names = FALSE)
 write_csv_safely(vbg_prob_curves, results_path("mi_spline_prob_curve_vbg.csv"), row_names = FALSE)
 write_csv_safely(vbg_coefs,  results_path("mi_spline_coef_vbg.csv"), row_names = FALSE)
+write_csv_safely(abg_cat_prob_curves, results_path("mi_cat3_prob_curve_abg.csv"), row_names = FALSE)
+write_csv_safely(vbg_cat_prob_curves, results_path("mi_cat3_prob_curve_vbg.csv"), row_names = FALSE)
 
 mi_single_pass_t1 <- Sys.time()
 stopifnot(exists("runtime_log"))
@@ -7892,7 +9377,10 @@ message("ABG MI weights were computed in the single-pass MI loop above.")
 
 ```
 
-```{r mi-weight-diagnostics-abg, echo=FALSE, message=FALSE}
+```{r}
+#| label: mi-weight-diagnostics-abg
+#| echo: false
+#| message: false
 #| results: "asis"
 # Weight diagnostics for ABG IPW across imputations
 stopifnot(exists("mi_weight_diag_abg"))
@@ -7951,7 +9439,7 @@ p_abg <- ggplot(bal_abg_plot, aes(x = smd, y = label, shape = type)) +
   labs(title = "MI target balance (ABG): pooled |SMD|", x = "|Target SMD|", y = NULL, shape = "Stage") +
   scale_x_continuous(limits = c(0, BAL_XLIM_MAX),
                      expand = expansion(mult = c(0, 0.02))) +
-  theme_minimal(base_size = 10)
+  theme_pub(base_size = 10)
 save_diag_plot(p_abg, results_path("figs", "diag-mi-balance-pooled-abg.png"), width = 7, height = 6)
 
 render_table_pdf_maybe(
@@ -7987,7 +9475,10 @@ message("VBG MI weights were computed in the single-pass MI loop above.")
 
 ```
 
-```{r mi-weight-diagnostics-vbg, echo=FALSE, message=FALSE}
+```{r}
+#| label: mi-weight-diagnostics-vbg
+#| echo: false
+#| message: false
 #| results: "asis"
 # Weight diagnostics for VBG IPW across imputations
 stopifnot(exists("mi_weight_diag_vbg"))
@@ -8037,7 +9528,7 @@ p_vbg <- ggplot(bal_vbg_plot, aes(x = smd, y = label, shape = type)) +
   labs(title = "MI target balance (VBG): pooled |SMD|", x = "|Target SMD|", y = NULL, shape = "Stage") +
   scale_x_continuous(limits = c(0, BAL_XLIM_MAX),
                      expand = expansion(mult = c(0, 0.02))) +
-  theme_minimal(base_size = 10)
+  theme_pub(base_size = 10)
 save_diag_plot(p_vbg, results_path("figs", "diag-mi-balance-pooled-vbg.png"), width = 7, height = 6)
 
 render_table_pdf_maybe(
@@ -8411,7 +9902,7 @@ if (RUN_SHAP) {
       "Mean absolute contribution on link scale"
     )
     shap_file <- results_path("figs", "shap-top10-mi-logistic-abg-vbg.png")
-    save_diag_plot(p_shap_mi, shap_file, width = 9, height = 5, dpi = 200)
+    save_diag_plot(p_shap_mi, shap_file, width = 9, height = 5, dpi = 300)
     register_plot_file("shap-top10-mi-logistic-abg-vbg", shap_file)
   }
 
@@ -8441,7 +9932,10 @@ stopifnot(exists("pool_terms"))
 message("MI 3-level helpers defined in the single-pass MI section.")
 ```
 
-```{r mi-co2-cat-checks, echo=FALSE, message=FALSE}
+```{r}
+#| label: mi-co2-cat-checks
+#| echo: false
+#| message: false
 # Three-level CO2 category sanity: per-imputation overlap for ABG/VBG
 stopifnot(exists("imp"))
 stopifnot(exists("mi_logistic_ps_abg_list"), exists("mi_logistic_ps_vbg_list"))
@@ -8526,6 +10020,7 @@ mi_threelevel_results <- dplyr::bind_rows(
   dplyr::mutate(vbg_cat_results, group = "VBG")
 ) |>
   dplyr::mutate(method = "IPW + MI adjusted")
+write_csv_safely(mi_threelevel_results, results_path("mi_threelevel_results.csv"), row_names = FALSE)
 
 table3_df <- dplyr::bind_rows(
   dplyr::mutate(abg_cat_results, group = "ABG"),
@@ -8580,8 +10075,8 @@ gt::gt(table3_wide) |>
 #| message: false
 
 # Purpose: table summary adjusted threelevel.
-# Build a unified comparison table across three analysis tracks:
-# Unweighted adjusted, IPW adjusted, and IPW + MI adjusted.
+# Build the canonical categorical key-results table across all requested tracks,
+# while retaining the narrower adjusted-only legacy summary outputs.
 label_outcome <- function(x) {
   dplyr::recode(
     x,
@@ -8596,35 +10091,15 @@ label_outcome <- function(x) {
   )
 }
 
-map_contrast <- function(term) {
-  dplyr::case_when(
-    grepl("Low", term)  ~ "Low vs normal",
-    grepl("High", term) ~ "High vs normal",
-    TRUE ~ NA_character_
-  )
+format_cat3_ci <- function(estimate, lcl, ucl) {
+  sprintf("%.2f (%.2f, %.2f)", estimate, lcl, ucl)
 }
 
-prep_threelevel <- function(df, estimate_col, lcl_col, ucl_col, method_label) {
-  # Standardize column names from each model output into a common schema.
-  df |>
-    dplyr::mutate(
-      contrast = map_contrast(term),
-      outcome_label = label_outcome(outcome),
-      OR  = .data[[estimate_col]],
-      LCL = .data[[lcl_col]],
-      UCL = .data[[ucl_col]],
-      method = method_label
-    ) |>
-    dplyr::filter(!is.na(contrast)) |>
-    dplyr::select(method, group, outcome_label, contrast, OR, LCL, UCL)
-}
-
-count_model <- function(data, outcome, exposure, adj_vars,
+count_model <- function(data, outcome, exposure, adj_vars = NULL,
                         treat_var = NULL, weight_var = NULL) {
-  # Counts complete-case model rows/events under each analysis variant.
   d <- data
   if (!is.null(treat_var)) d <- d[d[[treat_var]] == 1, , drop = FALSE]
-  vars <- c(outcome, exposure, adj_vars)
+  vars <- unique(c(outcome, exposure, adj_vars, weight_var))
   if (!is.null(weight_var)) vars <- c(vars, weight_var)
   d <- d[, vars, drop = FALSE]
   d <- d[complete.cases(d), , drop = FALSE]
@@ -8645,37 +10120,45 @@ count_model <- function(data, outcome, exposure, adj_vars,
 count_group <- function(group, method) {
   exp_var   <- if (group == "ABG") "pco2_cat_abg" else "pco2_cat_vbg"
   treat_var <- if (group == "ABG") "has_abg" else "has_vbg"
-  weight_var <- if (method == "IPW adjusted") {
-    if (group == "ABG") "w_abg" else "w_vbg"
-  } else {
-    NULL
-  }
+  adj_vars <- switch(
+    method,
+    "Crude" = NULL,
+    "Adjusted" = adj_core,
+    "GBM-weighted" = adj_core,
+    stop("Unsupported non-MI count method: ", method)
+  )
+  weight_var <- switch(
+    method,
+    "Crude" = NULL,
+    "Adjusted" = NULL,
+    "GBM-weighted" = if (group == "ABG") "w_abg" else "w_vbg",
+    stop("Unsupported non-MI count method: ", method)
+  )
   outcomes <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
   purrr::map_dfr(outcomes, function(outcome) {
-    cnt <- count_model(subset_data, outcome, exp_var, adj_core,
+    cnt <- count_model(subset_data, outcome, exp_var, adj_vars,
                        treat_var = treat_var, weight_var = weight_var)
     dplyr::mutate(cnt,
                   method = method,
                   group = group,
-                  outcome_label = label_outcome(outcome))
+                  outcome = label_outcome(outcome))
   })
 }
 
-mi_counts_threelevel <- function(outcome, group) {
-  # For MI models, report median sample size/events across imputations.
+mi_counts_threelevel <- function(outcome, group, method) {
   imp_n <- imp$m
   counts <- lapply(seq_len(imp_n), function(i) {
     d <- get_imp(i)
     if (group == "ABG") {
       co2_var <- "paco2"
       treat_var <- "has_abg"
-      w <- get_mi_weight("ABG", i)
+      w <- if (identical(method, "Weighted and adjusted")) get_mi_weight("ABG", i) else rep(1, nrow(d))
       low_cut <- ABG_CO2_LOW
       high_cut <- ABG_CO2_HIGH
     } else {
       co2_var <- "vbg_co2"
       treat_var <- "has_vbg"
-      w <- get_mi_weight("VBG", i)
+      w <- if (identical(method, "Weighted and adjusted")) get_mi_weight("VBG", i) else rep(1, nrow(d))
       low_cut <- VBG_CO2_LOW
       high_cut <- VBG_CO2_HIGH
     }
@@ -8704,41 +10187,307 @@ mi_counts_threelevel <- function(outcome, group) {
   )
 }
 
-mi_counts <- function(group) {
+mi_counts <- function(group, method) {
   outcomes <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
   purrr::map_dfr(outcomes, function(outcome) {
-    cnt <- mi_counts_threelevel(outcome, group)
+    cnt <- mi_counts_threelevel(outcome, group, method = method)
     dplyr::mutate(cnt,
-                  method = "IPW + MI adjusted",
+                  method = method,
                   group = group,
-                  outcome_label = label_outcome(outcome))
+                  outcome = label_outcome(outcome))
   })
 }
 
-counts_tbl <- dplyr::bind_rows(
-  count_group("ABG", "Unweighted adjusted"),
-  count_group("VBG", "Unweighted adjusted"),
-  count_group("ABG", "IPW adjusted"),
-  count_group("VBG", "IPW adjusted"),
-  mi_counts("ABG"),
-  mi_counts("VBG")
+predict_cat3_track_probs <- function(fit_list_abg, fit_list_vbg, method,
+                                     ref_abg, ref_vbg,
+                                     adj_vars = adj_core,
+                                     cat_var_abg = "pco2_cat_abg",
+                                     cat_var_vbg = "pco2_cat_vbg") {
+  prob_abg <- dplyr::bind_rows(lapply(names(fit_list_abg), function(outcome_var) {
+    predict_cat3_prob_from_fit(
+      fit_list_abg[[outcome_var]],
+      ref_df = ref_abg,
+      outcome_var = outcome_var,
+      cat_var = cat_var_abg,
+      adj_vars = adj_vars
+    ) |>
+      dplyr::mutate(outcome = outcome_var, group = "ABG")
+  }))
+  prob_vbg <- dplyr::bind_rows(lapply(names(fit_list_vbg), function(outcome_var) {
+    predict_cat3_prob_from_fit(
+      fit_list_vbg[[outcome_var]],
+      ref_df = ref_vbg,
+      outcome_var = outcome_var,
+      cat_var = cat_var_vbg,
+      adj_vars = adj_vars
+    ) |>
+      dplyr::mutate(outcome = outcome_var, group = "VBG")
+  }))
+
+  normalize_cat3_key_results_prob_df(
+    dplyr::bind_rows(prob_abg, prob_vbg),
+    method = method,
+    outcome_col = "outcome",
+    group_col = "group",
+    category_col = "category",
+    p_col = "p",
+    lcl_col = "p_LCL",
+    ucl_col = "p_UCL",
+    context = paste0("categorical track probabilities: ", method)
+  )
+}
+
+crude_cat3_results <- normalize_cat3_key_results_or_df(
+  unw_results_crude,
+  method = "Crude",
+  outcome_col = "outcome",
+  group_col = "group",
+  term_col = "term",
+  or_col = "estimate",
+  lcl_col = "conf.low",
+  ucl_col = "conf.high",
+  context = "categorical crude ORs"
+)
+adjusted_cat3_results <- normalize_cat3_key_results_or_df(
+  unw_results_adj,
+  method = "Adjusted",
+  outcome_col = "outcome",
+  group_col = "group",
+  term_col = "term",
+  or_col = "estimate",
+  lcl_col = "conf.low",
+  ucl_col = "conf.high",
+  context = "categorical adjusted ORs"
+)
+gbm_cat3_results <- normalize_cat3_key_results_or_df(
+  ipw_threelevel_results,
+  method = "GBM-weighted",
+  outcome_col = "outcome",
+  group_col = "group",
+  term_col = "term",
+  or_col = "estimate",
+  lcl_col = "conf.low",
+  ucl_col = "conf.high",
+  context = "categorical GBM-weighted ORs"
+)
+main_cat3_results <- normalize_cat3_key_results_or_df(
+  mi_threelevel_results,
+  method = "Weighted and adjusted",
+  outcome_col = "outcome",
+  group_col = "group",
+  term_col = "term",
+  or_col = "OR",
+  lcl_col = "LCL",
+  ucl_col = "UCL",
+  context = "categorical main ORs"
+)
+imputed_cat3_results <- normalize_cat3_key_results_or_df(
+  dplyr::bind_rows(mi_unweighted_abg_cat_results, mi_unweighted_vbg_cat_results),
+  method = "Imputed",
+  outcome_col = "outcome",
+  group_col = "group",
+  term_col = "term",
+  or_col = "OR",
+  lcl_col = "LCL",
+  ucl_col = "UCL",
+  context = "categorical imputed ORs"
 )
 
-or_all <- dplyr::bind_rows(
-  prep_threelevel(unw_threelevel_results, "estimate", "conf.low", "conf.high", "Unweighted adjusted"),
-  prep_threelevel(ipw_threelevel_results, "estimate", "conf.low", "conf.high", "IPW adjusted"),
-  prep_threelevel(mi_threelevel_results, "OR", "LCL", "UCL", "IPW + MI adjusted")
-) |>
-  dplyr::left_join(counts_tbl, by = c("method", "group", "outcome_label"))
+crude_cat3_probs <- predict_cat3_track_probs(
+  crude_cat3_fits_abg,
+  crude_cat3_fits_vbg,
+  method = "Crude",
+  ref_abg = data.frame(.ref = 1),
+  ref_vbg = data.frame(.ref = 1),
+  adj_vars = NULL
+)
+adjusted_cat3_probs <- predict_cat3_track_probs(
+  adjusted_cat3_fits_abg,
+  adjusted_cat3_fits_vbg,
+  method = "Adjusted",
+  ref_abg = x_ref_abg,
+  ref_vbg = x_ref_vbg,
+  adj_vars = adj_core
+)
+gbm_cat3_probs <- predict_cat3_track_probs(
+  gbm_cat3_fits_abg,
+  gbm_cat3_fits_vbg,
+  method = "GBM-weighted",
+  ref_abg = x_ref_abg,
+  ref_vbg = x_ref_vbg,
+  adj_vars = adj_core
+)
+main_cat3_probs <- normalize_cat3_key_results_prob_df(
+  dplyr::bind_rows(abg_cat_prob_curves, vbg_cat_prob_curves),
+  method = "Weighted and adjusted",
+  outcome_col = "outcome",
+  group_col = "group",
+  category_col = "category",
+  p_col = "p",
+  lcl_col = "p_LCL",
+  ucl_col = "p_UCL",
+  context = "categorical main probabilities"
+)
+imputed_cat3_probs <- normalize_cat3_key_results_prob_df(
+  dplyr::bind_rows(mi_unweighted_abg_cat_prob_curves, mi_unweighted_vbg_cat_prob_curves),
+  method = "Imputed",
+  outcome_col = "outcome",
+  group_col = "group",
+  category_col = "category",
+  p_col = "p",
+  lcl_col = "p_LCL",
+  ucl_col = "p_UCL",
+  context = "categorical imputed probabilities"
+)
 
-table_summary <- or_all |>
-  dplyr::mutate(or_ci = sprintf("%.2f (%.2f, %.2f)", OR, LCL, UCL)) |>
-  dplyr::select(method, group, outcome_label, n_model, events, contrast, or_ci) |>
+counts_tbl_cat3 <- dplyr::bind_rows(
+  count_group("ABG", "Crude"),
+  count_group("VBG", "Crude"),
+  count_group("ABG", "Adjusted"),
+  count_group("VBG", "Adjusted"),
+  count_group("ABG", "GBM-weighted"),
+  count_group("VBG", "GBM-weighted"),
+  mi_counts("ABG", "Imputed"),
+  mi_counts("VBG", "Imputed"),
+  mi_counts("ABG", "Weighted and adjusted"),
+  mi_counts("VBG", "Weighted and adjusted")
+)
+
+cat3_or_all <- dplyr::bind_rows(
+  crude_cat3_results,
+  adjusted_cat3_results,
+  imputed_cat3_results,
+  main_cat3_results,
+  gbm_cat3_results
+) |>
+  dplyr::mutate(outcome = as.character(outcome)) |>
+  dplyr::left_join(counts_tbl_cat3, by = c("method", "group", "outcome"))
+
+cat3_prob_all <- dplyr::bind_rows(
+  crude_cat3_probs,
+  adjusted_cat3_probs,
+  imputed_cat3_probs,
+  main_cat3_probs,
+  gbm_cat3_probs
+) |>
+  dplyr::mutate(outcome = as.character(outcome)) |>
+  dplyr::left_join(counts_tbl_cat3, by = c("method", "group", "outcome"))
+
+cat3_key_results_long <- dplyr::bind_rows(
+  cat3_or_all |>
+    dplyr::transmute(
+      method,
+      group,
+      outcome,
+      metric_type = "OR",
+      level = as.character(contrast),
+      estimate = OR,
+      lcl = LCL,
+      ucl = UCL,
+      n_model,
+      events
+    ),
+  cat3_prob_all |>
+    dplyr::transmute(
+      method,
+      group,
+      outcome,
+      metric_type = "Probability",
+      level = as.character(category),
+      estimate = p,
+      lcl = p_LCL,
+      ucl = p_UCL,
+      n_model,
+      events
+    )
+)
+write_csv_safely(cat3_key_results_long, results_path("cat3_key_results_long.csv"), row_names = FALSE)
+
+cat3_or_display <- cat3_or_all |>
+  dplyr::mutate(display = format_cat3_ci(OR, LCL, UCL)) |>
+  dplyr::select(method, group, outcome, n_model, events, contrast, display) |>
+  tidyr::pivot_wider(
+    names_from = contrast,
+    values_from = display,
+    names_glue = "{contrast} OR (95% CI)"
+  )
+
+cat3_prob_display <- cat3_prob_all |>
+  dplyr::mutate(display = format_cat3_ci(p, p_LCL, p_UCL)) |>
+  dplyr::select(method, group, outcome, category, display) |>
+  tidyr::pivot_wider(
+    names_from = category,
+    values_from = display,
+    names_glue = "{category} probability (95% CI)"
+  )
+
+table_summary_key_results_cat3 <- counts_tbl_cat3 |>
+  dplyr::left_join(
+    dplyr::select(cat3_or_display, -n_model, -events),
+    by = c("method", "group", "outcome")
+  ) |>
+  dplyr::left_join(cat3_prob_display, by = c("method", "group", "outcome")) |>
+  dplyr::arrange(
+    factor(method, levels = CAT3_KEY_RESULTS_METHOD_LEVELS),
+    factor(group, levels = c("ABG", "VBG")),
+    factor(outcome, levels = KEY_RESULTS_OUTCOME_LEVELS)
+  )
+
+write_csv_safely(
+  table_summary_key_results_cat3,
+  results_path("table_summary_key_results_cat3.csv"),
+  row_names = FALSE
+)
+
+table_summary_key_results_cat3_abg <- table_summary_key_results_cat3 |>
+  dplyr::filter(group == "ABG")
+table_summary_key_results_cat3_vbg <- table_summary_key_results_cat3 |>
+  dplyr::filter(group == "VBG")
+
+render_table_pdf(
+  table_summary_key_results_cat3_abg,
+  caption = "Categorical key results for the ABG cohort across crude, adjusted, imputed, weighted, and GBM-weighted analyses; probabilities are conditional on X_ref except in the crude track.",
+  file_stub = "table_summary_key_results_cat3_abg",
+  wide = TRUE,
+  digits = 2
+)
+
+render_table_pdf(
+  table_summary_key_results_cat3_vbg,
+  caption = "Categorical key results for the VBG cohort across crude, adjusted, imputed, weighted, and GBM-weighted analyses; probabilities are conditional on X_ref except in the crude track.",
+  file_stub = "table_summary_key_results_cat3_vbg",
+  wide = TRUE,
+  digits = 2
+)
+
+legacy_counts_tbl <- dplyr::bind_rows(
+  counts_tbl_cat3 |>
+    dplyr::filter(method == "Adjusted") |>
+    dplyr::mutate(method = "Unweighted adjusted"),
+  counts_tbl_cat3 |>
+    dplyr::filter(method == "GBM-weighted") |>
+    dplyr::mutate(method = "IPW adjusted"),
+  counts_tbl_cat3 |>
+    dplyr::filter(method == "Weighted and adjusted") |>
+    dplyr::mutate(method = "IPW + MI adjusted")
+)
+
+table_summary <- dplyr::bind_rows(
+  adjusted_cat3_results |>
+    dplyr::mutate(method = "Unweighted adjusted", outcome = as.character(outcome)),
+  gbm_cat3_results |>
+    dplyr::mutate(method = "IPW adjusted", outcome = as.character(outcome)),
+  main_cat3_results |>
+    dplyr::mutate(method = "IPW + MI adjusted", outcome = as.character(outcome))
+) |>
+  dplyr::left_join(legacy_counts_tbl, by = c("method", "group", "outcome")) |>
+  dplyr::mutate(or_ci = format_cat3_ci(OR, LCL, UCL)) |>
+  dplyr::select(method, group, outcome, n_model, events, contrast, or_ci) |>
   tidyr::pivot_wider(names_from = contrast, values_from = or_ci) |>
   dplyr::arrange(
     factor(method, levels = c("Unweighted adjusted", "IPW adjusted", "IPW + MI adjusted")),
     factor(group, levels = c("ABG", "VBG")),
-    factor(outcome_label, levels = c("IMV", "NIV", "Death (60d)", "Hypercapnic RF"))
+    factor(outcome, levels = KEY_RESULTS_OUTCOME_LEVELS)
   )
 
 write_csv_safely(table_summary, results_path("table_summary_adjusted_threelevel.csv"), row_names = FALSE)
@@ -8760,6 +10509,139 @@ render_table_pdf(
   caption = "Adjusted odds ratios (low/high vs normal) across analysis tracks for VBG cohort; n/events reflect model sample size (median across imputations for MI).",
   file_stub = "table_summary_adjusted_threelevel_vbg",
   digits = 2
+)
+```
+
+## Canonical Categorical Key-Results Figures Across Analysis Tracks
+
+```{r key-results-cat3-track-prep}
+#| message: false
+# Purpose: prepare canonical categorical key-results figure objects across analysis tracks.
+key_results_cat3_caption_crude <- paste0(
+  "Crude, unadjusted categorical odds ratios use the normal CO2 category as the reference. ",
+  "Predicted probabilities are crude model-implied category probabilities within the tested cohorts."
+)
+key_results_cat3_caption_adjusted <- paste0(
+  "Odds ratios use the normal CO2 category as the reference. ",
+  "Predicted probabilities are conditional on the reference covariate profile X_ref within each test-specific cohort."
+)
+key_results_cat3_caption_imputed <- paste0(
+  "MI-pooled categorical odds ratios use the normal CO2 category as the reference. ",
+  "Predicted probabilities are pooled on the link scale and are conditional on X_ref within each test-specific cohort."
+)
+key_results_cat3_caption_main <- paste0(
+  "MI-pooled, IPSW-adjusted categorical odds ratios use the normal CO2 category as the reference. ",
+  "Predicted probabilities are pooled on the link scale and are conditional on X_ref within each test-specific cohort."
+)
+key_results_cat3_caption_gbm <- paste0(
+  "GBM-IPSW-adjusted categorical odds ratios use the normal CO2 category as the reference. ",
+  "Predicted probabilities are conditional on X_ref within each test-specific cohort."
+)
+
+key_results_cat3_crude_plot <- assemble_cat3_key_results_figure(
+  crude_cat3_results,
+  crude_cat3_probs,
+  figure_title = "Crude categorical associations: ABG vs VBG CO2 category",
+  figure_caption = key_results_cat3_caption_crude
+)
+key_results_cat3_adjusted_plot <- assemble_cat3_key_results_figure(
+  adjusted_cat3_results,
+  adjusted_cat3_probs,
+  figure_title = "Adjusted categorical associations: ABG vs VBG CO2 category",
+  figure_caption = key_results_cat3_caption_adjusted
+)
+key_results_cat3_imputed_plot <- assemble_cat3_key_results_figure(
+  imputed_cat3_results,
+  imputed_cat3_probs,
+  figure_title = "MI-pooled categorical associations (non-weighted): ABG vs VBG CO2 category",
+  figure_caption = key_results_cat3_caption_imputed
+)
+key_results_cat3_main_plot <- assemble_cat3_key_results_figure(
+  main_cat3_results,
+  main_cat3_probs,
+  figure_title = "MI-pooled IPSW-adjusted categorical associations: ABG vs VBG CO2 category",
+  figure_caption = key_results_cat3_caption_main
+)
+key_results_cat3_gbm_plot <- assemble_cat3_key_results_figure(
+  gbm_cat3_results,
+  gbm_cat3_probs,
+  figure_title = "GBM-IPSW-adjusted categorical associations: ABG vs VBG CO2 category",
+  figure_caption = key_results_cat3_caption_gbm
+)
+```
+
+```{r key-results-cat3-crude-abg-vbg}
+#| fig-width: 10.5
+#| fig-height: 11
+#| fig-pos: "H"
+#| fig-cap: "Canonical crude categorical key-results figure showing odds ratios and predicted probabilities for low, normal, and high pCO2 categories across four clinical outcomes for ABG and VBG."
+#| fig-alt: "Eight-panel categorical key-results figure with crude ABG and VBG odds-ratio forest plots on the left and predicted-probability forest plots on the right across four outcomes."
+# Purpose: canonical categorical key-results figure for crude models.
+print_plot_once(
+  key_results_cat3_crude_plot,
+  "key-results-cat3-crude-abg-vbg",
+  width = CAT3_KEY_RESULTS_FIG_WIDTH,
+  height = CAT3_KEY_RESULTS_FIG_HEIGHT
+)
+```
+
+```{r key-results-cat3-adjusted-abg-vbg}
+#| fig-width: 10.5
+#| fig-height: 11
+#| fig-pos: "H"
+#| fig-cap: "Canonical adjusted categorical key-results figure showing odds ratios and predicted probabilities for low, normal, and high pCO2 categories across four clinical outcomes for ABG and VBG."
+#| fig-alt: "Eight-panel categorical key-results figure with adjusted ABG and VBG odds-ratio forest plots on the left and predicted-probability forest plots on the right across four outcomes."
+# Purpose: canonical categorical key-results figure for adjusted models.
+print_plot_once(
+  key_results_cat3_adjusted_plot,
+  "key-results-cat3-adjusted-abg-vbg",
+  width = CAT3_KEY_RESULTS_FIG_WIDTH,
+  height = CAT3_KEY_RESULTS_FIG_HEIGHT
+)
+```
+
+```{r key-results-cat3-imputed-abg-vbg}
+#| fig-width: 10.5
+#| fig-height: 11
+#| fig-pos: "H"
+#| fig-cap: "Canonical MI-pooled, non-weighted categorical key-results figure showing odds ratios and predicted probabilities for low, normal, and high pCO2 categories across four clinical outcomes for ABG and VBG."
+#| fig-alt: "Eight-panel categorical key-results figure with MI-pooled non-weighted ABG and VBG odds-ratio forest plots on the left and predicted-probability forest plots on the right across four outcomes."
+# Purpose: canonical categorical key-results figure for imputed non-weighted models.
+print_plot_once(
+  key_results_cat3_imputed_plot,
+  "key-results-cat3-imputed-abg-vbg",
+  width = CAT3_KEY_RESULTS_FIG_WIDTH,
+  height = CAT3_KEY_RESULTS_FIG_HEIGHT
+)
+```
+
+```{r key-results-cat3-main-mi-ipw-abg-vbg}
+#| fig-width: 10.5
+#| fig-height: 11
+#| fig-pos: "H"
+#| fig-cap: "Canonical MI-pooled, IPSW-adjusted categorical key-results figure showing odds ratios and predicted probabilities for low, normal, and high pCO2 categories across four clinical outcomes for ABG and VBG."
+#| fig-alt: "Eight-panel categorical key-results figure with MI-pooled IPSW-adjusted ABG and VBG odds-ratio forest plots on the left and predicted-probability forest plots on the right across four outcomes."
+# Purpose: canonical categorical key-results figure for main MI-weighted models.
+print_plot_once(
+  key_results_cat3_main_plot,
+  "key-results-cat3-main-mi-ipw-abg-vbg",
+  width = CAT3_KEY_RESULTS_FIG_WIDTH,
+  height = CAT3_KEY_RESULTS_FIG_HEIGHT
+)
+```
+
+```{r key-results-cat3-gbm-weighted-abg-vbg}
+#| fig-width: 10.5
+#| fig-height: 11
+#| fig-pos: "H"
+#| fig-cap: "Canonical GBM-weighted categorical key-results figure showing odds ratios and predicted probabilities for low, normal, and high pCO2 categories across four clinical outcomes for ABG and VBG."
+#| fig-alt: "Eight-panel categorical key-results figure with GBM-weighted ABG and VBG odds-ratio forest plots on the left and predicted-probability forest plots on the right across four outcomes."
+# Purpose: canonical categorical key-results figure for GBM-weighted models.
+print_plot_once(
+  key_results_cat3_gbm_plot,
+  "key-results-cat3-gbm-weighted-abg-vbg",
+  width = CAT3_KEY_RESULTS_FIG_WIDTH,
+  height = CAT3_KEY_RESULTS_FIG_HEIGHT
 )
 ```
 
@@ -8858,23 +10740,34 @@ invisible(gc(FALSE))
 ```{r manuscript-outputs}
 #| code-block-title: "Manuscript outputs (compact)"
 #| results: "asis"
-# Cohort flow / sample sizes
+# Use full-cohort flow counts here so manuscript-facing sample sizes remain
+# stable in pilot renders and stay synchronized with Figure 1.
 flow_tbl <- tibble::tibble(
   metric = c(
-    "Full cohort (raw)",
-    "Analytic subset",
-    "ABG tested",
-    "ABG with PaCO2",
-    "VBG tested",
-    "VBG with VBG CO2"
+    "Extracted encounter cohort",
+    "Ambulatory encounters excluded",
+    "Analytic ED/inpatient cohort",
+    "ABG-tested encounters",
+    "VBG-tested encounters",
+    "Both ABG and VBG",
+    "ABG only",
+    "VBG only",
+    "Neither ABG nor VBG",
+    "ABG with observed PaCO2",
+    "VBG with observed CO2"
   ),
   n = c(
-    nrow(stata_data),
-    nrow(subset_data),
-    sum(subset_data$has_abg == 1, na.rm = TRUE),
-    sum(subset_data$has_abg == 1 & !is.na(subset_data$paco2), na.rm = TRUE),
-    sum(subset_data$has_vbg == 1, na.rm = TRUE),
-    sum(subset_data$has_vbg == 1 & !is.na(subset_data$vbg_co2), na.rm = TRUE)
+    cohort_flow_counts$total_extracted,
+    cohort_flow_counts$excluded_ambulatory,
+    cohort_flow_counts$analytic_ed_inpatient,
+    cohort_flow_counts$abg_tested,
+    cohort_flow_counts$vbg_tested,
+    cohort_flow_counts$both_abg_vbg,
+    cohort_flow_counts$abg_only,
+    cohort_flow_counts$vbg_only,
+    cohort_flow_counts$neither_abg_nor_vbg,
+    cohort_flow_counts$abg_with_paco2,
+    cohort_flow_counts$vbg_with_vbg_co2
   )
 )
 render_table_pdf_maybe(flow_tbl, "Cohort flow summary", "cohort_flow_summary",
@@ -9002,6 +10895,8 @@ stopifnot(exists("abg_cat_results"), nrow(abg_cat_results) > 0)
 #| fig-width: 7.5
 #| fig-height: 4.8
 #| fig-pos: "H"
+#| fig-cap: "MI-pooled, IPSW-adjusted odds ratios for low versus normal and high versus normal pCO2 categories across IMV, NIV, 60-day mortality, and hypercapnic respiratory failure, shown separately for ABG and VBG with 95% confidence intervals."
+#| fig-alt: "Faceted odds-ratio plot comparing ABG and VBG low-versus-normal and high-versus-normal pCO2 categories across four outcomes, with confidence intervals."
 
 # Purpose: chunk.
 stopifnot(exists("abg_cat_results"), exists("vbg_cat_results"))
@@ -9038,12 +10933,68 @@ mi_p_or <- plot_or_safe(
 print_plot_once(mi_p_or, "or-plot-mi-weighted", width = 7.5, height = 4.8)
 ```
 
+### Visualization: pooled three-level predicted probabilities
+
+```{r}
+#| label: ipw-three-level-pco2-mi-abg-vbg-prob
+#| message: false
+#| fig-width: 7.8
+#| fig-height: 4.9
+#| fig-pos: "H"
+#| fig-cap: "MI-pooled, IPSW-adjusted predicted probabilities across low, normal, and high pCO2 categories for IMV, NIV, 60-day mortality, and hypercapnic respiratory failure, shown separately for ABG and VBG."
+#| fig-alt: "Faceted predicted-probability plot comparing ABG and VBG low, normal, and high pCO2 categories across four outcomes, with confidence intervals."
+
+# Purpose: plot MI-pooled adjusted probabilities by categorical CO2 exposure.
+stopifnot(exists("abg_cat_prob_curves"), exists("vbg_cat_prob_curves"))
+
+mi_cat_prob_plot_df <- dplyr::bind_rows(
+  abg_cat_prob_curves,
+  vbg_cat_prob_curves
+) |>
+  dplyr::mutate(
+    group = factor(group, levels = c("ABG", "VBG")),
+    co2_cat = factor(co2_cat, levels = CO2_CAT_LEVELS),
+    outcome = factor(
+      outcome,
+      levels = c("IMV", "NIV", "Death60d", "HCRF"),
+      labels = c("IMV", "NIV", "Death (60d)", "Hypercapnic RF")
+    )
+  )
+
+axis_mi_cat_prob <- compute_prob_axis_spec(list(mi_cat_prob_plot_df), lo_col = "p_LCL", hi_col = "p_UCL")
+dodge_cat_prob <- ggplot2::position_dodge(width = 0.45)
+
+mi_cat_prob_plot <- ggplot(
+  mi_cat_prob_plot_df,
+  aes(x = co2_cat, y = p, color = group)
+) +
+  geom_pointrange(
+    aes(ymin = p_LCL, ymax = p_UCL),
+    position = dodge_cat_prob,
+    fatten = 1.2,
+    linewidth = 0.4
+  ) +
+  prob_axis_scale(axis_mi_cat_prob) +
+  facet_wrap(~ outcome) +
+  labs(
+    title = "MI-pooled, IPW-adjusted predicted probabilities by PCO2 category (ABG vs VBG)",
+    x = "PCO2 category",
+    y = "Predicted probability",
+    caption = "Conditional on reference profiles X_ref within each test-specific cohort."
+  ) +
+  theme_pub(base_size = 10)
+
+print_plot_once(mi_cat_prob_plot, "ipw-three-level-mi-abg-vbg-prob", width = 7.8, height = 4.9)
+```
+
 ```{r mi-propensity-histograms-logistic}
 #| code-block-title: "MI logistic propensity score distributions (imputation-averaged)"
 #| message: false
 #| fig-width: 8.5
 #| fig-height: 5
 #| fig-pos: "H"
+#| fig-cap: "Imputation-averaged propensity-score distributions for tested and untested encounters in the MI logistic ABG and VBG test-ordering models."
+#| fig-alt: "Two histograms showing imputation-averaged tested-versus-untested propensity-score distributions for the MI logistic ABG and VBG models."
 # Purpose: mi propensity histograms logistic.
 # Build an imputation-averaged propensity histogram for ABG and VBG.
 # This mirrors the non-MI propensity display while respecting MI variability.
@@ -9125,7 +11076,7 @@ if (nrow(mi_ps_hist) > 0 && any(is.finite(mi_ps_hist$density) & mi_ps_hist$densi
       y = "Density",
       fill = "Group"
     ) +
-    theme_minimal(base_size = 12)
+    theme_pub(base_size = 12)
 
   print_plot_once(mi_ps_hist_plot, "propensity-histograms-mi-logistic", width = 8.5, height = 5)
 } else {
@@ -9139,6 +11090,8 @@ if (nrow(mi_ps_hist) > 0 && any(is.finite(mi_ps_hist$density) & mi_ps_hist$densi
 #| fig-width: 9
 #| fig-height: 6
 #| fig-pos: "H"
+#| fig-cap: "Covariate balance after MI logistic inverse-probability weighting for ABG and VBG test-ordering models. Points show median absolute standardized mean differences before and after weighting across imputations; the dashed line marks |SMD| = 0.1."
+#| fig-alt: "Two-panel love plot for ABG and VBG showing median pre-weighting and post-weighting absolute standardized mean differences across imputations."
 # Purpose: loveplot mi logistic.
 # Build pooled (median across imputations) raw vs weighted |SMD|
 # so MI balance can be read with the same visual grammar as non-MI.
@@ -9177,6 +11130,8 @@ print_plot_once(p_lov_mi, "loveplot-mi-logistic-abg-vbg", width = 9, height = 6)
 #| fig-width: 9
 #| fig-height: 5
 #| fig-pos: "H"
+#| fig-cap: "SHAP-style contribution summaries for the MI logistic ABG and VBG test-ordering models. Bars show mean absolute contributions on the link scale."
+#| fig-alt: "Side-by-side bar charts listing the top mean absolute contribution features in the MI logistic ABG and VBG ordering models."
 # Purpose: render SHAP top-10 directly from CSV to ensure PDF display.
 # Read precomputed top-10 SHAP values and re-plot deterministically.
 shap_abg_file <- results_path("shap_top10_mi_logistic_abg.csv")
@@ -9201,7 +11156,7 @@ p_shap <- plot_shap_top10_two_panel(
   "MI logistic IPSW SHAP top contributors (ABG vs VBG)",
   "Mean |SHAP value|"
 )
-print(p_shap)
+print_plot_force(p_shap, "shap-top10-mi-logistic-abg-vbg", width = 9, height = 5)
 ```
 
 ```{r float-barrier-mi-or-plot}
@@ -9219,6 +11174,8 @@ float_barrier("section")
 #| fig-width: 8.5
 #| fig-height: 6.5
 #| fig-pos: "H"
+#| fig-cap: "MI-pooled, IPSW-adjusted spline odds-ratio curves for ABG and VBG pCO2 across IMV, NIV, 60-day mortality, and hypercapnic respiratory failure. Shaded bands show 95% confidence intervals."
+#| fig-alt: "Four-panel spline odds-ratio figure overlaying ABG and VBG curves with 95% confidence bands across four clinical outcomes."
 
 # Purpose: chunk.
 
@@ -9248,7 +11205,7 @@ curve_all <- bind_rows(curve_abg, curve_vbg) |>
                           labels = c("IMV", "NIV", "Death (60d)", "Hypercapnic RF")))
 axis_mi_ipw <- compute_or_axis_spec(list(curve_abg, curve_vbg), lo_col = "LCL", hi_col = "UCL")
 
-ggplot(curve_all, aes(x = co2, y = OR, color = group, fill = group)) +
+mi_or_overlay <- ggplot(curve_all, aes(x = co2, y = OR, color = group, fill = group)) +
   geom_line(linewidth = 0.6) +
   geom_ribbon(aes(ymin = LCL, ymax = UCL), alpha = 0.15, color = NA) +
   geom_hline(yintercept = 1, linetype = "dashed", color = "grey40") +
@@ -9262,7 +11219,9 @@ ggplot(curve_all, aes(x = co2, y = OR, color = group, fill = group)) +
     y = paste0("Odds ratio (ref: ABG ", ABG_CO2_REF, ", VBG ", VBG_CO2_REF, "; log scale)"),
     caption = paste0("Reference CO2: ABG ", ABG_CO2_REF, " mmHg; VBG ", VBG_CO2_REF, " mmHg")
   ) +
-  theme_minimal(base_size = 10)
+  theme_pub(base_size = 10)
+
+print_plot_once(mi_or_overlay, "ipw-rcs-overlay-mi-abg-vbg", width = 8.5, height = 6.5)
 ```
 
 ```{r}
@@ -9271,6 +11230,8 @@ ggplot(curve_all, aes(x = co2, y = OR, color = group, fill = group)) +
 #| fig-width: 8.5
 #| fig-height: 6.5
 #| fig-pos: "H"
+#| fig-cap: "MI-pooled, IPSW-adjusted spline predicted-probability curves for ABG and VBG pCO2 across IMV, NIV, 60-day mortality, and hypercapnic respiratory failure. Shaded bands show 95% confidence intervals."
+#| fig-alt: "Four-panel spline predicted-probability figure overlaying ABG and VBG curves with 95% confidence bands across four clinical outcomes."
 # Purpose: MI pooled IPSW spline probability overlay.
 stopifnot(exists("abg_prob_curves"), exists("vbg_prob_curves"))
 
@@ -9305,9 +11266,363 @@ mi_prob_overlay <- ggplot(curve_all_prob, aes(x = co2, y = p, color = group, fil
       ABG_CO2_REF, " mmHg; VBG ", VBG_CO2_REF, " mmHg"
     )
   ) +
-  theme_minimal(base_size = 10)
+  theme_pub(base_size = 10)
 
 print_plot_once(mi_prob_overlay, "ipw-rcs-overlay-mi-abg-vbg-prob", width = 8.5, height = 6.5)
+```
+
+## Canonical Key-Results Figures Across Analysis Tracks
+
+The following 4×2 figures are the canonical manuscript-facing spline displays across crude, adjusted, imputed, and weighted analyses.
+
+```{r}
+#| label: key-results-track-prep
+#| message: false
+# Purpose: prepare canonical key-results figure data across analysis tracks.
+stopifnot(
+  exists("fit_spline_glm"),
+  exists("subset_data_abg"), exists("subset_data_vbg"),
+  exists("grid_abg_unw"), exists("grid_vbg_unw"),
+  exists("ref_idx_abg_unw"), exists("ref_idx_vbg_unw"),
+  exists("pred_imv"), exists("pred_niv"), exists("pred_death"), exists("pred_hcrf"),
+  exists("pred_imv_vbg"), exists("pred_niv_vbg"), exists("pred_death_vbg"), exists("pred_hcrf_vbg"),
+  exists("ipw_curve_overlay"), exists("ipw_curve_overlay_prob"),
+  exists("abg_curves"), exists("vbg_curves"),
+  exists("abg_prob_curves"), exists("vbg_prob_curves"),
+  exists("mi_unweighted_abg_curves"), exists("mi_unweighted_vbg_curves"),
+  exists("mi_unweighted_abg_prob_curves"), exists("mi_unweighted_vbg_prob_curves")
+)
+
+crude_spline_forms <- list(
+  "ABG spline (crude): IMV ~ CO2 spline"      = make_spline_fml("imv_proc", "paco2", NULL),
+  "ABG spline (crude): NIV ~ CO2 spline"      = make_spline_fml("niv_proc", "paco2", NULL),
+  "ABG spline (crude): Death60d ~ CO2 spline" = make_spline_fml("death_60d", "paco2", NULL),
+  "ABG spline (crude): HCRF ~ CO2 spline"     = make_spline_fml("hypercap_resp_failure", "paco2", NULL),
+  "VBG spline (crude): IMV ~ CO2 spline"      = make_spline_fml("imv_proc", "vbg_co2", NULL),
+  "VBG spline (crude): NIV ~ CO2 spline"      = make_spline_fml("niv_proc", "vbg_co2", NULL),
+  "VBG spline (crude): Death60d ~ CO2 spline" = make_spline_fml("death_60d", "vbg_co2", NULL),
+  "VBG spline (crude): HCRF ~ CO2 spline"     = make_spline_fml("hypercap_resp_failure", "vbg_co2", NULL)
+)
+register_model_diagrams(crude_spline_forms)
+
+fit_imv_crude_abg <- fit_spline_glm("imv_proc", "paco2", subset_data_abg, "ABG",
+                                    adj_vars = NULL, analysis_variant = "crude")
+fit_niv_crude_abg <- fit_spline_glm("niv_proc", "paco2", subset_data_abg, "ABG",
+                                    adj_vars = NULL, analysis_variant = "crude")
+fit_death_crude_abg <- fit_spline_glm("death_60d", "paco2", subset_data_abg, "ABG",
+                                      adj_vars = NULL, analysis_variant = "crude")
+fit_hcrf_crude_abg <- fit_spline_glm("hypercap_resp_failure", "paco2", subset_data_abg, "ABG",
+                                     adj_vars = NULL, analysis_variant = "crude")
+fit_imv_crude_vbg <- fit_spline_glm("imv_proc", "vbg_co2", subset_data_vbg, "VBG",
+                                    adj_vars = NULL, analysis_variant = "crude")
+fit_niv_crude_vbg <- fit_spline_glm("niv_proc", "vbg_co2", subset_data_vbg, "VBG",
+                                    adj_vars = NULL, analysis_variant = "crude")
+fit_death_crude_vbg <- fit_spline_glm("death_60d", "vbg_co2", subset_data_vbg, "VBG",
+                                      adj_vars = NULL, analysis_variant = "crude")
+fit_hcrf_crude_vbg <- fit_spline_glm("hypercap_resp_failure", "vbg_co2", subset_data_vbg, "VBG",
+                                     adj_vars = NULL, analysis_variant = "crude")
+
+if (any(vapply(
+  list(
+    fit_imv_crude_abg, fit_niv_crude_abg, fit_death_crude_abg, fit_hcrf_crude_abg,
+    fit_imv_crude_vbg, fit_niv_crude_vbg, fit_death_crude_vbg, fit_hcrf_crude_vbg
+  ),
+  is.null,
+  logical(1)
+))) {
+  stop("Crude key-results spline fits failed; see model_fit_diagnostics.csv.")
+}
+
+pred_imv_crude_abg <- predict_or_curve_from_fit(fit_imv_crude_abg, grid_abg_unw, ref_idx_abg_unw, "paco2")
+pred_niv_crude_abg <- predict_or_curve_from_fit(fit_niv_crude_abg, grid_abg_unw, ref_idx_abg_unw, "paco2")
+pred_death_crude_abg <- predict_or_curve_from_fit(fit_death_crude_abg, grid_abg_unw, ref_idx_abg_unw, "paco2")
+pred_hcrf_crude_abg <- predict_or_curve_from_fit(fit_hcrf_crude_abg, grid_abg_unw, ref_idx_abg_unw, "paco2")
+pred_imv_crude_vbg <- predict_or_curve_from_fit(fit_imv_crude_vbg, grid_vbg_unw, ref_idx_vbg_unw, "vbg_co2")
+pred_niv_crude_vbg <- predict_or_curve_from_fit(fit_niv_crude_vbg, grid_vbg_unw, ref_idx_vbg_unw, "vbg_co2")
+pred_death_crude_vbg <- predict_or_curve_from_fit(fit_death_crude_vbg, grid_vbg_unw, ref_idx_vbg_unw, "vbg_co2")
+pred_hcrf_crude_vbg <- predict_or_curve_from_fit(fit_hcrf_crude_vbg, grid_vbg_unw, ref_idx_vbg_unw, "vbg_co2")
+
+key_results_crude_or_df <- dplyr::bind_rows(
+  bind_key_results_or_curves(
+    list(
+      imv_proc = pred_imv_crude_abg,
+      niv_proc = pred_niv_crude_abg,
+      death_60d = pred_death_crude_abg,
+      hypercap_resp_failure = pred_hcrf_crude_abg
+    ),
+    group = "ABG",
+    co2_col = "paco2",
+    context = "key-results crude OR"
+  ),
+  bind_key_results_or_curves(
+    list(
+      imv_proc = pred_imv_crude_vbg,
+      niv_proc = pred_niv_crude_vbg,
+      death_60d = pred_death_crude_vbg,
+      hypercap_resp_failure = pred_hcrf_crude_vbg
+    ),
+    group = "VBG",
+    co2_col = "vbg_co2",
+    context = "key-results crude OR"
+  )
+)
+key_results_crude_prob_df <- dplyr::bind_rows(
+  bind_key_results_prob_curves(
+    list(
+      imv_proc = pred_imv_crude_abg,
+      niv_proc = pred_niv_crude_abg,
+      death_60d = pred_death_crude_abg,
+      hypercap_resp_failure = pred_hcrf_crude_abg
+    ),
+    group = "ABG",
+    co2_col = "paco2",
+    context = "key-results crude probability"
+  ),
+  bind_key_results_prob_curves(
+    list(
+      imv_proc = pred_imv_crude_vbg,
+      niv_proc = pred_niv_crude_vbg,
+      death_60d = pred_death_crude_vbg,
+      hypercap_resp_failure = pred_hcrf_crude_vbg
+    ),
+    group = "VBG",
+    co2_col = "vbg_co2",
+    context = "key-results crude probability"
+  )
+)
+
+key_results_adjusted_or_df <- dplyr::bind_rows(
+  bind_key_results_or_curves(
+    list(
+      imv_proc = pred_imv,
+      niv_proc = pred_niv,
+      death_60d = pred_death,
+      hypercap_resp_failure = pred_hcrf
+    ),
+    group = "ABG",
+    co2_col = "paco2",
+    context = "key-results adjusted OR"
+  ),
+  bind_key_results_or_curves(
+    list(
+      imv_proc = pred_imv_vbg,
+      niv_proc = pred_niv_vbg,
+      death_60d = pred_death_vbg,
+      hypercap_resp_failure = pred_hcrf_vbg
+    ),
+    group = "VBG",
+    co2_col = "vbg_co2",
+    context = "key-results adjusted OR"
+  )
+)
+key_results_adjusted_prob_df <- dplyr::bind_rows(
+  bind_key_results_prob_curves(
+    list(
+      imv_proc = pred_imv,
+      niv_proc = pred_niv,
+      death_60d = pred_death,
+      hypercap_resp_failure = pred_hcrf
+    ),
+    group = "ABG",
+    co2_col = "paco2",
+    context = "key-results adjusted probability"
+  ),
+  bind_key_results_prob_curves(
+    list(
+      imv_proc = pred_imv_vbg,
+      niv_proc = pred_niv_vbg,
+      death_60d = pred_death_vbg,
+      hypercap_resp_failure = pred_hcrf_vbg
+    ),
+    group = "VBG",
+    co2_col = "vbg_co2",
+    context = "key-results adjusted probability"
+  )
+)
+
+key_results_imputed_or_df <- dplyr::bind_rows(
+  normalize_key_results_or_df(
+    mi_unweighted_abg_curves,
+    co2_col = "paco2",
+    context = "key-results imputed OR"
+  ),
+  normalize_key_results_or_df(
+    mi_unweighted_vbg_curves,
+    co2_col = "vbg_co2",
+    context = "key-results imputed OR"
+  )
+)
+key_results_imputed_prob_df <- dplyr::bind_rows(
+  normalize_key_results_prob_df(
+    mi_unweighted_abg_prob_curves,
+    co2_col = "paco2",
+    context = "key-results imputed probability"
+  ),
+  normalize_key_results_prob_df(
+    mi_unweighted_vbg_prob_curves,
+    co2_col = "vbg_co2",
+    context = "key-results imputed probability"
+  )
+)
+
+key_results_main_mi_ipw_or_df <- dplyr::bind_rows(
+  normalize_key_results_or_df(abg_curves, co2_col = "paco2", context = "key-results main MI IPW OR"),
+  normalize_key_results_or_df(vbg_curves, co2_col = "vbg_co2", context = "key-results main MI IPW OR")
+)
+key_results_main_mi_ipw_prob_df <- dplyr::bind_rows(
+  normalize_key_results_prob_df(abg_prob_curves, co2_col = "paco2", context = "key-results main MI IPW probability"),
+  normalize_key_results_prob_df(vbg_prob_curves, co2_col = "vbg_co2", context = "key-results main MI IPW probability")
+)
+
+key_results_gbm_weighted_or_df <- normalize_key_results_or_df(
+  ipw_curve_overlay,
+  context = "key-results GBM-weighted OR"
+)
+key_results_gbm_weighted_prob_df <- normalize_key_results_prob_df(
+  ipw_curve_overlay_prob,
+  context = "key-results GBM-weighted probability"
+)
+
+key_results_caption_crude <- paste0(
+  "Odds ratio curves are relative to the test-specific reference CO2 values (ABG ",
+  ABG_CO2_REF, " mmHg; VBG ", VBG_CO2_REF,
+  " mmHg). Predicted probability curves are unadjusted model-based probabilities within the tested cohorts."
+)
+key_results_caption_adjusted <- paste0(
+  "Odds ratio curves are relative to the test-specific reference CO2 values (ABG ",
+  ABG_CO2_REF, " mmHg; VBG ", VBG_CO2_REF,
+  " mmHg). Predicted probability curves are conditional on the reference covariate profile X_ref within each test-specific cohort."
+)
+key_results_caption_imputed <- paste0(
+  "Odds ratio curves are relative to the test-specific reference CO2 values (ABG ",
+  ABG_CO2_REF, " mmHg; VBG ", VBG_CO2_REF,
+  " mmHg). Predicted probability curves are conditional on the reference covariate profile X_ref within each test-specific cohort."
+)
+key_results_caption_main <- paste0(
+  "Odds ratio curves are relative to the test-specific reference CO2 values (ABG ",
+  ABG_CO2_REF, " mmHg; VBG ", VBG_CO2_REF,
+  " mmHg). Predicted probability curves are conditional on the reference covariate profile X_ref within each test-specific cohort."
+)
+key_results_caption_gbm <- paste0(
+  "Odds ratio curves are relative to the test-specific reference CO2 values (ABG ",
+  ABG_CO2_REF, " mmHg; VBG ", VBG_CO2_REF,
+  " mmHg). Predicted probability curves are conditional on the reference covariate profile X_ref within each test-specific cohort."
+)
+
+key_results_crude_plot <- build_key_results_figure(
+  key_results_crude_or_df,
+  key_results_crude_prob_df,
+  figure_title = "Crude spline associations: ABG vs VBG CO2",
+  figure_caption = key_results_caption_crude
+)
+key_results_adjusted_plot <- build_key_results_figure(
+  key_results_adjusted_or_df,
+  key_results_adjusted_prob_df,
+  figure_title = "Adjusted complete-case spline associations: ABG vs VBG CO2",
+  figure_caption = key_results_caption_adjusted
+)
+key_results_imputed_plot <- build_key_results_figure(
+  key_results_imputed_or_df,
+  key_results_imputed_prob_df,
+  figure_title = "MI-pooled adjusted spline associations (non-weighted): ABG vs VBG CO2",
+  figure_caption = key_results_caption_imputed
+)
+key_results_main_mi_ipw_plot <- build_key_results_figure(
+  key_results_main_mi_ipw_or_df,
+  key_results_main_mi_ipw_prob_df,
+  figure_title = "MI-pooled IPSW-adjusted spline associations: ABG vs VBG CO2",
+  figure_caption = key_results_caption_main
+)
+key_results_gbm_weighted_plot <- build_key_results_figure(
+  key_results_gbm_weighted_or_df,
+  key_results_gbm_weighted_prob_df,
+  figure_title = "GBM-IPSW-adjusted spline associations (non-MI): ABG vs VBG CO2",
+  figure_caption = key_results_caption_gbm
+)
+```
+
+```{r}
+#| label: key-results-spline-crude-abg-vbg
+#| fig-width: 10.5
+#| fig-height: 11
+#| fig-pos: "H"
+#| fig-cap: "Canonical crude spline key-results figure showing odds-ratio and predicted-probability associations of pCO2 with IMV, NIV, 60-day mortality, and hypercapnic respiratory failure for ABG and VBG."
+#| fig-alt: "Eight-panel key-results figure with odds-ratio panels on the left and predicted-probability panels on the right, comparing crude ABG and VBG spline associations across four outcomes."
+# Purpose: canonical key-results figure for crude spline models.
+print_plot_once(
+  key_results_crude_plot,
+  "key-results-spline-crude-abg-vbg",
+  width = KEY_RESULTS_FIG_WIDTH,
+  height = KEY_RESULTS_FIG_HEIGHT
+)
+```
+
+```{r}
+#| label: key-results-spline-adjusted-abg-vbg
+#| fig-width: 10.5
+#| fig-height: 11
+#| fig-pos: "H"
+#| fig-cap: "Unweighted covariate-adjusted spline associations of pCO2 with clinical outcomes by ABG and VBG. Odds-ratio curves are referenced to the midpoint of the normal range and predicted-probability curves are conditional on the reference covariate profile X_ref."
+#| fig-alt: "Eight-panel key-results figure with adjusted ABG and VBG spline odds-ratio and predicted-probability curves across four outcomes."
+# Purpose: canonical key-results figure for adjusted complete-case spline models.
+print_plot_once(
+  key_results_adjusted_plot,
+  "key-results-spline-adjusted-abg-vbg",
+  width = KEY_RESULTS_FIG_WIDTH,
+  height = KEY_RESULTS_FIG_HEIGHT
+)
+write_plot_alias(
+  "key-results-spline-adjusted-abg-vbg",
+  "figure_s5_unweighted_adjusted_spline_abg_vbg"
+)
+```
+
+```{r}
+#| label: key-results-spline-imputed-abg-vbg
+#| fig-width: 10.5
+#| fig-height: 11
+#| fig-pos: "H"
+#| fig-cap: "Canonical MI-pooled, non-weighted spline key-results figure showing odds-ratio and predicted-probability associations of pCO2 with four clinical outcomes for ABG and VBG."
+#| fig-alt: "Eight-panel key-results figure with MI-pooled non-weighted ABG and VBG spline odds-ratio and predicted-probability curves across four outcomes."
+# Purpose: canonical key-results figure for imputed non-weighted spline models.
+print_plot_once(
+  key_results_imputed_plot,
+  "key-results-spline-imputed-abg-vbg",
+  width = KEY_RESULTS_FIG_WIDTH,
+  height = KEY_RESULTS_FIG_HEIGHT
+)
+```
+
+```{r}
+#| label: key-results-spline-main-mi-ipw-abg-vbg
+#| fig-width: 10.5
+#| fig-height: 11
+#| fig-pos: "H"
+#| fig-cap: "Canonical MI-pooled, IPSW-adjusted spline key-results figure showing odds-ratio and predicted-probability associations of pCO2 with four clinical outcomes for ABG and VBG."
+#| fig-alt: "Eight-panel key-results figure with MI-pooled IPSW-adjusted ABG and VBG spline odds-ratio and predicted-probability curves across four outcomes."
+# Purpose: canonical key-results figure for main MI-weighted spline models.
+print_plot_once(
+  key_results_main_mi_ipw_plot,
+  "key-results-spline-main-mi-ipw-abg-vbg",
+  width = KEY_RESULTS_FIG_WIDTH,
+  height = KEY_RESULTS_FIG_HEIGHT
+)
+```
+
+```{r}
+#| label: key-results-spline-gbm-weighted-abg-vbg
+#| fig-width: 10.5
+#| fig-height: 11
+#| fig-pos: "H"
+#| fig-cap: "Canonical GBM-weighted spline key-results figure showing odds-ratio and predicted-probability associations of pCO2 with four clinical outcomes for ABG and VBG."
+#| fig-alt: "Eight-panel key-results figure with GBM-weighted ABG and VBG spline odds-ratio and predicted-probability curves across four outcomes."
+# Purpose: canonical key-results figure for GBM-weighted spline models.
+print_plot_once(
+  key_results_gbm_weighted_plot,
+  "key-results-spline-gbm-weighted-abg-vbg",
+  width = KEY_RESULTS_FIG_WIDTH,
+  height = KEY_RESULTS_FIG_HEIGHT
+)
 ```
 
 ```{r float-barrier-mi-spline}
@@ -9325,6 +11640,8 @@ float_barrier("section")
 non_mi_ipw_outputs <- tibble::tribble(
   ~parity_key, ~artifact_type, ~artifact_name,
   "threelevel_or", "figure", "or-plot-three-level-weighted.png",
+  "key_results_figure", "figure", "key-results-spline-gbm-weighted-abg-vbg.png",
+  "categorical_key_results_figure", "figure", "key-results-cat3-gbm-weighted-abg-vbg.png",
   "abg_spline_panel", "figure", "spline-ipw-abg-trimmed.png",
   "vbg_spline_panel", "figure", "spline-ipw-vbg.png",
   "abg_shared_spline", "figure", "spline-ipw-abg-shared.png",
@@ -9340,14 +11657,22 @@ non_mi_ipw_outputs <- tibble::tribble(
   "love_plot", "figure", "loveplot-ipw-gbm-abg-vbg.png",
   "love_plot_data", "table_csv", "loveplot_ipw_gbm_data.csv",
   "threelevel_table", "table_csv", "table_summary_adjusted_threelevel.csv",
+  "categorical_key_results_table", "table_csv", "table_summary_key_results_cat3.csv",
   "weighting_diag", "table_csv", "weighting_diagnostics_non_mi.csv"
 )
 
 mi_ipw_outputs <- tibble::tribble(
   ~parity_key, ~artifact_type, ~artifact_name,
   "threelevel_or", "figure", "or-plot-mi-weighted.png",
-  "overlay_spline", "figure", "ipw-rcs-overlay-mi-abg-vbg*.png",
+  "threelevel_prob", "figure", "ipw-three-level-mi-abg-vbg-prob.png",
+  "key_results_figure", "figure", "key-results-spline-main-mi-ipw-abg-vbg.png",
+  "categorical_key_results_figure", "figure", "key-results-cat3-main-mi-ipw-abg-vbg.png",
+  "overlay_spline", "figure", "ipw-rcs-overlay-mi-abg-vbg.png",
   "overlay_spline_prob", "figure", "ipw-rcs-overlay-mi-abg-vbg-prob.png",
+  "mi_cat3_prob_curve_abg", "table_csv", "mi_cat3_prob_curve_abg.csv",
+  "mi_cat3_prob_curve_vbg", "table_csv", "mi_cat3_prob_curve_vbg.csv",
+  "mi_spline_curve_abg", "table_csv", "mi_spline_curve_abg.csv",
+  "mi_spline_curve_vbg", "table_csv", "mi_spline_curve_vbg.csv",
   "mi_spline_prob_curve_abg", "table_csv", "mi_spline_prob_curve_abg.csv",
   "mi_spline_prob_curve_vbg", "table_csv", "mi_spline_prob_curve_vbg.csv",
   "propensity_hist_tested", "figure", "propensity-histograms-mi-logistic.png",
@@ -9357,6 +11682,7 @@ mi_ipw_outputs <- tibble::tribble(
   "love_plot", "figure", "loveplot-mi-logistic-abg-vbg.png",
   "love_plot_data", "table_csv", "loveplot_mi_logistic_data.csv",
   "threelevel_table", "table_csv", "mi_threelevel_results.csv",
+  "categorical_key_results_table", "table_csv", "table_summary_key_results_cat3.csv",
   "ps_model_store_abg", "diagnostic_rds", "mi_logistic_ps_abg_list.rds",
   "ps_model_store_vbg", "diagnostic_rds", "mi_logistic_ps_vbg_list.rds"
 )
@@ -9418,6 +11744,126 @@ render_table_pdf_maybe(
   digits = 0,
   show = SHOW_LOW_VALUE_TABLES
 )
+```
+
+```{r key-results-output-audit}
+#| code-block-title: "Canonical key-results artifact audit"
+#| echo: true
+#| message: false
+# Purpose: verify the additional canonical key-results artifacts across spline and categorical tracks.
+key_results_outputs <- tibble::tribble(
+  ~family, ~track, ~artifact_type, ~artifact_name,
+  "Spline", "Crude", "figure", "key-results-spline-crude-abg-vbg.png",
+  "Spline", "Adjusted", "figure", "key-results-spline-adjusted-abg-vbg.png",
+  "Spline", "Imputed", "figure", "key-results-spline-imputed-abg-vbg.png",
+  "Categorical", "Crude", "figure", "key-results-cat3-crude-abg-vbg.png",
+  "Categorical", "Adjusted", "figure", "key-results-cat3-adjusted-abg-vbg.png",
+  "Categorical", "Imputed", "figure", "key-results-cat3-imputed-abg-vbg.png",
+  "Categorical", "Weighted and adjusted", "figure", "key-results-cat3-main-mi-ipw-abg-vbg.png",
+  "Categorical", "GBM-weighted", "figure", "key-results-cat3-gbm-weighted-abg-vbg.png",
+  "Categorical", "Master table", "table_csv", "table_summary_key_results_cat3.csv",
+  "Categorical", "ABG table", "table_csv", "table_summary_key_results_cat3_abg.csv",
+  "Categorical", "VBG table", "table_csv", "table_summary_key_results_cat3_vbg.csv",
+  "Categorical", "Long-form extract", "table_csv", "cat3_key_results_long.csv"
+) |>
+  dplyr::mutate(
+    artifact_path = dplyr::if_else(
+      artifact_type == "figure",
+      results_path("figs", artifact_name),
+      results_path(artifact_name)
+    ),
+    exists = file.exists(artifact_path)
+  )
+
+key_results_outputs
+```
+
+```{r supplement-artifact-manifest}
+#| code-block-title: "Supplement artifact manifest"
+#| include: true
+#| echo: true
+#| message: false
+# Purpose: freeze supplement numbering, paths, and targeted duplicate cleanup.
+cleanup_targeted_supplement_duplicates <- function() {
+  duplicate_map <- tibble::tribble(
+    ~canonical_file, ~duplicate_file,
+    results_path("figs", "propensity-histograms-conditional.png"), results_path("figs", "propensity-histograms-conditional-1.png"),
+    results_path("figs", "shap-top10-ipw-gbm-abg-vbg.png"), results_path("figs", "shap-top10-ipw-gbm-display-1.png")
+  )
+
+  duplicate_map |>
+    dplyr::rowwise() |>
+    dplyr::mutate(
+      remove_ok = file.exists(canonical_file) && file.exists(duplicate_file)
+    ) |>
+    dplyr::ungroup() |>
+    dplyr::filter(remove_ok) |>
+    dplyr::pull(duplicate_file) |>
+    unique() |>
+    (\(paths) {
+      if (length(paths)) fs::file_delete(paths)
+      invisible(paths)
+    })()
+}
+
+cleanup_targeted_supplement_duplicates()
+
+supplement_manifest_internal <- tibble::tribble(
+  ~supp_label, ~title, ~analysis_family, ~artifact_file, ~chunk_name, ~notes,
+  "Table S2", "Crude associations of pCO2 category with clinical outcomes by ABG and VBG", "crude", results_path("table_s2_crude_threelevel.pdf"), "supplement-table-s2-crude", "Standalone crude categorical odds-ratio table; paired CSV at Results/table_s2_crude_threelevel.csv.",
+  "Figure S5", "Unweighted covariate-adjusted spline associations of pCO2 with clinical outcomes by ABG and VBG", "unweighted_adjusted", results_path("figs", "figure_s5_unweighted_adjusted_spline_abg_vbg.png"), "key-results-spline-adjusted-abg-vbg", "Alias of the canonical combined adjusted spline figure.",
+  "Table S3", "Gradient-boosted propensity-weighted associations of pCO2 category with clinical outcomes by ABG and VBG", "gbm_sensitivity", results_path("table_s3_gbm_threelevel.pdf"), "supplement-table-s3-gbm", "Standalone GBM-weighted categorical odds-ratio table; paired CSV at Results/table_s3_gbm_threelevel.csv.",
+  "Figure S6", "Covariate balance after gradient-boosted propensity weighting for ABG and VBG test-ordering models", "gbm_sensitivity", results_path("figs", "loveplot-ipw-gbm-abg-vbg.png"), "loveplot-ipw-gbm", "Raw vs weighted absolute standardized mean differences; dashed line marks |SMD| = 0.1.",
+  "Figure S7", "Propensity-score overlap for gradient-boosted ABG and VBG test-ordering models", "gbm_sensitivity", results_path("figs", "propensity-histograms-conditional.png"), "propensity-histograms-conditional", "Tested-versus-untested propensity-score distributions under the GBM models.",
+  "Figure S8", "SHAP-style contribution summaries for gradient-boosted ABG and VBG test-ordering models", "gbm_sensitivity", results_path("figs", "shap-top10-ipw-gbm-abg-vbg.png"), "shap-top10-ipw-gbm-display", "Mean absolute SHAP value summaries; not interpreted as independent predictors."
+) |>
+  dplyr::mutate(artifact_path = vapply(artifact_file, pretty_path, character(1L))) |>
+  dplyr::select(supp_label, title, analysis_family, artifact_path, chunk_name, notes, artifact_file)
+
+write_csv_safely(
+  supplement_manifest_internal |>
+    dplyr::select(-artifact_file),
+  results_path("supplement_manifest.csv"),
+  row_names = FALSE
+)
+
+supplement_manifest_internal |>
+  dplyr::select(-artifact_file)
+```
+
+```{r supplement-artifact-assertions}
+#| include: true
+#| message: false
+# Purpose: verify supplement artifacts are present and targeted spill duplicates are removed.
+required_supplement_files <- c(
+  results_path("table_s2_crude_threelevel.csv"),
+  results_path("table_s2_crude_threelevel.pdf"),
+  results_path("figs", "figure_s5_unweighted_adjusted_spline_abg_vbg.png"),
+  results_path("table_s3_gbm_threelevel.csv"),
+  results_path("table_s3_gbm_threelevel.pdf"),
+  results_path("figs", "loveplot-ipw-gbm-abg-vbg.png"),
+  results_path("figs", "propensity-histograms-conditional.png"),
+  results_path("figs", "shap-top10-ipw-gbm-abg-vbg.png"),
+  results_path("supplement_manifest.csv")
+)
+
+missing_supplement_files <- required_supplement_files[!file.exists(required_supplement_files)]
+forbidden_duplicate_files <- c(
+  results_path("figs", "propensity-histograms-conditional-1.png")
+)
+existing_forbidden_duplicates <- forbidden_duplicate_files[file.exists(forbidden_duplicate_files)]
+
+if (length(missing_supplement_files) || length(existing_forbidden_duplicates)) {
+  missing_pretty <- vapply(missing_supplement_files, pretty_path, character(1L))
+  duplicate_pretty <- vapply(existing_forbidden_duplicates, pretty_path, character(1L))
+  stop(
+    "Supplement artifact check failed: missing files [",
+    paste(missing_pretty, collapse = ", "),
+    "]; forbidden duplicates [",
+    paste(duplicate_pretty, collapse = ", "),
+    "]."
+  )
+}
 ```
 
 # Diagnostics and Exports
@@ -9488,7 +11934,7 @@ if (nrow(miss_overall) > 0) {
     slice_sample(n = min(1000, nrow(subset_data_raw)))
 
   p_miss <- naniar::vis_miss(miss_sample, sort_miss = TRUE) +
-    theme_minimal(base_size = 10) +
+    theme_pub(base_size = 10) +
     labs(title = "Missingness heatmap (top 20 variables)")
   save_diag_plot(p_miss, results_path("figs", "diag-mi-missingness-heatmap.png"),
                  width = 10, height = 6)
@@ -9947,7 +12393,7 @@ plot_hist <- function(df, title) {
   ggplot(df, aes(x = weight)) +
     geom_histogram(bins = 40, fill = "grey70", color = "white") +
     labs(title = title, x = "Weight", y = "Count") +
-    theme_minimal(base_size = 10)
+    theme_pub(base_size = 10)
 }
 
 p_hist_abg <- plot_hist(filter(wt_df, group == "ABG"), "ABG weight distribution")
@@ -9963,7 +12409,7 @@ plot_scatter <- function(df, title) {
     geom_point(data = top_wt, color = "red", size = 1.2) +
     scale_y_log10() +
     labs(title = title, x = "Propensity score", y = "Weight (log10)") +
-    theme_minimal(base_size = 10)
+    theme_pub(base_size = 10)
 }
 
 p_scatter_abg <- plot_scatter(filter(wt_df, group == "ABG"),
@@ -10030,7 +12476,7 @@ p_bal_abg <- ggplot(filter(bal_plot_df, group == "ABG"),
   geom_hline(yintercept = c(-0.05, 0.05), linetype = 3, linewidth = 0.3) +
   coord_flip() +
   labs(x = NULL, y = "Target SMD", title = "ABG target balance") +
-  theme_minimal(base_size = 10)
+  theme_pub(base_size = 10)
 
 p_bal_vbg <- ggplot(filter(bal_plot_df, group == "VBG"),
                     aes(x = reorder(label, abs(smd)), y = smd, color = stage, shape = stage)) +
@@ -10039,7 +12485,7 @@ p_bal_vbg <- ggplot(filter(bal_plot_df, group == "VBG"),
   geom_hline(yintercept = c(-0.05, 0.05), linetype = 3, linewidth = 0.3) +
   coord_flip() +
   labs(x = NULL, y = "Target SMD", title = "VBG target balance") +
-  theme_minimal(base_size = 10)
+  theme_pub(base_size = 10)
 
 save_diag_plot(p_bal_abg, results_path("figs", "diag-balance-loveplot-abg.png"), width = 9, height = 7)
 save_diag_plot(p_bal_vbg, results_path("figs", "diag-balance-loveplot-vbg.png"), width = 9, height = 7)
@@ -10144,7 +12590,7 @@ stopifnot(exists("abg_curves"), exists("vbg_curves"))
       y = paste0("Odds ratio (ref: ABG ", ABG_CO2_REF, ", VBG ", VBG_CO2_REF, "; log scale)"),
       caption = paste0("Reference CO2: ABG ", ABG_CO2_REF, " mmHg; VBG ", VBG_CO2_REF, " mmHg")
     ) +
-    theme_minimal(base_size = 10)
+    theme_pub(base_size = 10)
   save_diag_plot(p_outcome, results_path("figs", "diag-outcome-or-vs-paco2.png"),
                  width = 10, height = 8)
 ```
@@ -10693,6 +13139,8 @@ expected_diag <- c(
   "mi_fit_issue_summary.csv", "mi_m_stability.csv", "mi_maxit_sensitivity.csv",
   "mi_obs_vs_imp_summary.csv", "mi_spline_curve_abg.csv",
   "mi_spline_curve_vbg.csv",
+  "mi_cat3_prob_curve_abg.csv", "mi_cat3_prob_curve_vbg.csv",
+  "mi_threelevel_results.csv",
   "mi_spline_prob_curve_abg.csv", "mi_spline_prob_curve_vbg.csv",
   "mi_spline_coef_abg.csv",
   "mi_spline_coef_vbg.csv", "diag-ps-shap-stability.csv",

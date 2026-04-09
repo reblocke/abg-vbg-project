@@ -1,11 +1,11 @@
 {
-  "run_id": "20260301_131122",
+  "run_id": "20260409_132423",
   "run_mode": "pilot",
   "pilot_frac": 0.01,
   "mi_batch_threshold": 5000,
-  "data_dir": "/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/data",
-  "results_dir": "/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Results",
+  "data_dir": "/Users/reblocke/Research/abg-vbg-project/data",
+  "results_dir": "/Users/reblocke/Research/abg-vbg-project/Results",
   "full_n": 833476,
   "sampled_n": 8335,
-  "subset_n": 5194
+  "subset_n": 5175
 }
