@@ -6,7 +6,7 @@ Thanks for your interest in contributing!
 - Report bugs or reproducibility issues via GitHub Issues
 - Propose improvements to documentation or analysis clarity
 - Add tests, small example datasets, or CI checks
-- Improve the results-to-code mapping table in `README.md`
+- Improve the current-state and results-to-manuscript pointers in `README.md`
 
 ## Ground rules
 1. **Do not commit sensitive data.** No PHI/PII, access tokens, or credentials.
@@ -22,6 +22,8 @@ Thanks for your interest in contributing!
   ```r
   renv::restore()
   ```
+- The primary analysis entrypoint is `Code Drafts/ABG-VBG analysis 2026-2-28.qmd`
+- The render wrapper `scripts/render_pdf.sh` runs environment preflight and renders that notebook by default
 
 ## Dependency workflow (required)
 1. Use `renv.lock` as the canonical R dependency snapshot.
@@ -41,9 +43,11 @@ Python sidecars (optional):
 - Keep that scope separate from R dependency management (`renv` remains authoritative for analysis execution).
 
 ## Style
-- Prefer clear file names (e.g., `01_import.R`, `02_clean.R`, `03_model.R`)
-- Put reusable functions in a shared file (e.g., `src/utils.R`)
-- Keep parameters configurable (e.g., at top of script or via a config file)
+- Prefer keeping the current main analysis in the newest maintained notebook under `Code Drafts/`
+- Use dated notebook names only when freezing a real snapshot; do not rename older notebooks in place
+- Put reusable helper code in `R/` or `scripts/` instead of duplicating it across notebooks when practical
+- Keep parameters explicit at the top of notebooks or in a small helper script rather than relying on hidden session state
+- If you update which notebook, manuscript draft, or output snapshot is considered current, update `README.md` in the same change
 
 ## Pull requests
 - Create a branch from `main`
@@ -52,6 +56,7 @@ Python sidecars (optional):
   - why
   - how to reproduce / test
 - If results change, note which tables/figures are affected.
+- If you need transient MI scratch artifacts for debugging, document that and render with `KEEP_MI_TRANSIENT=1`.
 
 ## Code of Conduct
 This project follows [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md).
