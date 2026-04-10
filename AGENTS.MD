@@ -159,6 +159,18 @@ is “fast enough” without compromising clarity.
 - Use `testthat` for unit tests under `tests/testthat`.
 - When creating or modifying R functions, propose new or updated tests and indicate the command to run them (for example, `devtools::test()`).
 
+## Standard operating procedures
+- Keep a persistent handoff log at `/Users/reblocke/Research/abg-vbg-project/WORKLOG.md`.
+- Update `WORKLOG.md` after each substantial task, render, or debugging session so the current state does not depend on long chat history.
+- Each update should record:
+  - date/time
+  - task completed or attempted
+  - files changed
+  - render or validation commands run
+  - key outcomes, failures, and next steps
+- Before starting a new major ticket or resuming a long-running thread, read the latest `WORKLOG.md` entry first.
+- If conversation context becomes stale or compacted, treat `WORKLOG.md` plus the notebook and git state as the source of truth.
+
 ## What not to do
 - Do not add interactive-only calls (`View()`, `fix()`) to analysis pipelines.
 - Do not introduce hidden global state or non-determinism without clear explanation.

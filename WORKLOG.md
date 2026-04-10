@@ -1,0 +1,172 @@
+# WORKLOG
+
+Persistent handoff record for analysis and notebook work in `/Users/reblocke/Research/abg-vbg-project`.
+
+## Entry template
+- Date/time:
+- Task:
+- Files changed:
+- Commands run:
+- Outcomes:
+- Next steps:
+
+## 2026-04-09
+- Date/time: 2026-04-09 America/Denver
+- Task: Initialize persistent worklog and add checkpoint SOP to `AGENTS.md`.
+- Files changed:
+  - `/Users/reblocke/Research/abg-vbg-project/AGENTS.md`
+  - `/Users/reblocke/Research/abg-vbg-project/WORKLOG.md`
+- Commands run:
+  - none
+- Outcomes:
+  - Added a standard operating procedure requiring checkpoint updates in `WORKLOG.md`.
+  - Established a repo-local handoff file to reduce the risk of long-thread context drift.
+- Next steps:
+  - Run a complete 1% pilot render after the latest Figure 1 PDF export fix.
+  - Visually confirm Figure 1 inside the rendered manuscript PDF, not only the exported figure asset.
+
+- Date/time: 2026-04-09 15:42 MDT
+- Task: Complete end-to-end 1% pilot render after the Figure 1 PDF export fix, verify Figure 1 inside the rendered PDF page, and capture runtime.
+- Files changed:
+  - `/Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd`
+  - `/Users/reblocke/Research/abg-vbg-project/WORKLOG.md`
+- Commands run:
+  - `quarto render '/Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd' -P run_mode:pilot -P pilot_frac:0.01`
+  - `pdfinfo '/Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf'`
+  - `pdftotext -f 14 -l 14 '/Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf' -`
+  - `pdftoppm -f 14 -l 14 -png '/Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf' '/Users/reblocke/Research/abg-vbg-project/tmp/pdf_pages/abg_vbg_page14'`
+- Outcomes:
+  - Final 1% pilot render completed successfully with `exit 0`.
+  - Wall time from the render log was `416.12` seconds (`6m 56s`).
+  - Figure 1 is present in the rendered PDF on page `14`; the graphic itself is visible, not just the caption.
+  - The render still emits Quarto warnings about raw LaTeX table labels that do not use native `tbl-*` crossrefs.
+  - The Figure 1 PDF page currently also shows echoed code from the following chunk beneath the caption because the notebook render is still running with `echo: true`.
+- Next steps:
+  - Decide whether the notebook PDF should continue to show code. If not, change the manuscript-facing render path to suppress echoed code around the figure pages.
+  - Revisit the remaining raw-LaTeX table crossref warnings if native Quarto table references become a priority.
+
+- Date/time: 2026-04-09 15:56 MDT
+- Task: Revise Figure 1 wording and target-cohort styling.
+- Files changed:
+  - /Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+  - /Users/reblocke/Research/abg-vbg-project/WORKLOG.md
+- Commands run:
+  - `quarto render '/Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd' -P run_mode:pilot -P pilot_frac:0.01`
+- Outcomes:
+  - Figure 1 now uses `Analytic cohort: ED and Inpatient Encounters`.
+  - The analytic cohort box and both weighted boxes use light gray fill.
+  - Weighted boxes now read `ABG-weighted sample` and `VBG-weighted sample`.
+  - Refreshed figure assets:
+    - `/Users/reblocke/Research/abg-vbg-project/Results/cohort_flow.png`
+    - `/Users/reblocke/Research/abg-vbg-project/Results/cohort_flow.pdf`
+- Next steps:
+  - None required for Figure 1 unless further wording or layout edits are requested.
+
+- Date/time: 2026-04-09 16:18 MDT
+- Task: Run a 5% pilot render with runtime and memory monitoring.
+- Files changed:
+  - /Users/reblocke/Research/abg-vbg-project/WORKLOG.md
+- Commands run:
+  - `quarto render '/Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd' -P run_mode:pilot -P pilot_frac:0.05`
+  - `/usr/bin/time -l` wrapped around the render for wall time and max RSS
+  - sampled live process-tree RSS during the render
+- Outcomes:
+  - 5% pilot render completed successfully.
+  - Wall time: `582.47` seconds (`9m 42s`).
+  - Max resident set size from `/usr/bin/time -l`: `8372846592` bytes (`7.80 GiB`), on a `16 GiB` machine.
+  - Peak live process-tree RSS was about `7336.5 MB`, with the highest pressure during the MI section.
+  - The likely runtime pressure point is the MI branch; the likely memory pressure point is `mi-exec`.
+  - Pilot telemetry files written by the notebook include:
+    - `/Users/reblocke/Research/abg-vbg-project/Results/runtime_summary.csv`
+    - `/Users/reblocke/Research/abg-vbg-project/Results/runtime_summary_top15.csv`
+    - `/Users/reblocke/Research/abg-vbg-project/Results/memory_snapshots.csv`
+- Next steps:
+  - Use the 5% pilot plus MI full-mode settings to decide whether a full run is acceptable on this machine or should be moved to a larger-memory environment.
+
+- Date/time: 2026-04-09 20:35 MDT
+- Task: Align manuscript numbering, add main Table 2, fix supplement table labels, stabilize PDF table typography, and validate with a monitored 10% pilot render.
+- Files changed:
+  - /Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+  - /Users/reblocke/Research/abg-vbg-project/WORKLOG.md
+- Commands run:
+  - repeated monitored pilot renders of:
+    - `quarto render '/Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd' -P run_mode:pilot -P pilot_frac:0.10`
+  - each wrapped with `/usr/bin/time -l` and logged to:
+    - `/Users/reblocke/Research/abg-vbg-project/tmp/render_10pct_20260409.log`
+- Outcomes:
+  - Added a manifest-driven manuscript display section so official manuscript labels render in explicit order rather than being consumed by generation-chunk order.
+  - Added main manuscript `Table 2` from the MI-pooled weighted categorical results:
+    - `/Users/reblocke/Research/abg-vbg-project/Results/table_2_weighted_categorical_outcomes.pdf`
+    - `/Users/reblocke/Research/abg-vbg-project/Results/table_2_weighted_categorical_outcomes.csv`
+  - Standalone supplement table PDFs now visibly self-label as manuscript tables:
+    - `/Users/reblocke/Research/abg-vbg-project/Results/table_s2_crude_threelevel.pdf`
+    - `/Users/reblocke/Research/abg-vbg-project/Results/table_s3_gbm_threelevel.pdf`
+  - Manual display pages in the rendered notebook PDF now show:
+    - `Figure 1` on page 422
+    - `Figure 2` on page 423
+    - `Table 1` on page 424
+    - `Table 2` on page 425
+    - `Figure S2` on page 427
+    - `Table S2` on page 431
+    - `Table S3` on page 432
+    - `Figure S7` on page 434
+  - Visible code blocks no longer drop the CO2 subscript glyph; source-code labels now render as ASCII `PaCO2` / `PvCO2`, while the PDF table-rendering helper still supports LaTeX-safe subscript output for rendered tables.
+  - Final successful 10% pilot wall time: `865.31` seconds (`14m 25s`).
+  - `/usr/bin/time -l` max resident set size for the final successful run: `10805444608` bytes (`10.06 GiB`).
+  - Subagent monitoring summary for the final successful run:
+    - wall time: `865.31 s`
+    - peak descendant-tree RSS: `8968.1 MB`
+    - longest phases: `mi-single-pass`, `mi-exec`, `table-summary-adjusted-threelevel`, `shap-top10-ipw-gbm`, `mi-transient-cleanup`, `shap-top10-mi-logistic`
+    - config-adjusted full-run estimate: central `1.36 h`, conservative `1.61 h`
+    - memory-risk assessment on 16 GB: `high`, with meaningful paging/slowdown risk on a full-data render
+- Next steps:
+  - Before a full-data render on this machine, assume the MI branch is still the main memory bottleneck and budget for paging-related slowdown.
+
+- Date/time: 2026-04-09 21:05 MDT
+- Task: Complete notebook-wide helper comment audit and fill remaining undocumented function blocks.
+- Files changed:
+  - /Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+  - /Users/reblocke/Research/abg-vbg-project/WORKLOG.md
+- Outcomes:
+  - Added the remaining missing human-facing comments for top-level helpers flagged by the audit, including:
+    - VBG spline panel plot helper
+    - MI sanity-check imputation accessor
+    - MI logistic propensity histogram binning helper
+    - supplement manifest normalization helper
+  - Re-ran the notebook-wide top-level function audit and confirmed no top-level `name <- function(...)` definitions remain without an immediately preceding explanatory comment.
+- Notes:
+  - This was a documentation-only pass; no statistical logic, file paths, or render settings were changed.
+
+- Date/time: 2026-04-09 21:40 MDT
+- Task: Audit weighting-method labels across generated figures and remove ambiguous weighted/IPSW titles.
+- Files changed:
+  - /Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+  - /Users/reblocke/Research/abg-vbg-project/WORKLOG.md
+- Outcomes:
+  - Updated weighted figure titles and manuscript-manifest labels so MI-weighted outputs now say `MI-logistic IPSW` and GBM sensitivity outputs now say `GBM IPSW` explicitly.
+  - This included the main manuscript weighted spline figure (`Figure 2`), the weighted categorical supplement figure (`Figure S4`), non-MI GBM spline/categorical titles, MI categorical/spline titles, and weighted outcome-rate figure titles.
+  - Ran a 1% pilot render to refresh the generated outputs and manuscript manifest.
+  - 1% pilot wall time: `355.04` seconds.
+  - 1% pilot max resident set size (`/usr/bin/time -l`): `8238120960` bytes.
+  - Visual spot-check confirmed refreshed titles on:
+    - /Users/reblocke/Research/abg-vbg-project/Results/figs/key-results-spline-main-mi-ipw-abg-vbg.png
+    - /Users/reblocke/Research/abg-vbg-project/Results/figs/key-results-cat3-main-mi-ipw-abg-vbg.png
+    - /Users/reblocke/Research/abg-vbg-project/Results/figs/key-results-spline-gbm-weighted-abg-vbg.png
+    - /Users/reblocke/Research/abg-vbg-project/Results/figs/propensity-histograms-conditional.png
+
+- Date/time: 2026-04-09 22:05 MDT
+- Task: Audit generated table titles/captions for explicit imputation and weighting-method labels.
+- Files changed:
+  - /Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+  - /Users/reblocke/Research/abg-vbg-project/WORKLOG.md
+- Outcomes:
+  - Updated manuscript and supplement table titles so weighted tables now explicitly distinguish `MI-logistic IPSW` from `GBM IPSW`.
+  - Updated cross-track summary table captions to spell out the analysis families: crude, unweighted adjusted, imputed non-weighted, MI-logistic IPSW-weighted, and GBM IPSW-weighted.
+  - Updated weighting/balance diagnostics tables so non-MI diagnostics identify `GBM IPSW` and MI balance/weight summaries identify `MI-logistic IPSW`.
+  - Refreshed outputs with a 1% pilot render.
+  - 1% pilot wall time: `348.63` seconds.
+  - 1% pilot max resident set size (`/usr/bin/time -l`): `7109230592` bytes.
+  - Verified on-disk titles in:
+    - /Users/reblocke/Research/abg-vbg-project/Results/table_2_weighted_categorical_outcomes.pdf
+    - /Users/reblocke/Research/abg-vbg-project/Results/table_s3_gbm_threelevel.pdf
+    - /Users/reblocke/Research/abg-vbg-project/Results/manuscript_asset_manifest.csv
