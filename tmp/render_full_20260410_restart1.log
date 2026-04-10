@@ -1,0 +1,22 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+Error: The name of the input file cannot contain the special shell characters: [ <>()|\:&;#?*'] (attempted to copy to a version without those characters 'ABG-VBG-analysis-2026-2-28.rmarkdown' however that file already exists)
+Execution halted
+WARN: Error encountered when rendering files
+       15.22 real         9.25 user         0.67 sys
+           219529216  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               63115  page reclaims
+                6546  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                  18  messages sent
+                  14  messages received
+                   4  signals received
+                3536  voluntary context switches
+               16958  involuntary context switches
+            38782725  instructions retired
+            23277823  cycles elapsed
+             1327392  peak memory footprint

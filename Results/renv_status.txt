@@ -1,8 +1,3 @@
-
-NOTE: Dependency discovery took 17 seconds during snapshot.
-Consider using .renvignore to ignore files, or switching to explicit snapshots.
-See `?renv::dependencies` for more information.
-
 The following package(s) are in an inconsistent state:
 
  package  installed recorded used

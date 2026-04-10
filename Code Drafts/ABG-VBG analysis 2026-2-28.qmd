@@ -10659,61 +10659,106 @@ count_group <- function(group, method) {
   })
 }
 
-# helper: summarize modeled sample size and events across imputations for one
-# MI categorical outcome/cohort combination.
-mi_counts_threelevel <- function(outcome, group, method) {
-  imp_n <- imp$m
-  counts <- lapply(seq_len(imp_n), function(i) {
-    d <- get_imp(i)
-    if (group == "ABG") {
-      co2_var <- "paco2"
-      treat_var <- "has_abg"
-      w <- if (identical(method, "Weighted and adjusted")) get_mi_weight("ABG", i) else rep(1, nrow(d))
-      low_cut <- ABG_CO2_LOW
-      high_cut <- ABG_CO2_HIGH
-    } else {
-      co2_var <- "vbg_co2"
-      treat_var <- "has_vbg"
-      w <- if (identical(method, "Weighted and adjusted")) get_mi_weight("VBG", i) else rep(1, nrow(d))
-      low_cut <- VBG_CO2_LOW
-      high_cut <- VBG_CO2_HIGH
-    }
-    d[[co2_var]] <- suppressWarnings(as.numeric(d[[co2_var]]))
-    keep <- d[[treat_var]] == 1 & is.finite(d[[co2_var]])
-    if (!any(keep)) return(c(n_model = 0, events = 0))
-    d2 <- d[keep, , drop = FALSE]
-    w2 <- w[keep]
-    d2$co2_cat <- make_co2_cat3(d2[[co2_var]], low_cut, high_cut)
-    keep2 <- !is.na(d2$co2_cat)
-    d2 <- d2[keep2, , drop = FALSE]
-    w2 <- w2[keep2]
-    if (nrow(d2) == 0L) return(c(n_model = 0, events = 0))
-    d2[[outcome]] <- to01(d2[[outcome]])
-    complete_ok <- complete.cases(d2[, c(outcome, adj_core, "co2_cat"), drop = FALSE])
-    w_ok <- is.finite(w2) & w2 > 0
-    d2 <- d2[complete_ok & w_ok, , drop = FALSE]
-    if (nrow(d2) == 0L) return(c(n_model = 0, events = 0))
-    c(n_model = nrow(d2), events = sum(d2[[outcome]] == 1, na.rm = TRUE))
-  })
-  n_vals <- vapply(counts, `[[`, numeric(1), "n_model")
-  e_vals <- vapply(counts, `[[`, numeric(1), "events")
-  tibble::tibble(
-    n_model = round(stats::median(n_vals, na.rm = TRUE)),
-    events = round(stats::median(e_vals, na.rm = TRUE))
-  )
+# helper: return zero-row MI count summaries for one cohort when an imputation
+# contributes no analyzable tested encounters after the required filtering.
+empty_mi_count_rows <- function(group, outcomes) {
+  tidyr::expand_grid(
+    method = c("Imputed", "Weighted and adjusted"),
+    outcome = label_outcome(outcomes)
+  ) |>
+    dplyr::mutate(
+      group = group,
+      n_model = 0L,
+      events = 0L
+    ) |>
+    dplyr::relocate(method, group, outcome, n_model, events)
 }
 
-# helper: vectorize the MI count summary across all four categorical outcomes
-# for one cohort and analysis track.
-mi_counts <- function(group, method) {
-  outcomes <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
+# helper: compute MI modeled counts for both the imputed-only and weighted MI
+# categorical tracks in one pass for one cohort within one imputed dataset.
+# This avoids reloading the same full imputation hundreds of times inside the
+# manuscript table summary chunk.
+compute_mi_count_group_all_methods <- function(d, group, weights, outcomes) {
+  if (group == "ABG") {
+    co2_var <- "paco2"
+    treat_var <- "has_abg"
+    low_cut <- ABG_CO2_LOW
+    high_cut <- ABG_CO2_HIGH
+  } else {
+    co2_var <- "vbg_co2"
+    treat_var <- "has_vbg"
+    low_cut <- VBG_CO2_LOW
+    high_cut <- VBG_CO2_HIGH
+  }
+
+  d[[co2_var]] <- suppressWarnings(as.numeric(d[[co2_var]]))
+  keep <- d[[treat_var]] == 1 & is.finite(d[[co2_var]])
+  if (!any(keep)) {
+    return(empty_mi_count_rows(group, outcomes))
+  }
+
+  d2 <- d[keep, c(outcomes, adj_core, co2_var), drop = FALSE]
+  w2 <- weights[keep]
+  d2$co2_cat <- make_co2_cat3(d2[[co2_var]], low_cut, high_cut)
+
+  keep2 <- !is.na(d2$co2_cat)
+  d2 <- d2[keep2, , drop = FALSE]
+  w2 <- w2[keep2]
+  if (nrow(d2) == 0L) {
+    return(empty_mi_count_rows(group, outcomes))
+  }
+
   purrr::map_dfr(outcomes, function(outcome) {
-    cnt <- mi_counts_threelevel(outcome, group, method = method)
-    dplyr::mutate(cnt,
-                  method = method,
-                  group = group,
-                  outcome = label_outcome(outcome))
+    outcome_complete <- complete.cases(d2[, c(outcome, adj_core, "co2_cat"), drop = FALSE])
+    outcome_vals <- to01(d2[[outcome]])
+    weighted_keep <- outcome_complete & is.finite(w2) & w2 > 0
+
+    tibble::tibble(
+      method = c("Imputed", "Weighted and adjusted"),
+      group = group,
+      outcome = label_outcome(outcome),
+      n_model = c(
+        sum(outcome_complete),
+        sum(weighted_keep)
+      ),
+      events = c(
+        sum(outcome_vals[outcome_complete] == 1, na.rm = TRUE),
+        sum(outcome_vals[weighted_keep] == 1, na.rm = TRUE)
+      )
+    )
   })
+}
+
+# helper: summarize MI modeled sample size and events across imputations for all
+# categorical outcomes and both cohorts using a single pass over each imputed
+# dataset. This preserves the original median-across-imputations definition
+# while removing a major full-run bottleneck.
+build_mi_counts_cat3 <- function() {
+  outcomes <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
+  per_imp_counts <- vector("list", imp$m)
+
+  for (i in seq_len(imp$m)) {
+    d <- get_imp(i)
+    w_abg <- get_mi_weight("ABG", i)
+    w_vbg <- get_mi_weight("VBG", i)
+
+    per_imp_counts[[i]] <- dplyr::bind_rows(
+      compute_mi_count_group_all_methods(d, "ABG", w_abg, outcomes),
+      compute_mi_count_group_all_methods(d, "VBG", w_vbg, outcomes)
+    ) |>
+      dplyr::mutate(imp = i)
+
+    rm(d, w_abg, w_vbg)
+    invisible(gc(FALSE))
+  }
+
+  dplyr::bind_rows(per_imp_counts) |>
+    dplyr::group_by(method, group, outcome) |>
+    dplyr::summarise(
+      n_model = round(stats::median(n_model, na.rm = TRUE)),
+      events = round(stats::median(events, na.rm = TRUE)),
+      .groups = "drop"
+    )
 }
 
 # helper: build one harmonized predicted-probability export for a full
@@ -10860,6 +10905,8 @@ imputed_cat3_probs <- normalize_cat3_key_results_prob_df(
   context = "categorical imputed probabilities"
 )
 
+mi_counts_cat3_all <- build_mi_counts_cat3()
+
 counts_tbl_cat3 <- dplyr::bind_rows(
   count_group("ABG", "Crude"),
   count_group("VBG", "Crude"),
@@ -10867,10 +10914,8 @@ counts_tbl_cat3 <- dplyr::bind_rows(
   count_group("VBG", "Adjusted"),
   count_group("ABG", "GBM-weighted"),
   count_group("VBG", "GBM-weighted"),
-  mi_counts("ABG", "Imputed"),
-  mi_counts("VBG", "Imputed"),
-  mi_counts("ABG", "Weighted and adjusted"),
-  mi_counts("VBG", "Weighted and adjusted")
+  dplyr::filter(mi_counts_cat3_all, method == "Imputed"),
+  dplyr::filter(mi_counts_cat3_all, method == "Weighted and adjusted")
 )
 
 cat3_or_all <- dplyr::bind_rows(

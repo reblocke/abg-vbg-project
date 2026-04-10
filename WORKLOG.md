@@ -170,3 +170,16 @@ Persistent handoff record for analysis and notebook work in `/Users/reblocke/Res
     - /Users/reblocke/Research/abg-vbg-project/Results/table_2_weighted_categorical_outcomes.pdf
     - /Users/reblocke/Research/abg-vbg-project/Results/table_s3_gbm_threelevel.pdf
     - /Users/reblocke/Research/abg-vbg-project/Results/manuscript_asset_manifest.csv
+
+## 2026-04-10 Full Render In Progress
+- Full Quarto render started at 2026-04-09 22:17 MDT.
+- Command: `quarto render /Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd -P run_mode:full`
+- Session: `46625`; main R pid: `84953`.
+- As of 2026-04-10 00:55 MDT, render remains in chunk `138/293 [mi-exec]` with sustained CPU and paging pressure but no error.
+- As of 2026-04-10 03:35 MDT, render is still in `138/293 [mi-exec]`; main R pid `84953` remains CPU-bound with RSS fluctuating roughly 5.7-8.0 GB and sustained compressed-memory usage.
+- As of 2026-04-10 05:14 MDT, full render still remains in `138/293 [mi-exec]`; process is alive, CPU-saturated, and near hardware memory limits but has not failed.
+- 2026-04-10 06:01 MDT: full render still active in chunk 176 [shap-top10-mi-logistic]; main R pid 84953 at ~100%% CPU, RSS ~7.9 GB, no new log/files for ~10 minutes, stack sample shows heavy GC/grep rather than idle hang.
+- 2026-04-10 06:11 MDT: full render advanced through mi-co2-cat-checks to 188 [table-summary-adjusted-threelevel]; Hypatia observed fresh model-diagram outputs for MI three-level IPW around 06:08:56-06:08:57; main R pid 84953 still CPU-bound and progressing.
+- 2026-04-10 06:57 MDT: interrupted full render in chunk 188 [table-summary-adjusted-threelevel] after ~48 minutes without progress; patched MI categorical count summary to compute both MI tracks in one pass per imputation before restarting full render.
+- 2026-04-10 06:58 MDT: first restart failed immediately due to stale sanitized file ABG-VBG-analysis-2026-2-28.rmarkdown already existing; clearing it before restart.
+- 2026-04-10 08:49 MDT: restart2 still in mi-exec after ~1h53m total elapsed; no new failure, main R pid 91123 at ~100%% CPU and ~5.2 GB RSS.
