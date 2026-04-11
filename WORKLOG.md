@@ -183,3 +183,8 @@ Persistent handoff record for analysis and notebook work in `/Users/reblocke/Res
 - 2026-04-10 06:57 MDT: interrupted full render in chunk 188 [table-summary-adjusted-threelevel] after ~48 minutes without progress; patched MI categorical count summary to compute both MI tracks in one pass per imputation before restarting full render.
 - 2026-04-10 06:58 MDT: first restart failed immediately due to stale sanitized file ABG-VBG-analysis-2026-2-28.rmarkdown already existing; clearing it before restart.
 - 2026-04-10 08:49 MDT: restart2 still in mi-exec after ~1h53m total elapsed; no new failure, main R pid 91123 at ~100%% CPU and ~5.2 GB RSS.
+
+## 2026-04-10 full render restart 3
+- Prior full render cleared the MI count bottleneck and reached `288/293 [pdf-hygiene-scan]` before failing on leaked absolute paths in the visible key-results audit table.
+- Patched `key-results-output-audit` so printed paths use `pretty_path()` while file existence still checks the internal absolute path.
+- Restarting a clean full render from the top with renewed process/resource monitoring.

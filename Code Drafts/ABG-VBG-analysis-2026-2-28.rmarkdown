@@ -12332,15 +12332,17 @@ key_results_outputs <- tibble::tribble(
   "Categorical", "Long-form extract", "table_csv", "cat3_key_results_long.csv"
 ) |>
   dplyr::mutate(
-    artifact_path = dplyr::if_else(
+    artifact_file = dplyr::if_else(
       artifact_type == "figure",
       results_path("figs", artifact_name),
       results_path(artifact_name)
     ),
-    exists = file.exists(artifact_path)
+    artifact_path = pretty_path(artifact_file),
+    exists = file.exists(artifact_file)
   )
 
-key_results_outputs
+key_results_outputs |>
+  dplyr::select(-artifact_file)
 ```
 
 ```{r supplement-artifact-manifest}
