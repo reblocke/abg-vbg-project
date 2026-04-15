@@ -132,6 +132,8 @@ is “fast enough” without compromising clarity.
 - For random operations, set an explicit seed near the beginning: `set.seed(1234)`.
 - Use `here::here()` or `fs::path()` for file paths; never hard-code absolute paths.
 - This notebook is intended to execute strictly top-to-bottom. If an error occurs because a variable or function is missing, treat it as a code-ordering bug to fix (move/define earlier), not something to patch with conditional existence checks. The only intended execution variation is full dataset vs subset (pilot) size.
+- Do not add alternate render modes or branch the canonical report path based on display/output preferences. Figure embedding, table inclusion, artifact cleanup, and similar report behavior must have one canonical implementation.
+- The only sanctioned execution variation is dataset scope (`run_mode` with `pilot_frac`) plus machine-local path or resource controls that do not change analytical outputs.
 - The master Quarto notebook must remain fully self-contained.
 - All code required to run the notebook from start to finish must live in the `.qmd` itself.
 - Do not move essential execution logic into supplementary `.R`, `.qmd`, or helper source files if that would make the notebook non-portable.
@@ -160,7 +162,7 @@ is “fast enough” without compromising clarity.
 - When creating or modifying R functions, propose new or updated tests and indicate the command to run them (for example, `devtools::test()`).
 
 ## Standard operating procedures
-- Keep a persistent handoff log at `/Users/reblocke/Research/abg-vbg-project/WORKLOG.md`.
+- Keep a persistent handoff log at the repo-root `WORKLOG.md`.
 - Update `WORKLOG.md` after each substantial task, render, or debugging session so the current state does not depend on long chat history.
 - Each update should record:
   - date/time

@@ -5,8 +5,6 @@ editor: visual
 params:
   run_mode: "full" # options: "pilot" or "full"
   pilot_frac: 0.05 # used only when run_mode == "pilot"
-  mi_batch_threshold_pilot: 5000 # pilot-only batching threshold
-  mi_batch_threshold_full: 200000 # full-run batching threshold
   sample_seed: 20251206
   data_dir: "data"
   results_dir: "Results"
@@ -15,6 +13,11 @@ format:
     toc: true
     number-sections: true
     pdf-engine: lualatex
+    keep-tex: true
+    hyperrefoptions:
+      - draft
+    pdf-engine-opts:
+      - --cnf-line=dest_names_size=300000
     mainfont: "Latin Modern Roman"
     code-block-bg: false
     include-in-header:
@@ -28,10 +31,10 @@ format:
 header-includes:
   - \usepackage{float}
   - \usepackage{placeins}
-output-dir: "."
+  - \graphicspath{{../}{./}}
 fontsize: 11pt
 execute:
-  echo: true
+  echo: false
   message: false
   warning: false
 ---
@@ -61,6 +64,9 @@ stopifnot(
 # globally tighten gtsummary/gt tables (smaller font + tighter padding)
 gtsummary::theme_gtsummary_compact()
 
+project_root <- here::here()
+knitr::opts_knit$set(root.dir = project_root)
+
 # keep figures anchored in PDF to reduce heading-only/blank pages
 if (knitr::is_latex_output()) {
   knitr::opts_chunk$set(fig.pos = "H")
@@ -80,21 +86,57 @@ kable_pdf <- function(df, caption = NULL, font_size = 7) {
   kbl
 }
 
+# helper: resolve a notebook display path relative to the repo root so the
+# canonical render path never depends on the notebook subdirectory.
+display_path <- function(path, must_exist = TRUE) {
+  vapply(path, function(one_path) {
+    path_abs <- tryCatch(
+      fs::path_abs(one_path, start = project_root),
+      error = function(e) NA_character_
+    )
+    if (is.na(path_abs)) {
+      stop("Could not resolve display path: ", one_path)
+    }
+    if (must_exist && !file.exists(path_abs)) {
+      stop("Missing display artifact: ", path_abs)
+    }
+    if (!(fs::path_has_parent(path_abs, project_root) || identical(path_abs, project_root))) {
+      stop("Display path escapes project root: ", path_abs)
+    }
+    fs::path_rel(path_abs, start = project_root)
+  }, character(1), USE.NAMES = FALSE)
+}
+
 # helper: pretty, relative paths for PDF output
 pretty_path <- function(p) {
-  p_abs <- tryCatch(fs::path_abs(p, start = getwd()), error = function(e) NA_character_)
-  res_abs <- tryCatch(fs::path_abs(results_dir, start = getwd()), error = function(e) NA_character_)
-  if (!is.na(p_abs) && !is.na(res_abs)) {
-    if (fs::path_has_parent(p_abs, res_abs) || identical(p_abs, res_abs)) {
-      rel <- fs::path_rel(p_abs, res_abs)
-      return(fs::path("Results", rel))
+  vapply(p, function(one_path) {
+    out <- tryCatch(display_path(one_path, must_exist = FALSE)[[1]], error = function(e) NA_character_)
+    if (is.na(out) || out == "." || grepl("^\\.\\.", out)) {
+      return(basename(one_path))
     }
+    out
+  }, character(1), USE.NAMES = FALSE)
+}
+
+# helper: emit inline notebook graphics through one canonical path. For PDF
+# renders we cap the height explicitly so headings plus image can fit on the
+# page without triggering TeX pagination loops.
+render_inline_graphic <- function(file,
+                                  width = "0.94\\linewidth",
+                                  height = "0.72\\textheight") {
+  inline_path <- display_path(file)
+  if (knitr::is_latex_output()) {
+    out <- c(
+      "\\begin{center}",
+      sprintf(
+        "\\includegraphics[width=%s,height=%s,keepaspectratio]{%s}",
+        width, height, inline_path
+      ),
+      "\\end{center}"
+    )
+    return(knitr::asis_output(paste(out, collapse = "\n")))
   }
-  out <- tryCatch(fs::path_rel(p, start = getwd()), error = function(e) NA_character_)
-  if (is.na(out) || out == "." || grepl("^\\.\\.", out)) {
-    return(basename(p))
-  }
-  out
+  knitr::include_graphics(inline_path)
 }
 
 # helper: strip manual "Table X." prefixes in PDF to avoid double numbering
@@ -282,6 +324,27 @@ render_table_pdf_maybe <- function(df, caption, file_stub,
 
 # helper: render a standalone table PDF that can be cited outside the notebook.
 # This path is used for manuscript/supplement table artifacts with stable names.
+resolve_latex_command <- function(cmd = "pdflatex") {
+  cmd_path <- Sys.which(cmd)
+  if (nzchar(cmd_path)) return(cmd_path)
+
+  fallback <- fs::path(path.expand("~"), "Library", "TinyTeX", "bin", "universal-darwin", cmd)
+  if (file.exists(fallback)) {
+    tex_dir <- fs::path_dir(fallback)
+    current_path <- Sys.getenv("PATH", unset = "")
+    path_parts <- strsplit(current_path, .Platform$path.sep, fixed = TRUE)[[1]]
+    if (!tex_dir %in% path_parts) {
+      Sys.setenv(PATH = paste(c(tex_dir, current_path), collapse = .Platform$path.sep))
+    }
+    return(fallback)
+  }
+
+  stop(
+    "Required LaTeX command not found on PATH: ", cmd,
+    ". Install TinyTeX or expose the TeX bin directory before rendering."
+  )
+}
+
 write_standalone_table_pdf <- function(df, caption, file_stub,
                                        wide = FALSE,
                                        digits = 2,
@@ -349,9 +412,10 @@ write_standalone_table_pdf <- function(df, caption, file_stub,
   tex_file <- fs::path(build_dir, paste0(file_stub, ".tex"))
   writeLines(tex_doc, tex_file, useBytes = TRUE)
 
+  latex_cmd <- resolve_latex_command("pdflatex")
   latex_log <- tryCatch(
     system2(
-      "pdflatex",
+      latex_cmd,
       args = c(
         "-interaction=nonstopmode",
         "-halt-on-error",
@@ -521,17 +585,16 @@ ensure_packages_loaded <- function(pkgs) {
 ensure_packages_loaded(required_pkgs)
 
 # Centralize outputs under Results/, with paths relative to project root
-qmd_dir <- here::here("Code Drafts")
 data_dir_param <- Sys.getenv("ABGVBG_DATA_DIR", unset = params$data_dir)
 results_dir_param <- Sys.getenv("ABGVBG_RESULTS_DIR", unset = params$results_dir)
-data_dir_name <- fs::path_abs(data_dir_param, start = here::here())
-results_dir <- fs::path_abs(results_dir_param, start = here::here())
+data_dir_name <- fs::path_abs(data_dir_param, start = project_root)
+results_dir <- fs::path_abs(results_dir_param, start = project_root)
 if (!dir.exists(data_dir_name)) {
   stop("Data directory does not exist: ", data_dir_name)
 }
 fs::dir_create(results_dir, recurse = TRUE)
 fig_dir      <- fs::path(results_dir, "figs")
-fig_path     <- paste0(fs::path_rel(fig_dir, start = qmd_dir), "/")
+fig_path     <- paste0(display_path(fig_dir, must_exist = FALSE), "/")
 # helper: build paths under `Results/` from one canonical root so later code
 # never has to guess where artifacts should be written.
 results_path <- function(...) fs::path(results_dir, ...)
@@ -642,12 +705,15 @@ decorate_weighted_comparability <- function(built_graph, weighted_nodes,
   )
 }
 
-# helper: export the cohort-flow graph to both PNG and PDF while drawing the
-# same built grob on each device to avoid device-specific layout drift.
+# helper: export the cohort-flow graph to manuscript artifacts plus an optional
+# low-DPI inline preview while drawing the same built grob on each device to
+# avoid device-specific layout drift.
 save_cohort_flow_outputs <- function(graph, png_file, pdf_file,
                                      width_mm = 180, height_mm = 150,
                                      dpi = 600, bg = "white",
-                                     decorate_fn = NULL) {
+                                     decorate_fn = NULL,
+                                     preview_file = NULL,
+                                     preview_dpi = 96) {
   width_in <- width_mm / 25.4
   height_in <- height_mm / 25.4
   draw_graph <- function(new_page = TRUE) {
@@ -710,14 +776,29 @@ save_cohort_flow_outputs <- function(graph, png_file, pdf_file,
   draw_graph(new_page = FALSE)
   grDevices::dev.off()
 
+  if (!is.null(preview_file)) {
+    fs::dir_create(fs::path_dir(preview_file), recurse = TRUE)
+    ragg::agg_png(
+      filename = preview_file,
+      width = width_mm,
+      height = height_mm,
+      units = "mm",
+      res = preview_dpi,
+      background = bg
+    )
+    draw_graph(new_page = TRUE)
+    grDevices::dev.off()
+  }
+
   stopifnot(file.exists(png_file), file.exists(pdf_file))
+  if (!is.null(preview_file)) stopifnot(file.exists(preview_file))
   if (requireNamespace("pdftools", quietly = TRUE)) {
     pdf_pages <- tryCatch(pdftools::pdf_info(pdf_file)$pages, error = function(e) NA_integer_)
     if (is.finite(pdf_pages) && pdf_pages != 1L) {
       stop("Cohort flow PDF export should be 1 page, got ", pdf_pages, ".")
     }
   }
-  invisible(list(png = png_file, pdf = pdf_file))
+  invisible(list(png = png_file, pdf = pdf_file, preview = preview_file))
 }
 
 cohort_flow_input <- read_cohort_flow_input(cohort_flow_input_path)
@@ -802,8 +883,7 @@ save_cohort_flow_outputs(
     )
   }
 )
-flow_include <- if (knitr::is_latex_output() && file.exists(flow_pdf)) flow_pdf else flow_png
-knitr::include_graphics(flow_include)
+render_inline_graphic(flow_png)
 ```
 
 ```{r setup-run-config}
@@ -811,8 +891,6 @@ knitr::include_graphics(flow_include)
 # Purpose: setup run config.
 stopifnot(!is.null(params$run_mode))
 stopifnot(!is.null(params$pilot_frac))
-stopifnot(!is.null(params$mi_batch_threshold_pilot))
-stopifnot(!is.null(params$mi_batch_threshold_full))
 stopifnot(!is.null(params$sample_seed))
 
 RUN_MODE <- match.arg(tolower(params$run_mode), c("pilot", "full"))
@@ -834,12 +912,9 @@ stopifnot(is.finite(SAMPLE_SEED))
 
 pilot_frac <- PILOT_FRAC
 FULL_RUN <- identical(RUN_MODE, "full")
-SHOW_LOW_VALUE_TABLES <- FALSE
-MI_BATCH_THRESHOLD <- if (IS_PILOT) {
-  as.integer(params$mi_batch_threshold_pilot)
-} else {
-  as.integer(params$mi_batch_threshold_full)
-}
+MI_BATCH_THRESHOLD_PILOT <- 5000L
+MI_BATCH_THRESHOLD_FULL <- 200000L
+MI_BATCH_THRESHOLD <- if (IS_PILOT) MI_BATCH_THRESHOLD_PILOT else MI_BATCH_THRESHOLD_FULL
 stopifnot(is.finite(MI_BATCH_THRESHOLD), MI_BATCH_THRESHOLD > 0)
 PLOT_DROP_POLICY <- "warn"
 PROB_EPS <- 1e-6
@@ -850,7 +925,6 @@ TAIL_N_FINITE <- 5L
 TAIL_WINDOW_ITERS <- 10L
 BAL_XLIM_MAX <- 1.0
 MC_ERR_RATIO_THRESH <- 0.10
-SHOW_CHUNK_RUNTIME_TEXT <- FALSE
 MAX_LEVELS_GBM <- 50L
 GBM_MM_EST_BYTES_WARN <- 6e9
 MAX_GBM_MM_COLS_WARN <- 200L
@@ -951,7 +1025,7 @@ cleanup_diagnostics_outputs <- function() {
   fs::file_delete(to_delete)
 
   diag_figs <- list.files(fig_dir, full.names = TRUE)
-  diag_figs <- diag_figs[grepl("^(diag-|or-plot|ps-)", basename(diag_figs))]
+  diag_figs <- diag_figs[grepl("^(diag-|or-plot|ps-)|-report-preview\\.png$", basename(diag_figs))]
   if (length(diag_figs)) {
     safe_root <- normalizePath(results_dir, winslash = "/", mustWork = FALSE)
     del_paths <- normalizePath(diag_figs, winslash = "/", mustWork = FALSE)
@@ -972,18 +1046,9 @@ cleanup_diagnostics_outputs <- function() {
   }
 }
 
-# helper: allow a user or debugging session to preserve large MI scratch files
-# across renders when they are explicitly investigating an MI issue.
-keep_mi_transient_outputs <- function() {
-  flag <- tolower(Sys.getenv("KEEP_MI_TRANSIENT", unset = ""))
-  isTRUE(getOption("abgvbg.keep_mi_transient", FALSE)) ||
-    flag %in% c("1", "true", "yes", "y")
-}
-
 # helper: remove heavyweight MI scratch artifacts after successful renders so
 # routine notebook runs do not silently accumulate stale intermediate objects.
 cleanup_mi_transient_outputs <- function() {
-  if (keep_mi_transient_outputs()) return(invisible(FALSE))
 
   transient_files <- c(
     results_path("mi_abg_vbg_mids.rds"),
@@ -1826,12 +1891,14 @@ register_plot_file <- function(plot_name, file, run_id = diag_run_id, run_ts = d
 print_plot_once <- function(p, plot_name, width = 8, height = 6, dpi = 300) {
   file_png <- results_path("figs", paste0(plot_name, ".png"))
   file_pdf <- results_path("figs", paste0(plot_name, ".pdf"))
+  file_preview <- results_path("figs", paste0(plot_name, "-report-preview.png"))
   save_diag_plot(p, file_png, width = width, height = height, dpi = dpi)
   save_diag_plot(p, file_pdf, width = width, height = height, dpi = dpi)
-  display_file <- if (knitr::is_latex_output()) file_pdf else file_png
+  # Use a lighter inline preview while keeping manuscript artifacts high resolution.
+  save_diag_plot(p, file_preview, width = width, height = height, dpi = min(dpi, 96))
   if (register_plot_file(plot_name, file_png)) {
     mark_float_emitted()
-    knitr::include_graphics(display_file)
+    render_inline_graphic(file_preview)
   } else {
     invisible(NULL)
   }
@@ -1908,14 +1975,15 @@ write_table_alias <- function(file_stub, alias_stub,
 # already emitted the same named artifact.
 print_plot_force <- function(p, plot_name, width = 8, height = 6, dpi = 300) {
   # Use this for key publication figures that must always appear in the PDF.
-  # We still register file metadata, but we never suppress the on-page display.
   file_png <- results_path("figs", paste0(plot_name, ".png"))
   file_pdf <- results_path("figs", paste0(plot_name, ".pdf"))
+  file_preview <- results_path("figs", paste0(plot_name, "-report-preview.png"))
   save_diag_plot(p, file_png, width = width, height = height, dpi = dpi)
   save_diag_plot(p, file_pdf, width = width, height = height, dpi = dpi)
+  save_diag_plot(p, file_preview, width = width, height = height, dpi = min(dpi, 96))
   register_plot_file(plot_name, file_png)
   mark_float_emitted()
-  knitr::include_graphics(if (knitr::is_latex_output()) file_pdf else file_png)
+  render_inline_graphic(file_preview)
 }
 
 # helper: map a model-matrix term back to its parent feature so SHAP fallbacks
@@ -3270,33 +3338,8 @@ if (RUN_SHAP && !HAS_FASTSHAP) {
 
 ```{r runtime-hooks}
 #| include: true
-# Chunk runtime annotation (printed into PDF) - disabled by default
-if (isTRUE(SHOW_CHUNK_RUNTIME_TEXT)) {
-  knitr::knit_hooks$set(runtimelog = local({
-    starts <- list()
-    escape_latex <- function(x) {
-      gsub("([\\\\%$&#{}_\\^~])", "\\\\\\1", x, perl = TRUE)
-    }
-    function(before, options) {
-      if (before) {
-        starts[[options$label]] <<- proc.time()
-      } else {
-        st <- starts[[options$label]]
-        if (is.null(st)) return(NULL)
-        elapsed <- (proc.time() - st)[["elapsed"]]
-        lbl <- escape_latex(options$label)
-        paste0(
-          "\n\n",
-          "\\textit{Chunk ", lbl, " runtime: ", sprintf("%.2f", elapsed), " s}",
-          "\n\n"
-        )
-      }
-    }
-  }))
-  knitr::opts_chunk$set(runtimelog = TRUE)
-} else {
-  knitr::opts_chunk$set(runtimelog = FALSE)
-}
+# The canonical report path does not inject per-chunk runtime text into the PDF.
+knitr::opts_chunk$set(runtimelog = FALSE)
 ```
 
 ```{r seed-escrow}
@@ -3822,6 +3865,71 @@ x_ref_vbg <- make_ref_profile(
 )
 ```
 
+```{r machine-resource-controls}
+#| code-block-title: "Machine-local resource controls"
+#| echo: true
+# Purpose: detect machine-local execution resources without changing analysis outputs.
+parse_positive_int_env <- function(env_name) {
+  raw_val <- trimws(Sys.getenv(env_name, unset = ""))
+  if (!nzchar(raw_val)) return(NULL)
+  parsed_val <- suppressWarnings(as.integer(raw_val))
+  if (is.na(parsed_val) || parsed_val <= 0L) {
+    stop(env_name, " must be a positive integer when set; got: '", raw_val, "'.")
+  }
+  parsed_val
+}
+
+detect_physical_ram_gb <- function(default_gb = 8L) {
+  override_val <- parse_positive_int_env("ABGVBG_MI_RAM_GB")
+  if (!is.null(override_val)) {
+    return(list(value = override_val, source = "env:ABGVBG_MI_RAM_GB"))
+  }
+
+  sys_name <- Sys.info()[["sysname"]]
+  ram_bytes <- NA_real_
+  if (identical(sys_name, "Darwin")) {
+    sysctl_out <- tryCatch(
+      system2("sysctl", c("-n", "hw.memsize"), stdout = TRUE, stderr = FALSE),
+      error = function(e) character()
+    )
+    if (length(sysctl_out) >= 1L) ram_bytes <- suppressWarnings(as.numeric(sysctl_out[[1L]]))
+  } else if (identical(sys_name, "Linux")) {
+    meminfo_path <- "/proc/meminfo"
+    if (file.exists(meminfo_path)) {
+      meminfo_line <- readLines(meminfo_path, n = 1L, warn = FALSE)
+      ram_kb <- suppressWarnings(as.numeric(gsub("[^0-9]", "", meminfo_line)))
+      if (is.finite(ram_kb)) ram_bytes <- ram_kb * 1024
+    }
+  }
+
+  if (!is.finite(ram_bytes) || ram_bytes <= 0) {
+    return(list(value = as.integer(default_gb), source = "default"))
+  }
+
+  ram_gb <- max(1L, as.integer(floor(ram_bytes / (1024^3))))
+  list(value = ram_gb, source = paste0("auto:", sys_name))
+}
+
+choose_mi_batch_start <- function(ram_gb) {
+  if (!is.finite(ram_gb) || ram_gb <= 0) stop("ram_gb must be a positive finite value.")
+  if (ram_gb <= 8L) return(1L)
+  if (ram_gb <= 16L) return(2L)
+  5L
+}
+
+mi_ram_info <- detect_physical_ram_gb(default_gb = 8L)
+MI_RAM_GB <- mi_ram_info$value
+MI_RAM_GB_SOURCE <- mi_ram_info$source
+MI_BATCH_START_OVERRIDE <- parse_positive_int_env("ABGVBG_MI_BATCH_START")
+if (!is.null(MI_BATCH_START_OVERRIDE)) {
+  MI_BATCH_START <- MI_BATCH_START_OVERRIDE
+  MI_BATCH_START_SOURCE <- "env:ABGVBG_MI_BATCH_START"
+} else {
+  MI_BATCH_START <- choose_mi_batch_start(MI_RAM_GB)
+  MI_BATCH_START_SOURCE <- paste0("auto:", MI_RAM_GB_SOURCE)
+}
+```
+
 ```{r run-metadata}
 #| code-block-title: "Run metadata"
 #| results: "asis"
@@ -3830,7 +3938,11 @@ run_meta <- tibble::tibble(
   run_id     = diag_run_id,
   run_mode   = RUN_MODE,
   pilot_frac = PILOT_FRAC,
+  mi_ram_gb  = MI_RAM_GB,
+  mi_ram_gb_source = MI_RAM_GB_SOURCE,
   mi_batch_threshold = MI_BATCH_THRESHOLD,
+  mi_batch_start = MI_BATCH_START,
+  mi_batch_start_source = MI_BATCH_START_SOURCE,
   full_n     = nrow(stata_data),
   sampled_n  = sampled_n,
   subset_n   = nrow(subset_data)
@@ -3846,7 +3958,11 @@ run_cfg <- list(
   run_id = diag_run_id,
   run_mode = RUN_MODE,
   pilot_frac = PILOT_FRAC,
+  mi_ram_gb = MI_RAM_GB,
+  mi_ram_gb_source = MI_RAM_GB_SOURCE,
   mi_batch_threshold = MI_BATCH_THRESHOLD,
+  mi_batch_start = MI_BATCH_START,
+  mi_batch_start_source = MI_BATCH_START_SOURCE,
   data_dir = data_dir_name,
   results_dir = results_dir,
   full_n = nrow(stata_data),
@@ -3858,7 +3974,11 @@ json_lines <- c(
   paste0("  \"run_id\": \"", json_escape(run_cfg$run_id), "\","),
   paste0("  \"run_mode\": \"", json_escape(run_cfg$run_mode), "\","),
   paste0("  \"pilot_frac\": ", run_cfg$pilot_frac, ","),
+  paste0("  \"mi_ram_gb\": ", run_cfg$mi_ram_gb, ","),
+  paste0("  \"mi_ram_gb_source\": \"", json_escape(run_cfg$mi_ram_gb_source), "\","),
   paste0("  \"mi_batch_threshold\": ", run_cfg$mi_batch_threshold, ","),
+  paste0("  \"mi_batch_start\": ", run_cfg$mi_batch_start, ","),
+  paste0("  \"mi_batch_start_source\": \"", json_escape(run_cfg$mi_batch_start_source), "\","),
   paste0("  \"data_dir\": \"", json_escape(run_cfg$data_dir), "\","),
   paste0("  \"results_dir\": \"", json_escape(run_cfg$results_dir), "\","),
   paste0("  \"full_n\": ", run_cfg$full_n, ","),
@@ -4806,7 +4926,7 @@ render_table_pdf_maybe(
   file_stub = "table_s2_crude_threelevel",
   wide = TRUE,
   digits = 2,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 
 ```
@@ -5967,7 +6087,7 @@ render_table_pdf_maybe(
   file_stub = "table_s3_gbm_threelevel",
   wide = TRUE,
   digits = 2,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 
 ```
@@ -6406,8 +6526,8 @@ MAX_LEVELS_PRED <- 100L
 COR_SAMPLE_N <- 50000L
 MI_MAX_BYTES <- 8e9
 
-MI_RAM_GB <- 16L
-MI_BATCH_START <- ifelse(MI_RAM_GB <= 16, 2L, 5L)
+stopifnot(exists("MI_RAM_GB"), exists("MI_BATCH_START"))
+stopifnot(is.finite(MI_RAM_GB), MI_RAM_GB > 0, MI_BATCH_START >= 1L)
 MI_BATCH_MIN <- 1L
 MI_BATCH_SEED_STRIDE <- 100000L
 MI_GC_EVERY_BATCH <- TRUE
@@ -6641,7 +6761,7 @@ render_table_pdf_maybe(
   caption = "Missingness by key strata (pre-imputation).",
   file_stub = "missingness_by_strata",
   digits = 1,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 
 ```
@@ -6754,7 +6874,7 @@ if (nrow(model_results) > 0) {
     caption = "Predictors of missingness (logit OR).",
     file_stub = "missingness-drivers",
     digits = 2,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 } else {
   model_results_stub <- data.frame(
@@ -7356,6 +7476,16 @@ run_mice_batched <- function(m_total, m_batch_start, maxit, base_seed) {
   batch_log <- list()
   logged_events_acc <- list()
 
+  write_batch_log <- function(extra_rows = NULL) {
+    rows_out <- batch_log
+    if (!is.null(extra_rows)) rows_out[[length(rows_out) + 1L]] <- extra_rows
+    if (length(rows_out) == 0L) {
+      write_csv_safely(data.frame(), results_path("mice_batches_log.csv"), row_names = FALSE)
+    } else {
+      write_csv_safely(dplyr::bind_rows(rows_out), results_path("mice_batches_log.csv"), row_names = FALSE)
+    }
+  }
+
   while (m_done < m_total) {
     if (MI_GC_EVERY_BATCH) invisible(gc())
     mem_stats <- get_vcells_stats()
@@ -7374,7 +7504,30 @@ run_mice_batched <- function(m_total, m_batch_start, maxit, base_seed) {
     message("MICE batch ", batch_attempt_idx, " (m=", m_b, ", seed=", seed_b, ")")
 
     t0 <- Sys.time()
+    m_done_before <- m_done
     mem_pre <- get_vcells_stats()
+    batch_started_row <- data.frame(
+      batch = batch_attempt_idx,
+      m_batch = m_b,
+      seed = seed_b,
+      status = "started",
+      ok = NA,
+      error_message = NA_character_,
+      started_at = as.character(t0),
+      finished_at = NA_character_,
+      m_done_before = m_done_before,
+      m_done_after = NA_integer_,
+      seconds = NA_real_,
+      gc_vcells_used_mb_pre = mem_pre$gc_vcells_used_mb,
+      gc_vcells_limit_mb_pre = mem_pre$gc_vcells_limit_mb,
+      gc_vcells_frac_pre = mem_pre$gc_vcells_frac,
+      gc_vcells_used_mb_post = NA_real_,
+      gc_vcells_limit_mb_post = NA_real_,
+      gc_vcells_frac_post = NA_real_,
+      stringsAsFactors = FALSE
+    )
+    write_batch_log(batch_started_row)
+
     cap <- capture_warnings(
       tryCatch(
         runtime_logger(
@@ -7414,8 +7567,13 @@ run_mice_batched <- function(m_total, m_batch_start, maxit, base_seed) {
         batch = batch_attempt_idx,
         m_batch = m_b,
         seed = seed_b,
+        status = "failed",
         ok = FALSE,
         error_message = err_msg,
+        started_at = as.character(t0),
+        finished_at = as.character(Sys.time()),
+        m_done_before = m_done_before,
+        m_done_after = m_done_before,
         seconds = as.numeric(difftime(Sys.time(), t0, units = "secs")),
         gc_vcells_used_mb_pre = mem_pre$gc_vcells_used_mb,
         gc_vcells_limit_mb_pre = mem_pre$gc_vcells_limit_mb,
@@ -7425,13 +7583,13 @@ run_mice_batched <- function(m_total, m_batch_start, maxit, base_seed) {
         gc_vcells_frac_post = mem_stats$gc_vcells_frac,
         stringsAsFactors = FALSE
       )
+      write_batch_log()
       if (grepl("vector memory limit", err_msg, fixed = TRUE) && m_batch > MI_BATCH_MIN) {
         m_batch <- max(MI_BATCH_MIN, floor(m_batch / 2))
         message("Reducing MI batch size to ", m_batch, " and retrying.")
         invisible(gc())
         next
       }
-      write_csv_safely(dplyr::bind_rows(batch_log), results_path("mice_batches_log.csv"), row_names = FALSE)
       stop("MICE batch ", batch_attempt_idx, " failed; see log: ", results_path("mice_batches_log.csv"))
     }
 
@@ -7459,8 +7617,13 @@ run_mice_batched <- function(m_total, m_batch_start, maxit, base_seed) {
       batch = batch_attempt_idx,
       m_batch = m_b,
       seed = seed_b,
+      status = "completed",
       ok = TRUE,
       error_message = NA_character_,
+      started_at = as.character(t0),
+      finished_at = as.character(Sys.time()),
+      m_done_before = m_done_before,
+      m_done_after = m_done,
       seconds = as.numeric(difftime(Sys.time(), t0, units = "secs")),
       gc_vcells_used_mb_pre = mem_pre$gc_vcells_used_mb,
       gc_vcells_limit_mb_pre = mem_pre$gc_vcells_limit_mb,
@@ -7470,6 +7633,7 @@ run_mice_batched <- function(m_total, m_batch_start, maxit, base_seed) {
       gc_vcells_frac_post = mem_stats$gc_vcells_frac,
       stringsAsFactors = FALSE
     )
+    write_batch_log()
     rm(imp_b)
     if (MI_GC_EVERY_BATCH) invisible(gc())
 
@@ -7495,7 +7659,7 @@ run_mice_batched <- function(m_total, m_batch_start, maxit, base_seed) {
     }
   }
 
-  write_csv_safely(dplyr::bind_rows(batch_log), results_path("mice_batches_log.csv"), row_names = FALSE)
+  write_batch_log()
   log_events_raw_batched <- dplyr::bind_rows(logged_events_acc)
   attr(imp_acc, "logged_events_batched") <- log_events_raw_batched
   imp_acc
@@ -8089,7 +8253,7 @@ if (length(mc_key_terms)) {
     caption = paste0("MC error QC (key terms only; threshold = ", MC_ERR_RATIO_THRESH, ")"),
     file_stub = "mc_error_qc_key_terms",
     digits = 3,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
   if (any(mc_key$qc_flag, na.rm = TRUE)) {
     knitr::asis_output(
@@ -8302,7 +8466,7 @@ if (nrow(mi_obs_imp_summary)) {
     caption = "Observed vs imputed summaries",
     file_stub = "mi_obs_vs_imp_summary",
     digits = 3,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 } else {
   mi_obs_imp_stub <- data.frame(
@@ -8449,7 +8613,7 @@ render_table_pdf_maybe(
   caption = "MC error progress by m (early-stop diagnostic)",
   file_stub = "mi_mcerr_progress",
   digits = 3,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 ```
 
@@ -8468,7 +8632,7 @@ render_table_pdf_maybe(
   caption = "Missingness after MI (completed data)",
   file_stub = "missingness_after_mi",
   digits = 2,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 
 # 2) Bar plot of top-K (mostly zeros after imputation)
@@ -9896,7 +10060,7 @@ render_table_pdf_maybe(
   caption = "ABG MI-logistic IPSW weight diagnostics (median across imputations)",
   file_stub = "mi_weight_diag_abg_summary",
   digits = 3,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 stopifnot(all(is.finite(mi_weight_diag_abg_df$ess)))
 ```
@@ -9947,7 +10111,7 @@ render_table_pdf_maybe(
   caption = "ABG MI-logistic IPSW target SMD rows across imputations (sorted by |SMD|)",
   file_stub = "abg_worst_target_smd_rows",
   digits = 3,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 
 abg_imp_summary <- bal_imp_abg$bal_imp_summary |>
@@ -9961,7 +10125,7 @@ render_table_pdf_maybe(
   caption = "ABG MI-logistic IPSW max |Target SMD| summary across imputations",
   file_stub = "abg_target_smd_summary",
   digits = 3,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 ```
 
@@ -9994,7 +10158,7 @@ render_table_pdf_maybe(
   caption = "VBG MI-logistic IPSW weight diagnostics (median across imputations)",
   file_stub = "mi_weight_diag_vbg_summary",
   digits = 3,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 stopifnot(all(is.finite(mi_weight_diag_vbg_df$ess)))
 ```
@@ -10036,7 +10200,7 @@ render_table_pdf_maybe(
   caption = "VBG MI-logistic IPSW target SMD rows across imputations (sorted by |SMD|)",
   file_stub = "vbg_worst_target_smd_rows",
   digits = 3,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 
 vbg_imp_summary <- bal_imp_vbg$bal_imp_summary |>
@@ -10050,7 +10214,7 @@ render_table_pdf_maybe(
   caption = "VBG MI-logistic IPSW max |Target SMD| summary across imputations",
   file_stub = "vbg_target_smd_summary",
   digits = 3,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 ```
 
@@ -11351,7 +11515,7 @@ flow_tbl <- tibble::tibble(
   )
 )
 render_table_pdf_maybe(flow_tbl, "Cohort flow summary", "cohort_flow_summary",
-                       digits = 0, show = SHOW_LOW_VALUE_TABLES)
+                       digits = 0, show = FALSE)
 
 # Event counts by cohort
 outcome_vars <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
@@ -11384,7 +11548,7 @@ event_tbl <- event_tbl |>
 render_table_pdf_maybe(event_tbl,
                        "Outcome counts by cohort (ABG/VBG tested)",
                        "outcome_counts_by_cohort",
-                       digits = 1, show = SHOW_LOW_VALUE_TABLES)
+                       digits = 1, show = FALSE)
 
 # Weighting diagnostics (non‑MI weights)
 stopifnot(all(c("w_abg", "w_vbg", "ps_abg", "ps_vbg") %in% names(subset_data)))
@@ -11414,7 +11578,7 @@ render_table_pdf_maybe(wt_sum_display,
                        "weighting_diagnostics_non_mi",
                        wide = TRUE,
                        digits = 3,
-                       show = SHOW_LOW_VALUE_TABLES)
+                       show = FALSE)
 
 # Missingness + MI spec summary
 miss_vars <- c(covars_ps, "paco2", "vbg_co2",
@@ -11428,7 +11592,7 @@ render_table_pdf_maybe(miss_tbl,
                        "Variables by missingness (pre‑imputation)",
                        "missingness_all",
                        digits = 1,
-                       show = SHOW_LOW_VALUE_TABLES)
+                       show = FALSE)
 
 mi_spec_tbl <- tibble::tibble(
   m = imp$m,
@@ -11441,7 +11605,7 @@ mi_spec_tbl <- tibble::tibble(
 render_table_pdf_maybe(mi_spec_tbl,
                        "MI specification (methods used)",
                        "mi_specification",
-                       show = SHOW_LOW_VALUE_TABLES)
+                       show = FALSE)
 ```
 
 ```{r}
@@ -12307,7 +12471,7 @@ render_table_pdf_maybe(
   caption = "GBM IPSW vs MI-logistic IPSW output parity (artifacts present in only one track)",
   file_stub = "ipw_output_parity_one_sided",
   digits = 0,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 ```
 
@@ -12501,17 +12665,16 @@ manifest_row <- function(label) {
   row
 }
 
-# helper: resolve the display-ready figure path for one manifest label,
-# preferring PDF for LaTeX output and falling back to PNG if needed.
+# helper: resolve the display-ready figure path for one manifest label.
+# LaTeX/PDF renders must fail fast if the manuscript PDF artifact is missing.
 manifest_figure_path <- function(label) {
   row <- manifest_row(label)
   ext <- if (knitr::is_latex_output()) "pdf" else "png"
   stub <- if (!is.na(row$alias_stub) && nzchar(row$alias_stub)) row$alias_stub else row$canonical_stub
   subdir <- if (!is.na(row$alias_subdir) && nzchar(row$alias_subdir)) row$alias_subdir else row$canonical_subdir
   path <- artifact_file_path(stub, ext, subdir)
-  if (!file.exists(path)) {
-    fallback_ext <- if (identical(ext, "pdf")) "png" else ext
-    path <- artifact_file_path(stub, fallback_ext, subdir)
+  if (knitr::is_latex_output() && !file.exists(path)) {
+    stop("Missing PDF display artifact for ", label, ": ", path)
   }
   if (!file.exists(path)) stop("Missing display artifact for ", label, ": ", path)
   path
@@ -12525,7 +12688,7 @@ render_manuscript_figure <- function(label, width = "0.88\\linewidth") {
   caption_text <- paste0(label, ". ", row$title)
   if (knitr::is_latex_output()) {
     latex_caption <- escape_latex_text(caption_text)
-    latex_path <- fs::path_rel(fig_path, start = qmd_dir)
+    latex_path <- display_path(fig_path)
     out <- c(
       "\\clearpage",
       "\\begin{center}",
@@ -12540,7 +12703,7 @@ render_manuscript_figure <- function(label, width = "0.88\\linewidth") {
     knitr::asis_output(paste(out, collapse = "\n"))
   } else {
     knitr::asis_output(
-      paste0("![](", pretty_path(fig_path), ")\n\n*", caption_text, "*\n")
+      paste0("![](", display_path(fig_path), ")\n\n*", caption_text, "*\n")
     )
   }
 }
@@ -12834,7 +12997,7 @@ if (nrow(log_events_summary) && !("empty" %in% names(log_events_summary) && all(
     caption = "Logged events (MI)",
     file_stub = "mice_logged_events_summary",
     digits = 0,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 
   stopifnot(all(c("variable", "n") %in% names(log_events_summary)))
@@ -12881,7 +13044,7 @@ if (nrow(top_flagged)) {
     caption = "MICE chain diagnostics (flagged drift)",
     file_stub = "mice_chain_diagnostics_flagged",
     digits = 3,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 } else {
   message("No flagged drift in chain diagnostics.")
@@ -12895,7 +13058,7 @@ if (nrow(top_tail_na)) {
     caption = "MICE chain diagnostics (tail NA fraction)",
     file_stub = "mice_chain_diagnostics_tail_na",
     digits = 3,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 }
 
@@ -13257,7 +13420,7 @@ render_table_pdf_maybe(
   caption = "GBM IPSW propensity-score overlap summary (tested cohort)",
   file_stub = "ps_overlap_summary",
   digits = 3,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 
 wt_df <- bind_rows(
@@ -13337,7 +13500,7 @@ render_table_pdf_maybe(
   caption = "GBM IPSW target balance by covariate (sorted by max |SMD|)",
   file_stub = "balance_worst",
   digits = 3,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 
 bal_plot_df <- bal_target |>
@@ -13386,7 +13549,7 @@ render_table_pdf_maybe(
   caption = "MI-logistic IPSW target SMD rows across imputations (sorted by |SMD|)",
   file_stub = "balance_target_worst_rows",
   digits = 3,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 write_csv_safely(worst_by_imp, results_path("balance_max_smd_by_imp.csv"), row_names = FALSE)
 write_csv_safely(worst_terms_by_imp, results_path("balance_worst_terms.csv"), row_names = FALSE)
@@ -13407,7 +13570,7 @@ if (nrow(bal_imp_summary)) {
     caption = "Distribution of max |Target SMD| across MI-logistic IPSW imputations",
     file_stub = "balance_target_max_smd_distribution",
     digits = 3,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 }
 if (nrow(worst_terms_by_imp)) {
@@ -13419,7 +13582,7 @@ if (nrow(worst_terms_by_imp)) {
     caption = "Most frequent worst-balance terms under MI-logistic IPSW",
     file_stub = "balance_worst_terms_freq",
     digits = 0,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 }
 
@@ -13668,7 +13831,7 @@ render_table_pdf_maybe(diag_summary_display,
                        "diagnostics_summary_display",
                        wide = TRUE,
                        digits = 3,
-                       show = SHOW_LOW_VALUE_TABLES)
+                       show = FALSE)
 
 audit_lines <- c(
   "# Diagnostics Audit",
@@ -13718,7 +13881,7 @@ if (nrow(warn_df)) {
     caption = "Warning messages by stage/component",
     file_stub = "warnings_by_stage_component",
     digits = 0,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 
   nonconv <- warn_df |>
@@ -13731,7 +13894,7 @@ if (nrow(warn_df)) {
       caption = "Nonconvergence contexts",
       file_stub = "nonconvergence_contexts",
       digits = 0,
-      show = SHOW_LOW_VALUE_TABLES
+      show = FALSE
     )
   }
 } else {
@@ -13768,7 +13931,7 @@ if (nrow(nonconv)) {
     caption = "Nonconverged fits by variant/group/outcome",
     file_stub = "nonconverged_fits_by_variant",
     digits = 0,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 
   worst_imps <- nonconv |>
@@ -13778,7 +13941,7 @@ if (nrow(nonconv)) {
     caption = "Imputations with most nonconverged fits",
     file_stub = "nonconverged_imputations",
     digits = 0,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 } else {
   message("No nonconverged outcome fits recorded.")
@@ -13792,7 +13955,7 @@ if (nrow(sep)) {
     caption = "Separation flags by variant/group/outcome",
     file_stub = "separation_flags_by_variant",
     digits = 0,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 } else {
   message("No separation flags recorded.")
@@ -13808,7 +13971,7 @@ if (nrow(worst_phat)) {
     caption = "Worst fitted-probability extremes",
     file_stub = "worst_phat_extremes",
     digits = 3,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 }
 
@@ -13847,7 +14010,7 @@ if (nrow(mi_warn_log)) {
     caption = "Warnings by stage/component",
     file_stub = "warnings_by_stage_component_full",
     digits = 0,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 }
 
@@ -13859,68 +14022,11 @@ if (nrow(log_events_summary)) {
     caption = "MICE loggedEvents drivers",
     file_stub = "mice_logged_events_drivers",
     digits = 0,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 }
 
-# Replay debug mode (off by default)
-MI_DEBUG_REPLAY <- FALSE
-if (MI_DEBUG_REPLAY) {
-  stopifnot(file.exists(results_path("model_fit_diagnostics.csv")))
-  diag_df <- read.csv(results_path("model_fit_diagnostics.csv"), stringsAsFactors = FALSE)
-  bad <- diag_df[isFALSE(diag_df$converged), , drop = FALSE]
-  if (nrow(bad)) {
-    row <- bad[1, , drop = FALSE]
-    message("Replaying: group=", row$group, ", outcome=", row$outcome,
-            ", model_type=", row$model_type, ", imputation=", row$imputation)
-    options(warn = 1)
-    stopifnot(exists("imp"))
-    get_imp <- function(i, imp_obj = imp) {
-      normalize_types(mice::complete(imp_obj, action = i), levels_ref)
-    }
-    d_dbg <- get_imp(row$imputation)
-    if (row$group == "ABG") {
-      keep_dbg <- d_dbg$has_abg == 1 & is.finite(d_dbg$paco2)
-      w_dbg <- get_mi_weight("ABG", row$imputation)[keep_dbg]
-      d_dbg <- d_dbg[keep_dbg, , drop = FALSE]
-      if (row$model_type == "spline") {
-        d_dbg <- d_dbg[, c(row$outcome, "has_abg", "paco2", adj_core), drop = FALSE]
-        fit_spline_imp(d_dbg, w_dbg, row$outcome, "paco2", "has_abg",
-                       adj_vars = adj_core, spline_df = SPLINE_DF, spline_basis = SPLINE_BASIS,
-                       grid_df = NULL, ref_idx = NULL, imp_index = row$imputation)
-      } else {
-        d_dbg$co2_cat <- make_co2_cat3(d_dbg$paco2, ABG_CO2_LOW, ABG_CO2_HIGH)
-        d_dbg$co2_cat <- stats::relevel(base::droplevels(d_dbg$co2_cat), ref = "Normal")
-        d_dbg[[row$outcome]] <- to01(d_dbg[[row$outcome]])
-        des <- survey::svydesign(ids = ~1, weights = ~w_dbg, data = d_dbg)
-        fml <- stats::reformulate(c("co2_cat", adj_core), response = row$outcome)
-        survey::svyglm(fml, design = des, family = quasibinomial(),
-                       control = stats::glm.control(maxit = 50))
-      }
-    } else if (row$group == "VBG") {
-      keep_dbg <- d_dbg$has_vbg == 1 & is.finite(d_dbg$vbg_co2)
-      w_dbg <- get_mi_weight("VBG", row$imputation)[keep_dbg]
-      d_dbg <- d_dbg[keep_dbg, , drop = FALSE]
-      if (row$model_type == "spline") {
-        d_dbg <- d_dbg[, c(row$outcome, "has_vbg", "vbg_co2", adj_core), drop = FALSE]
-        fit_spline_imp(d_dbg, w_dbg, row$outcome, "vbg_co2", "has_vbg",
-                       adj_vars = adj_core, spline_df = SPLINE_DF, spline_basis = SPLINE_BASIS,
-                       grid_df = NULL, ref_idx = NULL, imp_index = row$imputation)
-      } else {
-        d_dbg$co2_cat <- make_co2_cat3(d_dbg$vbg_co2, VBG_CO2_LOW, VBG_CO2_HIGH)
-        d_dbg$co2_cat <- stats::relevel(base::droplevels(d_dbg$co2_cat), ref = "Normal")
-        d_dbg[[row$outcome]] <- to01(d_dbg[[row$outcome]])
-        des <- survey::svydesign(ids = ~1, weights = ~w_dbg, data = d_dbg)
-        fml <- stats::reformulate(c("co2_cat", adj_core), response = row$outcome)
-        survey::svyglm(fml, design = des, family = quasibinomial(),
-                       control = stats::glm.control(maxit = 50))
-      }
-    }
-    options(warn = 0)
-  } else {
-    message("MI_DEBUG_REPLAY=TRUE but no nonconverged rows found.")
-  }
-}
+# Replay debugging is intentionally omitted from the canonical render path.
 ```
 
 ### Performance / runtime log
@@ -13944,7 +14050,7 @@ render_table_pdf_maybe(
   caption = "Runtime steps (seconds)",
   file_stub = "runtime_steps",
   digits = 3,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 
 total_seconds <- sum(runtime_log_curr$seconds, na.rm = TRUE)
@@ -13961,7 +14067,7 @@ render_table_pdf_maybe(
   caption = "Runtime summary (total + all steps)",
   file_stub = "runtime_summary",
   digits = 3,
-  show = SHOW_LOW_VALUE_TABLES
+  show = FALSE
 )
 
 # GBM preflight diagnostics (CSV only)
@@ -13981,7 +14087,7 @@ if (is.finite(PILOT_FRAC) && PILOT_FRAC > 0 && PILOT_FRAC < 1) {
     caption = paste0("Runtime projection (scalable steps; pilot_frac = ", PILOT_FRAC, ")"),
     file_stub = "runtime_projection",
     digits = 3,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
   if (is.finite(proj_total) && proj_total > 10) {
     warning("Projected full-run time exceeds 10 hours (", round(proj_total, 1), "h).",
@@ -14119,7 +14225,7 @@ if (file.exists(audit_issues)) {
     caption = "Diagnostics audit issues (see Results/diagnostics_audit.md for details)",
     file_stub = "diagnostics_audit_issues",
     digits = 2,
-    show = SHOW_LOW_VALUE_TABLES
+    show = FALSE
   )
 } else {
   cat("Diagnostics audit summary not available.\n")
@@ -14170,67 +14276,35 @@ cat("Software: R ", as.character(getRversion()),
     "; key packages: mice, WeightIt, cobalt, survey, rms.\n")
 ```
 
-```{r pdf-hygiene-scan}
+```{r render-path-hygiene-scan}
 #| include: true
-# Purpose: pdf hygiene scan.
-qmd_src <- resolve_current_qmd()
-pdf_file <- file.path(
-  dirname(qmd_src),
-  paste0(tools::file_path_sans_ext(basename(qmd_src)), ".pdf")
-)
-pdf_file <- normalizePath(pdf_file, winslash = "/", mustWork = FALSE)
-scan_out <- results_path("pdf_hygiene_scan.csv")
-scanner <- "none"
-scan_status <- "skipped_pdf_missing"
-txt <- character()
-
-if (file.exists(pdf_file)) {
-  scan_status <- "scanned"
-  # "pdftotext" is a system binary (Poppler), not an R package.
-  # Fallback to pdftools::pdf_text() when the binary is unavailable.
-  pdftotext_bin <- Sys.which("pdftotext")
-
-  if (nzchar(pdftotext_bin)) {
-    scanner <- "pdftotext"
-    tmp_txt <- tempfile(fileext = ".txt")
-    scan_ok <- tryCatch({
-      system2(pdftotext_bin, c(pdf_file, tmp_txt), stdout = FALSE, stderr = FALSE)
-      file.exists(tmp_txt)
-    }, error = function(e) FALSE)
-    if (isTRUE(scan_ok)) {
-      txt <- readLines(tmp_txt, warn = FALSE)
-    }
-  }
-
-  if (length(txt) == 0 && requireNamespace("pdftools", quietly = TRUE)) {
-    scanner <- "pdftools"
-    txt <- tryCatch(
-      unlist(pdftools::pdf_text(pdf_file), use.names = FALSE),
-      error = function(e) character()
-    )
-  }
-
-  if (length(txt) == 0) scan_status <- "skipped_no_scanner"
-}
-
-# Match real absolute paths and avoid false hits from the code regex itself.
-path_pattern <- "(/Users/[A-Za-z0-9._-]+/[A-Za-z0-9._/ -]+)|([A-Za-z]:\\\\[^[:space:]]+)"
-bad <- if (length(txt)) txt[grepl(path_pattern, txt)] else character()
-n_bad <- length(bad)
+# Purpose: record that render-path validation is deferred to wrapper postflight,
+# which is the first point where the current render's TeX actually exists.
+scan_out <- results_path("render_path_hygiene_scan.csv")
 scan_df <- data.frame(
-  scan_status = scan_status,
-  scanner = scanner,
-  line = if (n_bad > 0) bad else "",
+  scan_status = "deferred_to_wrapper",
+  line = "",
+  run_id = diag_run_id,
+  run_ts = diag_run_ts,
   stringsAsFactors = FALSE
 )
 write_csv_safely(scan_df, scan_out, row_names = FALSE)
+```
 
-if (RUN_MODE == "full" && scan_status != "scanned") {
-  stop("PDF hygiene scan unavailable (no scanner found); see ", scan_out)
-}
-if (RUN_MODE == "full" && n_bad > 0) {
-  stop("PDF hygiene scan detected absolute paths; see ", scan_out)
-}
+```{r pdf-hygiene-scan}
+#| include: true
+# Purpose: record that PDF hygiene validation is deferred to wrapper postflight,
+# which is the first point where the current render's PDF actually exists.
+scan_out <- results_path("pdf_hygiene_scan.csv")
+scan_df <- data.frame(
+  scan_status = "deferred_to_wrapper",
+  scanner = "wrapper_postflight",
+  line = "",
+  run_id = diag_run_id,
+  run_ts = diag_run_ts,
+  stringsAsFactors = FALSE
+)
+write_csv_safely(scan_df, scan_out, row_names = FALSE)
 ```
 
 ```{r numbering-hygiene-scan}
