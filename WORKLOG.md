@@ -528,3 +528,14 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
   - The most obvious operational byproducts from the canonical renders were removed.
   - Remaining untracked files are now mainly new diagnostics, new analysis summaries, and new figure/data artifacts rather than TeX, preview PNGs, or wrapper logs.
   - Remaining tracked changes still include the rendered PDF, refreshed manuscript/supporting outputs, and the code/config changes that produced them.
+
+## 2026-04-15 diagnostics/supporting data checkpoint
+- Date/time: 2026-04-15 07:50:00 AKDT
+- Task: Commit the remaining diagnostics, runtime, balance, MI-detail, and supporting summary outputs that were intentionally left out of the first manuscript-export checkpoint.
+- Files included:
+  - remaining modified and untracked files under `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Results/`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md`
+- Validation note:
+  - No executable code changed after the prior passing checks (`check_env`, `check_dependencies`, QMD parse, wrapper render validation), so this checkpoint only adds generated outputs and the handoff log entry.
+- Outcome:
+  - This second checkpoint captures the diagnostics/supporting data layer separately from the manuscript-export commit on the same branch.
