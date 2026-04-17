@@ -539,3 +539,239 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
   - No executable code changed after the prior passing checks (`check_env`, `check_dependencies`, QMD parse, wrapper render validation), so this checkpoint only adds generated outputs and the handoff log entry.
 - Outcome:
   - This second checkpoint captures the diagnostics/supporting data layer separately from the manuscript-export commit on the same branch.
+
+## 2026-04-15 validation-only PDF/QMD hardening for ticket issues 2-6
+- Date/time: $(date '+%Y-%m-%d %H:%M:%S %Z')
+- Task: Implement the validation-only manuscript asset registry, glyph/duplicate audits, diagnostics audit hardening, and wrapper postflight checks for ticket issues 2-6; confirm behavior on the canonical 1% wrapper render.
+- Files changed:
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/tex/pandoc-code-wrap.tex
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/R/diagnostics_audit.R
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/render_pdf.sh
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/README.md
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `Rscript --vanilla -e "tf <- tempfile(fileext='.R'); knitr::purl('Code Drafts/ABG-VBG analysis 2026-2-28.qmd', output = tf, quiet = TRUE); invisible(parse(file = tf)); cat('QMD chunk parse passed\n')"`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+- Outcomes:
+  - Implemented a normalized canonical asset registry in the notebook and emitted:
+    - `Results/artifact_provenance_manifest.csv`
+    - `Results/canonical_asset_registry.csv`
+    - `Results/artifact_check_status.csv`
+    - `Results/artifact_check_missing.csv`
+    - `Results/manuscript_sync_report.md`
+    - `Results/glyph_audit.csv`
+    - `Results/duplicate_asset_audit.csv`
+  - Kept `Supplementary Table 1` as `external/manual` and validated it through the registry/check outputs rather than notebook generation.
+  - Centralized manuscript-facing labels/captions through safe-text helpers and added glyph audit enforcement.
+  - Restructured the PDF tail into a single validation-oriented build summary with canonical assets plus essential audits only.
+  - Hardened `R/diagnostics_audit.R` to always write stable `diagnostics_audit_summary.csv` and `diagnostics_audit_issues.csv` outputs with aligned severity/status.
+  - Extended wrapper postflight to require the new validation artifacts and validate their schemas.
+  - First reruns exposed two implementation bugs:
+    - `manuscript_caption()` was scalar-only and failed inside `dplyr::mutate()`; fixed by making it vector-safe.
+    - notebook diagnostics audit subprocess invocation was brittle under Quarto; replaced with `sys.source()` inside the notebook render path.
+  - A subsequent full notebook pass failed at LaTeX with `Environment Shaded undefined`; fixed by updating `Code Drafts/tex/pandoc-code-wrap.tex` to explicitly define-or-renew `Shaded` instead of conditionally `\renewenvironment` based on `framed.sty`.
+  - Final canonical validation command succeeded:
+    - wrapper log: `Results/render_logs/render_20260415_224656.log`
+    - exit status: `0`
+    - PDF output: `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf`
+  - Wrapper postflight passed, including render-path and PDF validation.
+  - Required validation artifacts were all present with expected headers.
+  - Validation inventory results:
+    - `artifact_check_missing.csv` contained exactly one allowed missing row for `Supplementary Table 1` (`external/manual`)
+    - no active numbering conflicts
+    - no active `Figure 3` reuse
+    - no blocking glyph audit rows
+    - no blocking duplicate audit rows
+  - Final build-status outputs in the PDF/TeX agree with `Results/diagnostics_audit_summary.csv`: overall build status = `FAIL` due to two high-severity diagnostics findings, not due to render infrastructure failure.
+  - High-severity diagnostics findings surfaced by the new validation path:
+    - `Balance`: `ABG max|SMD|=0.100` exceeded the configured threshold in `Results/balance_target_imp_summary.csv`
+    - `Outcome`: `162` separation flags reported in `Results/model_fit_diagnostics.csv`
+- Next steps:
+  - decide whether to relax/clarify the diagnostics thresholds or treat the new `FAIL` as the intended strict validation outcome
+  - if the strict outcome is intended, triage the balance and separation findings before moving to larger-scope validation renders
+
+## 2026-04-16 MI instrumentation + diagnostic full rerun (11:39:55 MDT)
+- Task: Implement stage-specific batched-MI diagnostics and wrapper hard-stop postmortem capture, validate on 1% pilot, and launch the diagnostic full rerun.
+- Files changed:
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/render_pdf.sh
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md
+- Commands run:
+  -         bash -n scripts/render_pdf.sh
+  - Rscript --vanilla -e "source('scripts/check_env.R')"
+  - Rscript --vanilla scripts/check_dependencies.R
+  - Rscript --vanilla -e "tf <- tempfile(fileext='.R'); knitr::purl('Code Drafts/ABG-VBG analysis 2026-2-28.qmd', output = tf, quiet = TRUE); invisible(parse(file = tf)); cat('QMD chunk parse passed\n')"
+  - ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01
+  - ./scripts/render_pdf.sh -P run_mode:full -P pilot_frac:1
+- Outcomes:
+  - Extended notebook batched MI logging to emit stage-specific rows in Results/mice_batches_log.csv with stages:
+    - batch_started
+    - mice_returned
+    - ibind_started
+    - ibind_completed
+    - checkpoint_saved
+    - batch_failed
+  - Added Results/mice_combine_log.csv with one row per combine step.
+  - Added per-batch checkpoint artifacts under Results/mi_batch_checkpoints/ and saved Results/mi_batch_context.rds for later standalone reproduction.
+  - Added notebook-side RSS / object-size / gc-vcells telemetry to distinguish batch-generation failures from combine failures.
+  - Hardened scripts/render_pdf.sh to:
+    - log wrapper PID
+    - discover/log Quarto and main R PIDs when discoverable
+    - append notebook-side MI postmortem tails on non-zero exit
+  - The first two pilot reruns failed in the new wrapper PID logging path due to quoting/awk bugs; these were fixed without changing the notebook logic.
+  - The validated pilot rerun succeeded end-to-end:
+    - wrapper log: Results/render_logs/render_20260416_111637.log
+    - wrapper status: 0
+    - PDF/postflight passed
+    - stage-level mice_batches_log.csv rows were written as expected
+    - mice_combine_log.csv was present with ibind_started / ibind_completed rows
+    - mi_batch_checkpoints/ and mi_batch_context.rds were created
+  - Diagnostic full rerun launched successfully and is currently in progress:
+    - wrapper log: Results/render_logs/render_20260416_112907.log
+    - command: ./scripts/render_pdf.sh -P run_mode:full -P pilot_frac:1
+- Next steps:
+  - let the diagnostic full rerun reach or fail within batched MI
+  - use the new notebook-side stage logs to classify the failure as mice(), ibind(), or checkpoint/write
+  - if ibind is confirmed, replace linear append with balanced combine and rerun full
+
+## 2026-04-16 12:32 MDT
+- Task: Confirm full-scale MI instrumentation is live during the diagnostic full rerun.
+- Files changed:
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md
+- Commands run:
+  - tail -n 20 Results/mice_batches_log.csv
+  - tail -n 20 Results/mice_combine_log.csv
+  - ps -p 1300 -o pid=,etime=,state=,%cpu=,rss=,command=
+- Outcomes:
+  - Diagnostic full rerun reached `140/299 [mi-exec]`.
+  - Full-scale batch 1 completed the new stage chain successfully:
+    - `batch_started`
+    - `mice_returned`
+    - `ibind_started`
+    - `ibind_completed`
+    - `checkpoint_saved`
+  - `Results/mice_combine_log.csv` recorded the corresponding `ibind_started` / `ibind_completed` entries.
+  - Batch 1 telemetry at full scale showed:
+    - `mice()` elapsed about 539 seconds
+    - `imp_b_size_bytes = 454949568`
+    - `rss_mb` around 1215-1348 during return/combine
+  - Batch 2 has started and the full diagnostic rerun remains active.
+- Next steps:
+  - continue monitoring toward the historical failure region around batch 39
+  - if the rerun dies, classify the exact terminal stage from `mice_batches_log.csv` and `mice_combine_log.csv`
+  - only then decide whether balanced combine is required
+
+## 2026-04-16 18:01 MDT
+- Task: Monitor the diagnostic full rerun through the historical failure region.
+- Files changed:
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md
+- Commands run:
+  - repeated watcher polls against `Results/mice_batches_log.csv`
+  - repeated process-tree checks for the live Quarto/R render
+  - batch 39 row inspection from `Results/mice_batches_log.csv`
+- Outcomes:
+  - The diagnostic full rerun passed the historical failure point successfully.
+  - Batch 39 completed the full stage chain:
+    - `batch_started`
+    - `mice_returned`
+    - `ibind_started`
+    - `ibind_completed`
+    - `checkpoint_saved`
+  - Batch 39 details:
+    - `mice()` finished at `2026-04-16 17:59:08 MDT`
+    - `ibind()` finished at `2026-04-16 17:59:21 MDT`
+    - `checkpoint_saved` finished at `2026-04-16 18:00:00 MDT`
+    - accumulated mids size after checkpoint: `1298305080` bytes
+    - RSS during checkpoint row: about `3015.9 MB`
+  - The full render process tree is still alive after clearing batch 39 and has already advanced into batch 40.
+- Next steps:
+  - The original fail point has been disproven for the current instrumented run.
+  - If the user wants, continue to full completion and only revisit balanced combine if a later-stage failure emerges.
+
+## 2026-04-16 21:45 MDT
+- Task: Implement the revised batch-40 troubleshooting workflow, validate it on a pilot render, and launch the next full rerun with wrapper RSS tracing.
+- Files changed:
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/render_pdf.sh
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/collect_render_postmortem.R
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/debug_batch40_mice.R
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/README.md
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `Rscript --vanilla -e "tf <- tempfile(fileext='.R'); knitr::purl('Code Drafts/ABG-VBG analysis 2026-2-28.qmd', output = tf, quiet = TRUE); invisible(parse(file = tf)); cat('QMD chunk parse passed\n')"`
+  - `Rscript --vanilla scripts/collect_render_postmortem.R --render-ts 20260416_112907 --results-dir Results --log-path Results/render_logs/render_20260416_112907.log --pdf-path "Code Drafts/ABG-VBG-analysis-2026-2-28.pdf"`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - `Rscript --vanilla scripts/debug_batch40_mice.R --context Results/archive/pre_run_20260416_211642/mi_batch_context.rds --checkpoint Results/archive/pre_run_20260416_211642/mi_batch_checkpoints/imp_acc_after_batch_39.rds --batch 40 --seed 24251206 --outdir Results/mi_batch_debug/20260416_112923`
+  - `Rscript --vanilla scripts/debug_batch40_mice.R --context Results/archive/pre_run_20260416_211642/mi_batch_context.rds --checkpoint Results/archive/pre_run_20260416_211642/mi_batch_checkpoints/imp_acc_after_batch_39.rds --batch 40 --seed 24251206 --outdir Results/mi_batch_debug/20260416_112923_rssfix`
+  - `./scripts/render_pdf.sh -P run_mode:full -P pilot_frac:1`
+- Outcomes:
+  - Notebook changes:
+    - default YAML now uses an internally consistent full-mode pair: `run_mode: "full"` and `pilot_frac: 1`
+    - `run_mice_batched()` now emits `mice_call_entered` immediately before `mice::mice()`
+    - `run_mice_batched()` now emits `checkpoint_started` immediately before saving the accumulated mids checkpoint
+  - Wrapper changes:
+    - archives only prior MI/debug artifacts to `Results/archive/pre_run_<render_ts>/`
+    - writes wrapper-side RSS traces to `Results/render_logs/rss_trace_<render_ts>.csv`
+    - calls `scripts/collect_render_postmortem.R` on wrapper exit so successful and caught-failure renders both write a postmortem/status summary
+    - corrected render/postflight exit-status capture so nonzero Quarto exits are no longer masked by `if ! ...; then $?` semantics
+  - Collector validation:
+    - `Results/render_logs/postmortem_20260416_112907.md` was created for the already-failed full run
+    - `Results/mi_run_status_20260416_112907.json` classified that run as `failed_abrupt_termination_suspected`
+  - Pilot validation:
+    - wrapper log: `Results/render_logs/render_20260416_211642.log`
+    - wrapper status: `0`
+    - PDF/postflight passed
+    - wrapper RSS trace and postmortem/status files were created as expected
+    - `Results/mice_batches_log.csv` now includes the new `mice_call_entered` and `checkpoint_started` stages
+    - prior failed-run MI/debug artifacts were archived under `Results/archive/pre_run_20260416_211642/`
+  - Standalone batch-40 reproduction:
+    - a bare `Rscript --vanilla` reproduction initially failed immediately with `Can't convert x <haven_labelled> to <double>`
+    - after loading the notebook-equivalent package subset (`haven`, `labelled`, `dplyr`, `tibble`, `mice`), the isolated batch-40 `mice()` call succeeded twice from the archived batch-39 checkpoint boundary
+    - successful reproduction artifact paths:
+      - `Results/mi_batch_debug/20260416_112923/batch40_result.json`
+      - `Results/mi_batch_debug/20260416_112923/batch40_mids.rds`
+      - `Results/mi_batch_debug/20260416_112923_rssfix/batch40_result.json`
+      - `Results/mi_batch_debug/20260416_112923_rssfix/batch40_mids.rds`
+    - the standalone self-RSS sampler still has a quoting/serialization bug and currently writes only the CSV header row
+  - Interpretation before the next full rerun:
+    - the full-run batch-40 failure is not reproduced as a deterministic caught R error once the isolated call is run in a faithful notebook-style package environment
+    - the remaining leading suspects are external/low-level termination or a runtime interaction that only appears in the full wrapper/render context
+  - A new full rerun has been launched from the clean archived state:
+    - command: `./scripts/render_pdf.sh -P run_mode:full -P pilot_frac:1`
+    - wrapper log: `Results/render_logs/render_20260416_214501.log`
+- Next steps:
+  - monitor the new full rerun through the old batch-40 failure region using `Results/mice_batches_log.csv` and the wrapper RSS trace
+  - if the rerun dies again, compare the death window to `Results/render_logs/rss_trace_20260416_214501.csv` and the new collector/postmortem outputs
+  - fix the standalone RSS-sampler quoting bug after the full rerun decision point unless that bug becomes critical sooner
+
+## 2026-04-17 08:31 MDT
+- Task: Generate a manual postmortem for failed full render `render_ts = 20260416_214501` and summarize the new failure evidence.
+- Files changed:
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md
+- Commands run:
+  - `Rscript --vanilla scripts/collect_render_postmortem.R --render-ts 20260416_214501 --results-dir Results --log-path Results/render_logs/render_20260416_214501.log --pdf-path "Code Drafts/ABG-VBG-analysis-2026-2-28.pdf"`
+  - `tail -n 120 Results/render_logs/postmortem_20260416_214501.md`
+  - `tail -n 20 Results/render_logs/rss_trace_20260416_214501.csv`
+  - `tail -n 20 Results/mice_batches_log.csv`
+  - `tail -n 20 Results/mice_combine_log.csv`
+- Outcomes:
+  - Manual collector outputs created:
+    - `Results/render_logs/postmortem_20260416_214501.md`
+    - `Results/mi_run_status_20260416_214501.json`
+  - Collector classified the failed full rerun as `failed_abrupt_termination_suspected`.
+  - No final PDF exists for this render and there is no wrapper trailer or wrapper status line.
+  - The authoritative notebook-side MI log shows the run died in batch `10` after `mice_call_entered` and before `mice_returned`.
+  - The current failure therefore localizes to the long batch-10 `mice()` call or a low-level termination during that call, not to `ibind()` or checkpoint saving.
+  - `mice_combine_log.csv` confirms batches `1` through `9` combined cleanly.
+  - The wrapper RSS trace shows the main R worker still alive and CPU-active through `2026-04-16 23:42:14 MDT`, with R RSS oscillating around roughly `1.3-2.1 GB` in the final samples.
+  - The postmortem system-log snippets show several contemporaneous `jetsam` / memory-pressure-related entries for other macOS processes, which is suggestive of host memory pressure but not direct proof that the Quarto/R process itself was jetsam-killed.
+- Next steps:
+  - Compare this failed full-run window against outer terminal/app/session lifetime limits, because the isolated batch-40 reproduction succeeded while the full render died abruptly without a caught R error.
+  - If another full rerun is attempted, keep the wrapper RSS trace enabled and treat notebook-side MI breadcrumbs plus manual collector output as the authoritative postmortem path.

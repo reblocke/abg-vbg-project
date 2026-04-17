@@ -1,0 +1,33 @@
+[render:start] 2026-04-16 11:15:13 -0600
+[render:qmd] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+[render:log] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Results/render_logs/render_20260416_111513.log
+[render:pdf_target] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf
+[render:wrapper_pid] 91408
+[render:args] -P run_mode:pilot -P pilot_frac:0.01
+[render:root] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project
+[render:preflight] check_env
+Starting environment preflight...
+Environment preflight passed.
+[render:preflight] check_dependencies
+Dependency audit targets:
+- /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+- /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/check_env.R
+- /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/check_dependencies.R
+
+Dependency audit note (renv::dependencies only):
+- rmarkdown
+- shiny
+
+Dependency audit passed for 44 declared direct packages.
+[render:quarto] begin
+[render:cwd] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project
+[render:wrapper_pid] 91408
+[render:render_pid] 91514
+[render:descendant_pids] 91521
+awk: syntax error at source line 1
+ context is
+	index($0, >>>  \ <<< "/Applications/quarto/share/rmd/rmd.R\") && index(pids, \" \" $1 \" \") { print $1; exit }
+awk: bailing out at source line 1
+[render:end] 2026-04-16 11:15:17 -0600
+[render:status] 2
+[render:log] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Results/render_logs/render_20260416_111513.log

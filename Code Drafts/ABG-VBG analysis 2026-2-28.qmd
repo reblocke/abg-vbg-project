@@ -4,7 +4,7 @@ author: "Brian Locke, Anila Mehta"
 editor: visual
 params:
   run_mode: "full" # options: "pilot" or "full"
-  pilot_frac: 0.05 # used only when run_mode == "pilot"
+  pilot_frac: 1 # used only when run_mode == "pilot"
   sample_seed: 20251206
   data_dir: "data"
   results_dir: "Results"
@@ -137,6 +137,75 @@ render_inline_graphic <- function(file,
     return(knitr::asis_output(paste(out, collapse = "\n")))
   }
   knitr::include_graphics(inline_path)
+}
+
+# Canonical PDF path: export all figure/table artifacts, but keep the rendered
+# notebook focused on manuscript-facing assets and essential audits only.
+VALIDATION_INLINE_ANALYSIS_PREVIEWS <- FALSE
+
+# helper: normalize manuscript-facing text to a plain-ASCII representation so
+# PDF labels/captions do not depend on platform-specific glyph handling.
+safe_manuscript_text <- function(x) {
+  if (is.null(x) || !length(x)) return(x)
+  x <- as.character(x)
+  replacements <- c(
+    "\u00a0" = " ",
+    "\u2010" = "-",
+    "\u2011" = "-",
+    "\u2012" = "-",
+    "\u2013" = "-",
+    "\u2014" = "-",
+    "\u2212" = "-",
+    "\u2026" = "...",
+    "\u03bc" = "u",
+    "\u00b5" = "u",
+    "\u2264" = "<=",
+    "\u2265" = ">=",
+    "\u0394" = "Delta",
+    "\u03b4" = "delta",
+    "\u03b2" = "beta",
+    "\u2082" = "2",
+    "\u00b2" = "^2",
+    "\u00b3" = "^3",
+    "\u2080" = "0",
+    "\u2081" = "1",
+    "\u2083" = "3",
+    "\u2084" = "4",
+    "\u2085" = "5",
+    "\u2086" = "6",
+    "\u2087" = "7",
+    "\u2088" = "8",
+    "\u2089" = "9"
+  )
+  for (i in seq_along(replacements)) {
+    x <- gsub(names(replacements)[i], replacements[[i]], x, fixed = TRUE)
+  }
+  x <- iconv(x, from = "", to = "ASCII//TRANSLIT", sub = "?")
+  x <- gsub("\\s+", " ", x)
+  trimws(x)
+}
+
+# helper: flag non-ASCII manuscript labels early so validation renders fail
+# before the final PDF silently substitutes or drops glyphs.
+is_ascii_text <- function(x) {
+  if (is.null(x) || !length(x)) return(logical(0))
+  !grepl("[^ -~]", x)
+}
+
+# helper: derive one stable manuscript caption from the centralized registry.
+manuscript_caption <- function(label, title) {
+  label <- safe_manuscript_text(label)
+  title <- safe_manuscript_text(title)
+  stopifnot(length(label) == length(title))
+  ifelse(!nzchar(title), label, paste0(label, ". ", title))
+}
+
+# helper: collapse component-level validation states into one build status.
+collapse_validation_status <- function(status_values) {
+  status_values <- unique(status_values[!is.na(status_values) & nzchar(status_values)])
+  if ("FAIL" %in% status_values) return("FAIL")
+  if ("PASS_WITH_WARNINGS" %in% status_values) return("PASS_WITH_WARNINGS")
+  "PASS"
 }
 
 # helper: strip manual "Table X." prefixes in PDF to avoid double numbering
@@ -506,7 +575,7 @@ Package dependencies are managed via `renv` for reproducibility. Use `renv::rest
 
 ```{r setup-packages}
 #| code-block-title: "Load required packages (renv-managed)"
-#| echo: true
+#| echo: false
 #| results: "hide"
 #| message: false
 #| warning: false
@@ -883,7 +952,7 @@ save_cohort_flow_outputs(
     )
   }
 )
-render_inline_graphic(flow_png)
+invisible(flow_png)
 ```
 
 ```{r setup-run-config}
@@ -1115,7 +1184,7 @@ if (length(stale_files)) fs::file_delete(stale_files)
 
 ```{r setup-diagnostics-helpers}
 #| code-block-title: "Diagnostics helpers"
-#| echo: true
+#| echo: false
 #| message: false
 #| warning: false
 # Diagnostics helper functions for MI/IPW pipeline
@@ -1897,8 +1966,12 @@ print_plot_once <- function(p, plot_name, width = 8, height = 6, dpi = 300) {
   # Use a lighter inline preview while keeping manuscript artifacts high resolution.
   save_diag_plot(p, file_preview, width = width, height = height, dpi = min(dpi, 96))
   if (register_plot_file(plot_name, file_png)) {
-    mark_float_emitted()
-    render_inline_graphic(file_preview)
+    if (isTRUE(VALIDATION_INLINE_ANALYSIS_PREVIEWS)) {
+      mark_float_emitted()
+      render_inline_graphic(file_preview)
+    } else {
+      invisible(file_preview)
+    }
   } else {
     invisible(NULL)
   }
@@ -1982,8 +2055,12 @@ print_plot_force <- function(p, plot_name, width = 8, height = 6, dpi = 300) {
   save_diag_plot(p, file_pdf, width = width, height = height, dpi = dpi)
   save_diag_plot(p, file_preview, width = width, height = height, dpi = min(dpi, 96))
   register_plot_file(plot_name, file_png)
-  mark_float_emitted()
-  render_inline_graphic(file_preview)
+  if (isTRUE(VALIDATION_INLINE_ANALYSIS_PREVIEWS)) {
+    mark_float_emitted()
+    render_inline_graphic(file_preview)
+  } else {
+    invisible(file_preview)
+  }
 }
 
 # helper: map a model-matrix term back to its parent feature so SHAP fallbacks
@@ -3867,7 +3944,7 @@ x_ref_vbg <- make_ref_profile(
 
 ```{r machine-resource-controls}
 #| code-block-title: "Machine-local resource controls"
-#| echo: true
+#| echo: false
 # Purpose: detect machine-local execution resources without changing analysis outputs.
 parse_positive_int_env <- function(env_name) {
   raw_val <- trimws(Sys.getenv(env_name, unset = ""))
@@ -3994,7 +4071,7 @@ Codebook artifact path: `r pretty_path(results_path("codebookr.docx"))`. Generat
 ```{r codebook-export-full}
 #| code-block-title: "Generate codebook"
 #| include: true
-#| echo: true
+#| echo: false
 #| results: "hide"
 #| message: false
 #| warning: false
@@ -6501,7 +6578,7 @@ options(bitmapType = "cairo")  # prevents device issues on macOS
 
 ```{r mi-settings}
 #| code-block-title: "MI settings"
-#| echo: true
+#| echo: false
 # Purpose: mi settings.
 M_IMP    <- if (IS_PILOT) 20L else 80L
 MAXIT_MI <- if (IS_PILOT) 5L else 20L
@@ -6551,7 +6628,7 @@ stopifnot(MI_PS_METHOD %in% c("glm_rcs4"))
 
 ```{r mi-missing-summary}
 #| code-block-title: "Missing data summary"
-#| echo: true
+#| echo: false
 #| message: false
 # Key covariates + outcomes used in MI (plus report-only BNP/Spo2)
 extra_miss_vars <- intersect(c("bnp", "spo2"), names(subset_data_raw))
@@ -6693,7 +6770,7 @@ fit_mi_ps_glm <- function(df, treat, covars, k = 4L, maxit = 25L, context = NULL
 
 ```{r mi-missing-structure}
 #| code-block-title: "Missingness structure and drivers"
-#| echo: true
+#| echo: false
 #| message: false
 #| results: "hide"
 
@@ -6775,7 +6852,7 @@ float_barrier("section")
 
 ```{r missingness-drivers}
 #| code-block-title: "Drivers of missingness"
-#| echo: true
+#| echo: false
 #| message: false
 
 # --- Drivers of missingness (logit I(NA) on observed covariates) --------------
@@ -7410,6 +7487,21 @@ get_vcells_stats <- function() {
   )
 }
 
+get_rss_mb <- function(pid = Sys.getpid()) {
+  rss_txt <- tryCatch(
+    system2("ps", c("-o", "rss=", "-p", as.character(pid)), stdout = TRUE, stderr = FALSE),
+    error = function(e) character()
+  )
+  rss_kb <- suppressWarnings(as.numeric(trimws(rss_txt[[1]])))
+  if (!length(rss_kb) || !is.finite(rss_kb) || rss_kb <= 0) return(NA_real_)
+  rss_kb / 1024
+}
+
+safe_object_size_bytes <- function(x) {
+  if (is.null(x)) return(NA_real_)
+  as.numeric(utils::object.size(x))
+}
+
 set.seed(MI_SEED)
 # helper: run one non-batched MICE job while routing timing through the shared
 # runtime logger.
@@ -7466,25 +7558,191 @@ mcerr_ratio_for_spec <- function(imp_obj, spec) {
   max(ratio[idx], na.rm = TRUE)
 }
 
-# helper: run MICE in smaller batches and combine them with `mice::ibind()`
-# when a single all-at-once run risks exceeding memory limits.
+# helper: run MICE in smaller batches while logging enough stage detail to
+# distinguish a hard stop inside `mice()` from a later combine or checkpoint
+# failure when a full-scale run dies abruptly.
 run_mice_batched <- function(m_total, m_batch_start, maxit, base_seed) {
   imp_acc <- NULL
   m_done <- 0L
   batch_attempt_idx <- 0L
   m_batch <- m_batch_start
   batch_log <- list()
+  combine_log <- list()
   logged_events_acc <- list()
+  checkpoint_dir <- results_path("mi_batch_checkpoints")
+  batch_context_path <- results_path("mi_batch_context.rds")
+
+  dir.create(checkpoint_dir, recursive = TRUE, showWarnings = FALSE)
+  old_checkpoints <- list.files(checkpoint_dir, full.names = TRUE, recursive = TRUE)
+  if (length(old_checkpoints)) unlink(old_checkpoints, recursive = TRUE, force = TRUE)
+  if (file.exists(batch_context_path)) unlink(batch_context_path, force = TRUE)
+
+  saveRDS(
+    list(
+      mi_df_run = mi_df_run,
+      predictorMatrix = pred,
+      method = meth,
+      maxit = maxit,
+      m_total = m_total,
+      m_batch_start = m_batch_start,
+      base_seed = base_seed,
+      run_mode = RUN_MODE,
+      pilot_frac = PILOT_FRAC,
+      mi_seed = MI_SEED,
+      run_id = if (exists("RUN_ID")) RUN_ID else NA_character_,
+      run_ts = if (exists("RUN_TS")) RUN_TS else NA_character_
+    ),
+    batch_context_path
+  )
+
+  empty_batch_log <- data.frame(
+    batch = integer(),
+    stage = character(),
+    status = character(),
+    failure_stage = character(),
+    m_batch = integer(),
+    seed = integer(),
+    ok = logical(),
+    error_message = character(),
+    started_at = character(),
+    finished_at = character(),
+    m_done_before = integer(),
+    m_done_after = integer(),
+    seconds = numeric(),
+    gc_vcells_used_mb_pre = numeric(),
+    gc_vcells_limit_mb_pre = numeric(),
+    gc_vcells_frac_pre = numeric(),
+    gc_vcells_used_mb_post = numeric(),
+    gc_vcells_limit_mb_post = numeric(),
+    gc_vcells_frac_post = numeric(),
+    rss_mb = numeric(),
+    imp_b_size_bytes = numeric(),
+    imp_acc_size_bytes = numeric(),
+    checkpoint_path = character(),
+    notes = character(),
+    stringsAsFactors = FALSE
+  )
+
+  empty_combine_log <- data.frame(
+    batch = integer(),
+    combine_stage = character(),
+    left_m = integer(),
+    right_m = integer(),
+    left_size_bytes = numeric(),
+    right_size_bytes = numeric(),
+    rss_mb = numeric(),
+    gc_vcells_frac = numeric(),
+    started_at = character(),
+    finished_at = character(),
+    ok = logical(),
+    error_message = character(),
+    stringsAsFactors = FALSE
+  )
 
   write_batch_log <- function(extra_rows = NULL) {
     rows_out <- batch_log
     if (!is.null(extra_rows)) rows_out[[length(rows_out) + 1L]] <- extra_rows
     if (length(rows_out) == 0L) {
-      write_csv_safely(data.frame(), results_path("mice_batches_log.csv"), row_names = FALSE)
+      write_csv_safely(empty_batch_log, results_path("mice_batches_log.csv"), row_names = FALSE)
     } else {
       write_csv_safely(dplyr::bind_rows(rows_out), results_path("mice_batches_log.csv"), row_names = FALSE)
     }
   }
+
+  append_batch_log <- function(row) {
+    batch_log[[length(batch_log) + 1L]] <<- row
+    write_batch_log()
+  }
+
+  write_combine_log <- function(extra_rows = NULL) {
+    rows_out <- combine_log
+    if (!is.null(extra_rows)) rows_out[[length(rows_out) + 1L]] <- extra_rows
+    if (length(rows_out) == 0L) {
+      write_csv_safely(empty_combine_log, results_path("mice_combine_log.csv"), row_names = FALSE)
+    } else {
+      write_csv_safely(dplyr::bind_rows(rows_out), results_path("mice_combine_log.csv"), row_names = FALSE)
+    }
+  }
+
+  append_combine_log <- function(row) {
+    combine_log[[length(combine_log) + 1L]] <<- row
+    write_combine_log()
+  }
+
+  make_batch_row <- function(batch, stage, status, failure_stage = NA_character_,
+                             m_batch, seed, ok, error_message = NA_character_,
+                             started_at, finished_at = NA_character_,
+                             m_done_before, m_done_after = NA_integer_,
+                             seconds = NA_real_,
+                             gc_pre = get_vcells_stats(),
+                             gc_post = NULL,
+                             rss_mb = get_rss_mb(),
+                             imp_b_size_bytes = NA_real_,
+                             imp_acc_size_bytes = NA_real_,
+                             checkpoint_path = NA_character_,
+                             notes = NA_character_) {
+    if (is.null(gc_post)) {
+      gc_post <- data.frame(
+        gc_vcells_used_mb = NA_real_,
+        gc_vcells_limit_mb = NA_real_,
+        gc_vcells_frac = NA_real_,
+        stringsAsFactors = FALSE
+      )
+    }
+    data.frame(
+      batch = batch,
+      stage = stage,
+      status = status,
+      failure_stage = failure_stage,
+      m_batch = m_batch,
+      seed = seed,
+      ok = ok,
+      error_message = error_message,
+      started_at = as.character(started_at),
+      finished_at = as.character(finished_at),
+      m_done_before = m_done_before,
+      m_done_after = m_done_after,
+      seconds = seconds,
+      gc_vcells_used_mb_pre = gc_pre$gc_vcells_used_mb,
+      gc_vcells_limit_mb_pre = gc_pre$gc_vcells_limit_mb,
+      gc_vcells_frac_pre = gc_pre$gc_vcells_frac,
+      gc_vcells_used_mb_post = gc_post$gc_vcells_used_mb,
+      gc_vcells_limit_mb_post = gc_post$gc_vcells_limit_mb,
+      gc_vcells_frac_post = gc_post$gc_vcells_frac,
+      rss_mb = rss_mb,
+      imp_b_size_bytes = imp_b_size_bytes,
+      imp_acc_size_bytes = imp_acc_size_bytes,
+      checkpoint_path = checkpoint_path,
+      notes = notes,
+      stringsAsFactors = FALSE
+    )
+  }
+
+  make_combine_row <- function(batch, combine_stage, left_m, right_m,
+                               left_size_bytes, right_size_bytes,
+                               started_at, finished_at = NA_character_,
+                               ok = NA, error_message = NA_character_,
+                               gc_vcells_frac = get_vcells_stats()$gc_vcells_frac,
+                               rss_mb = get_rss_mb()) {
+    data.frame(
+      batch = batch,
+      combine_stage = combine_stage,
+      left_m = left_m,
+      right_m = right_m,
+      left_size_bytes = left_size_bytes,
+      right_size_bytes = right_size_bytes,
+      rss_mb = rss_mb,
+      gc_vcells_frac = gc_vcells_frac,
+      started_at = as.character(started_at),
+      finished_at = as.character(finished_at),
+      ok = ok,
+      error_message = error_message,
+      stringsAsFactors = FALSE
+    )
+  }
+
+  write_batch_log()
+  write_combine_log()
 
   while (m_done < m_total) {
     if (MI_GC_EVERY_BATCH) invisible(gc())
@@ -7503,31 +7761,56 @@ run_mice_batched <- function(m_total, m_batch_start, maxit, base_seed) {
     seed_b <- base_seed + batch_attempt_idx * MI_BATCH_SEED_STRIDE
     message("MICE batch ", batch_attempt_idx, " (m=", m_b, ", seed=", seed_b, ")")
 
+    batch_id <- sprintf("%02d", batch_attempt_idx)
+    imp_b_path <- file.path(checkpoint_dir, paste0("imp_b_batch_", batch_id, ".rds"))
+    imp_acc_path <- file.path(checkpoint_dir, paste0("imp_acc_after_batch_", batch_id, ".rds"))
     t0 <- Sys.time()
     m_done_before <- m_done
     mem_pre <- get_vcells_stats()
-    batch_started_row <- data.frame(
-      batch = batch_attempt_idx,
-      m_batch = m_b,
-      seed = seed_b,
-      status = "started",
-      ok = NA,
-      error_message = NA_character_,
-      started_at = as.character(t0),
-      finished_at = NA_character_,
-      m_done_before = m_done_before,
-      m_done_after = NA_integer_,
-      seconds = NA_real_,
-      gc_vcells_used_mb_pre = mem_pre$gc_vcells_used_mb,
-      gc_vcells_limit_mb_pre = mem_pre$gc_vcells_limit_mb,
-      gc_vcells_frac_pre = mem_pre$gc_vcells_frac,
-      gc_vcells_used_mb_post = NA_real_,
-      gc_vcells_limit_mb_post = NA_real_,
-      gc_vcells_frac_post = NA_real_,
-      stringsAsFactors = FALSE
+    append_batch_log(
+      make_batch_row(
+        batch = batch_attempt_idx,
+        stage = "batch_started",
+        status = "started",
+        m_batch = m_b,
+        seed = seed_b,
+        ok = NA,
+        started_at = t0,
+        finished_at = NA_character_,
+        m_done_before = m_done_before,
+        m_done_after = NA_integer_,
+        gc_pre = mem_pre,
+        gc_post = NULL,
+        rss_mb = get_rss_mb(),
+        imp_b_size_bytes = NA_real_,
+        imp_acc_size_bytes = safe_object_size_bytes(imp_acc),
+        checkpoint_path = NA_character_,
+        notes = "batch entry"
+      )
     )
-    write_batch_log(batch_started_row)
 
+    mice_started_at <- Sys.time()
+    append_batch_log(
+      make_batch_row(
+        batch = batch_attempt_idx,
+        stage = "mice_call_entered",
+        status = "started",
+        m_batch = m_b,
+        seed = seed_b,
+        ok = NA,
+        started_at = mice_started_at,
+        finished_at = NA_character_,
+        m_done_before = m_done_before,
+        m_done_after = m_done_before,
+        gc_pre = mem_pre,
+        gc_post = NULL,
+        rss_mb = get_rss_mb(),
+        imp_b_size_bytes = NA_real_,
+        imp_acc_size_bytes = safe_object_size_bytes(imp_acc),
+        checkpoint_path = NA_character_,
+        notes = "about to call mice::mice()"
+      )
+    )
     cap <- capture_warnings(
       tryCatch(
         runtime_logger(
@@ -7563,27 +7846,30 @@ run_mice_batched <- function(m_total, m_batch_start, maxit, base_seed) {
       err_msg <- conditionMessage(imp_b)
       message("MICE batch ", batch_attempt_idx, " failed: ", err_msg)
       mem_stats <- get_vcells_stats()
-      batch_log[[batch_attempt_idx]] <- data.frame(
-        batch = batch_attempt_idx,
-        m_batch = m_b,
-        seed = seed_b,
-        status = "failed",
-        ok = FALSE,
-        error_message = err_msg,
-        started_at = as.character(t0),
-        finished_at = as.character(Sys.time()),
-        m_done_before = m_done_before,
-        m_done_after = m_done_before,
-        seconds = as.numeric(difftime(Sys.time(), t0, units = "secs")),
-        gc_vcells_used_mb_pre = mem_pre$gc_vcells_used_mb,
-        gc_vcells_limit_mb_pre = mem_pre$gc_vcells_limit_mb,
-        gc_vcells_frac_pre = mem_pre$gc_vcells_frac,
-        gc_vcells_used_mb_post = mem_stats$gc_vcells_used_mb,
-        gc_vcells_limit_mb_post = mem_stats$gc_vcells_limit_mb,
-        gc_vcells_frac_post = mem_stats$gc_vcells_frac,
-        stringsAsFactors = FALSE
+      append_batch_log(
+        make_batch_row(
+          batch = batch_attempt_idx,
+          stage = "batch_failed",
+          status = "failed",
+          failure_stage = "mice",
+          m_batch = m_b,
+          seed = seed_b,
+          ok = FALSE,
+          error_message = err_msg,
+          started_at = mice_started_at,
+          finished_at = Sys.time(),
+          m_done_before = m_done_before,
+          m_done_after = m_done_before,
+          seconds = as.numeric(difftime(Sys.time(), mice_started_at, units = "secs")),
+          gc_pre = mem_pre,
+          gc_post = mem_stats,
+          rss_mb = get_rss_mb(),
+          imp_b_size_bytes = NA_real_,
+          imp_acc_size_bytes = safe_object_size_bytes(imp_acc),
+          checkpoint_path = NA_character_,
+          notes = "mice() returned a caught error"
+        )
       )
-      write_batch_log()
       if (grepl("vector memory limit", err_msg, fixed = TRUE) && m_batch > MI_BATCH_MIN) {
         m_batch <- max(MI_BATCH_MIN, floor(m_batch / 2))
         message("Reducing MI batch size to ", m_batch, " and retrying.")
@@ -7593,11 +7879,200 @@ run_mice_batched <- function(m_total, m_batch_start, maxit, base_seed) {
       stop("MICE batch ", batch_attempt_idx, " failed; see log: ", results_path("mice_batches_log.csv"))
     }
 
-    if (is.null(imp_acc)) {
-      imp_acc <- imp_b
-    } else {
-      imp_acc <- mice::ibind(imp_acc, imp_b)
+    mice_finished_at <- Sys.time()
+    mem_after_mice <- get_vcells_stats()
+    imp_b_size_bytes <- safe_object_size_bytes(imp_b)
+    append_batch_log(
+      make_batch_row(
+        batch = batch_attempt_idx,
+        stage = "mice_returned",
+        status = "ok",
+        m_batch = m_b,
+        seed = seed_b,
+        ok = TRUE,
+        started_at = mice_started_at,
+        finished_at = mice_finished_at,
+        m_done_before = m_done_before,
+        m_done_after = m_done_before,
+        seconds = as.numeric(difftime(mice_finished_at, mice_started_at, units = "secs")),
+        gc_pre = mem_pre,
+        gc_post = mem_after_mice,
+        rss_mb = get_rss_mb(),
+        imp_b_size_bytes = imp_b_size_bytes,
+        imp_acc_size_bytes = safe_object_size_bytes(imp_acc),
+        checkpoint_path = NA_character_,
+        notes = "mice() returned successfully"
+      )
+    )
+
+    imp_b_saved <- tryCatch({
+      saveRDS(imp_b, imp_b_path)
+      TRUE
+    }, error = function(e) e)
+    if (inherits(imp_b_saved, "error")) {
+      err_msg <- conditionMessage(imp_b_saved)
+      mem_stats <- get_vcells_stats()
+      append_batch_log(
+        make_batch_row(
+          batch = batch_attempt_idx,
+          stage = "batch_failed",
+          status = "failed",
+          failure_stage = "imp_b_checkpoint_save",
+          m_batch = m_b,
+          seed = seed_b,
+          ok = FALSE,
+          error_message = err_msg,
+          started_at = mice_finished_at,
+          finished_at = Sys.time(),
+          m_done_before = m_done_before,
+          m_done_after = m_done_before,
+          seconds = as.numeric(difftime(Sys.time(), mice_finished_at, units = "secs")),
+          gc_pre = mem_after_mice,
+          gc_post = mem_stats,
+          rss_mb = get_rss_mb(),
+          imp_b_size_bytes = imp_b_size_bytes,
+          imp_acc_size_bytes = safe_object_size_bytes(imp_acc),
+          checkpoint_path = imp_b_path,
+          notes = "failed while saving imp_b checkpoint"
+        )
+      )
+      stop("Failed to save imp_b checkpoint for batch ", batch_attempt_idx, ": ", err_msg, call. = FALSE)
     }
+
+    ibind_started_at <- Sys.time()
+    mem_ibind_start <- get_vcells_stats()
+    left_m <- if (is.null(imp_acc)) 0L else imp_acc$m
+    left_size_bytes <- safe_object_size_bytes(imp_acc)
+    right_m <- imp_b$m
+    append_batch_log(
+      make_batch_row(
+        batch = batch_attempt_idx,
+        stage = "ibind_started",
+        status = "started",
+        m_batch = m_b,
+        seed = seed_b,
+        ok = NA,
+        started_at = ibind_started_at,
+        finished_at = NA_character_,
+        m_done_before = m_done_before,
+        m_done_after = m_done_before,
+        gc_pre = mem_ibind_start,
+        gc_post = NULL,
+        rss_mb = get_rss_mb(),
+        imp_b_size_bytes = imp_b_size_bytes,
+        imp_acc_size_bytes = left_size_bytes,
+        checkpoint_path = imp_b_path,
+        notes = if (is.null(imp_acc)) "initial accumulator assignment" else "about to call mice::ibind()"
+      )
+    )
+    append_combine_log(
+      make_combine_row(
+        batch = batch_attempt_idx,
+        combine_stage = "ibind_started",
+        left_m = left_m,
+        right_m = right_m,
+        left_size_bytes = left_size_bytes,
+        right_size_bytes = imp_b_size_bytes,
+        started_at = ibind_started_at,
+        finished_at = NA_character_,
+        ok = NA,
+        error_message = NA_character_,
+        gc_vcells_frac = mem_ibind_start$gc_vcells_frac,
+        rss_mb = get_rss_mb()
+      )
+    )
+
+    ibind_result <- tryCatch(
+      if (is.null(imp_acc)) imp_b else mice::ibind(imp_acc, imp_b),
+      error = function(e) e
+    )
+    if (inherits(ibind_result, "error")) {
+      err_msg <- conditionMessage(ibind_result)
+      mem_stats <- get_vcells_stats()
+      append_combine_log(
+        make_combine_row(
+          batch = batch_attempt_idx,
+          combine_stage = "ibind_failed",
+          left_m = left_m,
+          right_m = right_m,
+          left_size_bytes = left_size_bytes,
+          right_size_bytes = imp_b_size_bytes,
+          started_at = ibind_started_at,
+          finished_at = Sys.time(),
+          ok = FALSE,
+          error_message = err_msg,
+          gc_vcells_frac = mem_stats$gc_vcells_frac,
+          rss_mb = get_rss_mb()
+        )
+      )
+      append_batch_log(
+        make_batch_row(
+          batch = batch_attempt_idx,
+          stage = "batch_failed",
+          status = "failed",
+          failure_stage = "ibind",
+          m_batch = m_b,
+          seed = seed_b,
+          ok = FALSE,
+          error_message = err_msg,
+          started_at = ibind_started_at,
+          finished_at = Sys.time(),
+          m_done_before = m_done_before,
+          m_done_after = m_done_before,
+          seconds = as.numeric(difftime(Sys.time(), ibind_started_at, units = "secs")),
+          gc_pre = mem_ibind_start,
+          gc_post = mem_stats,
+          rss_mb = get_rss_mb(),
+          imp_b_size_bytes = imp_b_size_bytes,
+          imp_acc_size_bytes = left_size_bytes,
+          checkpoint_path = imp_b_path,
+          notes = "mice::ibind() returned a caught error"
+        )
+      )
+      stop("MICE batch ", batch_attempt_idx, " failed during ibind(); see log: ", results_path("mice_batches_log.csv"))
+    }
+
+    imp_acc <- ibind_result
+    ibind_finished_at <- Sys.time()
+    mem_after_ibind <- get_vcells_stats()
+    append_combine_log(
+      make_combine_row(
+        batch = batch_attempt_idx,
+        combine_stage = "ibind_completed",
+        left_m = left_m,
+        right_m = right_m,
+        left_size_bytes = left_size_bytes,
+        right_size_bytes = imp_b_size_bytes,
+        started_at = ibind_started_at,
+        finished_at = ibind_finished_at,
+        ok = TRUE,
+        error_message = NA_character_,
+        gc_vcells_frac = mem_after_ibind$gc_vcells_frac,
+        rss_mb = get_rss_mb()
+      )
+    )
+    append_batch_log(
+      make_batch_row(
+        batch = batch_attempt_idx,
+        stage = "ibind_completed",
+        status = "ok",
+        m_batch = m_b,
+        seed = seed_b,
+        ok = TRUE,
+        started_at = ibind_started_at,
+        finished_at = ibind_finished_at,
+        m_done_before = m_done_before,
+        m_done_after = imp_acc$m,
+        seconds = as.numeric(difftime(ibind_finished_at, ibind_started_at, units = "secs")),
+        gc_pre = mem_ibind_start,
+        gc_post = mem_after_ibind,
+        rss_mb = get_rss_mb(),
+        imp_b_size_bytes = imp_b_size_bytes,
+        imp_acc_size_bytes = safe_object_size_bytes(imp_acc),
+        checkpoint_path = imp_b_path,
+        notes = if (left_m == 0L) "initialized accumulator" else "mice::ibind() completed"
+      )
+    )
 
     le_b <- imp_b$loggedEvents
     le_b <- if (is.null(le_b)) data.frame() else as.data.frame(le_b)
@@ -7612,28 +8087,85 @@ run_mice_batched <- function(m_total, m_batch_start, maxit, base_seed) {
     }
 
     m_done <- imp_acc$m
-    mem_stats <- get_vcells_stats()
-    batch_log[[batch_attempt_idx]] <- data.frame(
-      batch = batch_attempt_idx,
-      m_batch = m_b,
-      seed = seed_b,
-      status = "completed",
-      ok = TRUE,
-      error_message = NA_character_,
-      started_at = as.character(t0),
-      finished_at = as.character(Sys.time()),
-      m_done_before = m_done_before,
-      m_done_after = m_done,
-      seconds = as.numeric(difftime(Sys.time(), t0, units = "secs")),
-      gc_vcells_used_mb_pre = mem_pre$gc_vcells_used_mb,
-      gc_vcells_limit_mb_pre = mem_pre$gc_vcells_limit_mb,
-      gc_vcells_frac_pre = mem_pre$gc_vcells_frac,
-      gc_vcells_used_mb_post = mem_stats$gc_vcells_used_mb,
-      gc_vcells_limit_mb_post = mem_stats$gc_vcells_limit_mb,
-      gc_vcells_frac_post = mem_stats$gc_vcells_frac,
-      stringsAsFactors = FALSE
+    checkpoint_started_at <- Sys.time()
+    append_batch_log(
+      make_batch_row(
+        batch = batch_attempt_idx,
+        stage = "checkpoint_started",
+        status = "started",
+        m_batch = m_b,
+        seed = seed_b,
+        ok = NA,
+        started_at = checkpoint_started_at,
+        finished_at = NA_character_,
+        m_done_before = m_done_before,
+        m_done_after = m_done,
+        gc_pre = mem_after_ibind,
+        gc_post = NULL,
+        rss_mb = get_rss_mb(),
+        imp_b_size_bytes = imp_b_size_bytes,
+        imp_acc_size_bytes = safe_object_size_bytes(imp_acc),
+        checkpoint_path = imp_acc_path,
+        notes = "about to save accumulated mids checkpoint"
+      )
     )
-    write_batch_log()
+    imp_acc_saved <- tryCatch({
+      saveRDS(imp_acc, imp_acc_path)
+      TRUE
+    }, error = function(e) e)
+    if (inherits(imp_acc_saved, "error")) {
+      err_msg <- conditionMessage(imp_acc_saved)
+      mem_stats <- get_vcells_stats()
+      append_batch_log(
+        make_batch_row(
+          batch = batch_attempt_idx,
+          stage = "batch_failed",
+          status = "failed",
+          failure_stage = "imp_acc_checkpoint_save",
+          m_batch = m_b,
+          seed = seed_b,
+          ok = FALSE,
+          error_message = err_msg,
+          started_at = checkpoint_started_at,
+          finished_at = Sys.time(),
+          m_done_before = m_done_before,
+          m_done_after = m_done,
+          seconds = as.numeric(difftime(Sys.time(), checkpoint_started_at, units = "secs")),
+          gc_pre = mem_after_ibind,
+          gc_post = mem_stats,
+          rss_mb = get_rss_mb(),
+          imp_b_size_bytes = imp_b_size_bytes,
+          imp_acc_size_bytes = safe_object_size_bytes(imp_acc),
+          checkpoint_path = imp_acc_path,
+          notes = "failed while saving imp_acc checkpoint"
+        )
+      )
+      stop("Failed to save imp_acc checkpoint for batch ", batch_attempt_idx, ": ", err_msg, call. = FALSE)
+    }
+    checkpoint_finished_at <- Sys.time()
+    mem_after_checkpoint <- get_vcells_stats()
+    append_batch_log(
+      make_batch_row(
+        batch = batch_attempt_idx,
+        stage = "checkpoint_saved",
+        status = "completed",
+        m_batch = m_b,
+        seed = seed_b,
+        ok = TRUE,
+        started_at = checkpoint_started_at,
+        finished_at = checkpoint_finished_at,
+        m_done_before = m_done_before,
+        m_done_after = m_done,
+        seconds = as.numeric(difftime(checkpoint_finished_at, checkpoint_started_at, units = "secs")),
+        gc_pre = mem_after_ibind,
+        gc_post = mem_after_checkpoint,
+        rss_mb = get_rss_mb(),
+        imp_b_size_bytes = imp_b_size_bytes,
+        imp_acc_size_bytes = safe_object_size_bytes(imp_acc),
+        checkpoint_path = imp_acc_path,
+        notes = "saved accumulated mids checkpoint"
+      )
+    )
     rm(imp_b)
     if (MI_GC_EVERY_BATCH) invisible(gc())
 
@@ -7660,6 +8192,7 @@ run_mice_batched <- function(m_total, m_batch_start, maxit, base_seed) {
   }
 
   write_batch_log()
+  write_combine_log()
   log_events_raw_batched <- dplyr::bind_rows(logged_events_acc)
   attr(imp_acc, "logged_events_batched") <- log_events_raw_batched
   imp_acc
@@ -7694,6 +8227,7 @@ if (use_batched) {
   imp <- run_mice_batched(M_IMP_RUN, MI_BATCH_START, MAXIT_RUN, MI_SEED)
 } else {
   write_csv_safely(data.frame(), results_path("mice_batches_log.csv"), row_names = FALSE)
+  write_csv_safely(data.frame(), results_path("mice_combine_log.csv"), row_names = FALSE)
 }
 if (inherits(imp, "error")) stop(imp)
 stopifnot(inherits(imp, "mids"))
@@ -8078,7 +8612,7 @@ if (length(na_counts)) {
 
 ```{r mi-mcerror}
 #| code-block-title: "MI Monte Carlo error diagnostics"
-#| echo: true
+#| echo: false
 #| message: false
 
 # Purpose: mi mcerror.
@@ -8485,7 +9019,7 @@ if (nrow(mi_obs_imp_summary)) {
 
 ```{r mi-missing-pattern}
 #| code-block-title: "Missingness pattern (saved to file)"
-#| echo: true
+#| echo: false
 #| message: false
 #| results: "hide"
 #| fig-show: "hide"
@@ -8671,7 +9205,7 @@ Note: the MI computations below run in a single pass per imputation (weights, ba
 
 ```{r fail-fast-checks}
 #| code-block-title: "FAIL-FAST CHECKS"
-#| echo: true
+#| echo: false
 #| message: false
 # Purpose: fail fast checks.
 # These checks intentionally stop early if MI state is not valid.
@@ -8697,7 +9231,7 @@ for (i in seq_len(imp$m)) {
 
 ```{r mi-single-pass}
 #| code-block-title: "MI single-pass pipeline (weights, balance, outcomes)"
-#| echo: true
+#| echo: false
 #| message: false
 # This single-pass loop computes MI weights, target balance, 3-level outcomes,
 # and spline outcomes in one traversal of imputations to avoid repeated
@@ -10681,7 +11215,7 @@ message("VBG MI 3-level results were computed in the single-pass MI loop above."
 
 ```{r table3-ipw-mi-co2}
 #| code-block-title: "Primary IPW associations (MI-pooled)"
-#| echo: true
+#| echo: false
 #| message: false
 
 # Purpose: table3 ipw mi co2.
@@ -10743,7 +11277,7 @@ gt::gt(table3_wide) |>
 
 ```{r table-summary-adjusted-threelevel}
 #| code-block-title: "Summary: adjusted CO2-category ORs (unweighted, IPW, IPW+MI)"
-#| echo: true
+#| echo: false
 #| message: false
 
 # Purpose: table summary adjusted threelevel.
@@ -12361,7 +12895,7 @@ float_barrier("section")
 
 ```{r ipw-output-parity}
 #| code-block-title: "IPSW output parity audit (non-MI vs MI)"
-#| echo: true
+#| echo: false
 #| message: false
 # Purpose: ipw output parity.
 non_mi_ipw_outputs <- tibble::tribble(
@@ -12477,7 +13011,7 @@ render_table_pdf_maybe(
 
 ```{r key-results-output-audit}
 #| code-block-title: "Canonical key-results artifact audit"
-#| echo: true
+#| echo: false
 #| message: false
 # Purpose: verify the additional canonical key-results artifacts across spline and categorical tracks.
 key_results_outputs <- tibble::tribble(
@@ -12512,7 +13046,7 @@ key_results_outputs |>
 ```{r supplement-artifact-manifest}
 #| code-block-title: "Manuscript asset manifests"
 #| include: true
-#| echo: true
+#| echo: false
 #| message: false
 # Purpose: freeze manuscript-facing numbering, paths, aliases, and targeted duplicate cleanup.
 # helper: delete only the known duplicate spill files for mapped supplement
@@ -12548,30 +13082,54 @@ format_manifest_path <- function(path) {
   pretty_path(path)
 }
 
+# helper: split comma-separated extension declarations into a stable vector.
+split_expected_extensions <- function(x) {
+  if (is.null(x) || is.na(x) || !nzchar(x)) return(character(0))
+  trimws(strsplit(x, ",", fixed = TRUE)[[1]]) |>
+    (\(vals) vals[nzchar(vals)])()
+}
+
+# helper: write markdown reports without prepending the diagnostics log header.
+write_markdown_report <- function(lines, path) {
+  writeLines(lines, con = path)
+  invisible(TRUE)
+}
+
+# helper: collapse repeated strings for compact audit detail columns.
+collapse_unique_text <- function(x) {
+  x <- unique(as.character(x))
+  x <- x[!is.na(x) & nzchar(x)]
+  paste(x, collapse = "; ")
+}
+
 # Canonical artifact names stay analysis-oriented for code stability, while
 # alias artifact names are manuscript-facing and numbered/titled for drafting.
-# The supplement manifest is derived from this unified registry so numbering and
-# file paths cannot silently drift away from the notebook outputs.
+# All provenance/check outputs are derived from this one registry so numbering,
+# paths, and validation display cannot silently drift apart.
 manuscript_asset_manifest_internal <- tibble::tribble(
-  ~manuscript_label, ~title, ~kind, ~section, ~chunk_label, ~status, ~notes, ~analysis_family, ~canonical_subdir, ~canonical_stub, ~alias_subdir, ~alias_stub, ~primary_ext,
-  "Figure 1", "Cohort assembly and target population for inverse probability-of-sampling weighting", "figure", "main", "cohort-flow-figure", "generated", "Primary cohort-flow display; .pdf sidecar also generated.", "main", "", "cohort_flow", "figs", "figure_1_cohort_assembly_target_population_ipsw", "png",
-  "Figure 2", "Primary MI-logistic IPSW-weighted spline associations of pCO2 with clinical outcomes by ABG and VBG", "figure", "main", "key-results-spline-main-mi-ipw-abg-vbg", "generated", "Combined manuscript-facing weighted spline figure from the primary MI-logistic IPSW analysis; .pdf sidecar also generated.", "main_mi_ipw_spline", "figs", "key-results-spline-main-mi-ipw-abg-vbg", "figs", "figure_2_primary_weighted_spline_associations_abg_vbg", "png",
-  "Table 1", "Baseline characteristics of the analytic cohort overall and by receipt of arterial and venous blood gas testing", "table", "main", "table1-everyone-abg-vbg", "generated", "Rendered from the canonical tbl1/tbl1_combined_csv objects; paired CSV also generated.", "baseline", "", "table1_combined", "", "table_1_baseline_characteristics_analytic_cohort", "pdf",
-  "Table 2", "MI-pooled, MI-logistic IPSW-weighted 3-level categorical results for ABG and VBG", "table", "main", "table2-weighted-categorical-outcomes", "generated", "Main manuscript table for weighted categorical ORs and predicted probabilities across ABG and VBG.", "main_mi_weighted_categorical", "", "table_2_weighted_categorical_outcomes", "", "table_2_weighted_categorical_outcomes", "pdf",
-  "Figure S1", "Covariate balance after MI logistic inverse-probability weighting for ABG and VBG test-ordering models", "figure", "supplement", "loveplot-mi-logistic", "generated", "Primary balance diagnostic for the MI logistic IPSW analysis.", "mi_logistic_primary", "figs", "loveplot-mi-logistic-abg-vbg", "figs", "figure_s1_covariate_balance_mi_logistic_ipsw", "png",
-  "Figure S2", "Propensity-score overlap for MI logistic ABG and VBG test-ordering models", "figure", "supplement", "mi-propensity-histograms-logistic", "generated", "Imputation-averaged tested-versus-untested propensity-score distributions under the MI logistic IPSW models.", "mi_logistic_primary", "figs", "propensity-histograms-mi-logistic", "figs", "figure_s2_propensity_score_overlap_mi_logistic", "png",
-  "Figure S3", "SHAP-style contribution summaries for MI logistic ABG and VBG test-ordering models", "figure", "supplement", "shap-top10-mi-logistic-display", "generated", "Mean absolute contribution summaries from the MI logistic IPSW test-ordering models.", "mi_logistic_primary", "figs", "shap-top10-mi-logistic-abg-vbg", "figs", "figure_s3_shap_style_contributions_mi_logistic", "png",
-  "Figure S4", "MI-logistic IPSW-weighted categorical associations of pCO2 category with clinical outcomes by ABG and VBG", "figure", "supplement", "key-results-cat3-main-mi-ipw-abg-vbg", "generated", "Weighted categorical display from the primary MI-logistic IPSW analysis, intentionally harmonized as Figure S4 rather than a main-text Figure 3.", "mi_weighted_categorical", "figs", "key-results-cat3-main-mi-ipw-abg-vbg", "figs", "figure_s4_weighted_categorical_associations_abg_vbg", "png",
-  "Figure S5", "Unweighted covariate-adjusted spline associations of pCO2 with clinical outcomes by ABG and VBG", "figure", "supplement", "key-results-spline-adjusted-abg-vbg", "generated", "Combined adjusted complete-case spline figure; .pdf sidecar also generated.", "unweighted_adjusted", "figs", "key-results-spline-adjusted-abg-vbg", "figs", "figure_s5_unweighted_adjusted_spline_abg_vbg", "png",
-  "Table S2", "Crude associations of pCO2 category with clinical outcomes by ABG and VBG", "table", "supplement", "supplement-table-s2-crude", "generated", "Standalone crude categorical odds-ratio table; paired CSV also generated.", "crude", "", "table_s2_crude_threelevel", "", "table_s2_crude_threelevel", "pdf",
-  "Table S3", "GBM IPSW-weighted associations of pCO2 category with clinical outcomes by ABG and VBG", "table", "supplement", "supplement-table-s3-gbm", "generated", "Standalone GBM IPSW-weighted categorical odds-ratio table; paired CSV also generated.", "gbm_sensitivity", "", "table_s3_gbm_threelevel", "", "table_s3_gbm_threelevel", "pdf",
-  "Figure S6", "Covariate balance after gradient-boosted propensity weighting for ABG and VBG test-ordering models", "figure", "supplement", "loveplot-ipw-gbm", "generated", "Raw-versus-weighted absolute standardized mean differences; dashed line marks |SMD| = 0.1.", "gbm_sensitivity", "figs", "loveplot-ipw-gbm-abg-vbg", "figs", "figure_s6_covariate_balance_gbm_weighting", "png",
-  "Figure S7", "Propensity-score overlap for gradient-boosted ABG and VBG test-ordering models", "figure", "supplement", "propensity-histograms-conditional", "generated", "Tested-versus-untested propensity-score distributions under the GBM sensitivity models.", "gbm_sensitivity", "figs", "propensity-histograms-conditional", "figs", "figure_s7_propensity_score_overlap_gbm", "png",
-  "Figure S8", "SHAP-style contribution summaries for gradient-boosted ABG and VBG test-ordering models", "figure", "supplement", "shap-top10-ipw-gbm-display", "generated", "Mean absolute SHAP value summaries; not interpreted as independent predictors.", "gbm_sensitivity", "figs", "shap-top10-ipw-gbm-abg-vbg", "figs", "figure_s8_shap_style_contributions_gbm", "png",
-  "Supplementary Table 1", "Inclusion criteria into the enriched sample", "table", "supplement", "", "external/manual", "Defined outside the notebook; intentionally not generated here.", "external", "", "", "", "", "",
-  "Figure 3", "Deprecated draft-only reference for weighted categorical results", "figure", "draft_only", "", "draft_only", "Weighted categorical display is intentionally harmonized as Figure S4; no Figure 3 alias is generated.", "deprecated", "", "", "", "", ""
+  ~manuscript_label, ~numbering_slot, ~title, ~kind, ~section, ~chunk_label, ~status, ~source_type, ~required_in_validation, ~expected_extensions, ~pdf_display, ~deprecated_replacement, ~missing_artifact_severity, ~notes, ~analysis_family, ~canonical_subdir, ~canonical_stub, ~alias_subdir, ~alias_stub, ~primary_ext,
+  "Figure 1", "Figure 1", "Cohort assembly and target population for inverse probability-of-sampling weighting", "figure", "main", "cohort-flow-figure", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Primary cohort-flow display; .pdf sidecar also generated.", "main", "", "cohort_flow", "figs", "figure_1_cohort_assembly_target_population_ipsw", "png",
+  "Figure 2", "Figure 2", "Primary MI-logistic IPSW-weighted spline associations of pCO2 with clinical outcomes by ABG and VBG", "figure", "main", "key-results-spline-main-mi-ipw-abg-vbg", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Combined manuscript-facing weighted spline figure from the primary MI-logistic IPSW analysis; .pdf sidecar also generated.", "main_mi_ipw_spline", "figs", "key-results-spline-main-mi-ipw-abg-vbg", "figs", "figure_2_primary_weighted_spline_associations_abg_vbg", "png",
+  "Table 1", "Table 1", "Baseline characteristics of the analytic cohort overall and by receipt of arterial and venous blood gas testing", "table", "main", "table1-everyone-abg-vbg", "generated", "notebook_generated", TRUE, "csv,pdf", TRUE, "", "fail", "Rendered from the canonical tbl1/tbl1_combined_csv objects; paired CSV also generated.", "baseline", "", "table1_combined", "", "table_1_baseline_characteristics_analytic_cohort", "pdf",
+  "Table 2", "Table 2", "MI-pooled, MI-logistic IPSW-weighted 3-level categorical results for ABG and VBG", "table", "main", "table2-weighted-categorical-outcomes", "generated", "notebook_generated", TRUE, "csv,pdf", TRUE, "", "fail", "Main manuscript table for weighted categorical ORs and predicted probabilities across ABG and VBG.", "main_mi_weighted_categorical", "", "table_2_weighted_categorical_outcomes", "", "table_2_weighted_categorical_outcomes", "pdf",
+  "Figure S1", "Figure S1", "Covariate balance after MI logistic inverse-probability weighting for ABG and VBG test-ordering models", "figure", "supplement", "loveplot-mi-logistic", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Primary balance diagnostic for the MI logistic IPSW analysis.", "mi_logistic_primary", "figs", "loveplot-mi-logistic-abg-vbg", "figs", "figure_s1_covariate_balance_mi_logistic_ipsw", "png",
+  "Figure S2", "Figure S2", "Propensity-score overlap for MI logistic ABG and VBG test-ordering models", "figure", "supplement", "mi-propensity-histograms-logistic", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Imputation-averaged tested-versus-untested propensity-score distributions under the MI logistic IPSW models.", "mi_logistic_primary", "figs", "propensity-histograms-mi-logistic", "figs", "figure_s2_propensity_score_overlap_mi_logistic", "png",
+  "Figure S3", "Figure S3", "SHAP-style contribution summaries for MI logistic ABG and VBG test-ordering models", "figure", "supplement", "shap-top10-mi-logistic-display", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Mean absolute contribution summaries from the MI logistic IPSW test-ordering models.", "mi_logistic_primary", "figs", "shap-top10-mi-logistic-abg-vbg", "figs", "figure_s3_shap_style_contributions_mi_logistic", "png",
+  "Figure S4", "Figure S4", "MI-logistic IPSW-weighted categorical associations of pCO2 category with clinical outcomes by ABG and VBG", "figure", "supplement", "key-results-cat3-main-mi-ipw-abg-vbg", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "Figure 3", "fail", "Weighted categorical display from the primary MI-logistic IPSW analysis, intentionally harmonized as Figure S4 rather than a main-text Figure 3.", "mi_weighted_categorical", "figs", "key-results-cat3-main-mi-ipw-abg-vbg", "figs", "figure_s4_weighted_categorical_associations_abg_vbg", "png",
+  "Figure S5", "Figure S5", "Unweighted covariate-adjusted spline associations of pCO2 with clinical outcomes by ABG and VBG", "figure", "supplement", "key-results-spline-adjusted-abg-vbg", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Combined adjusted complete-case spline figure; .pdf sidecar also generated.", "unweighted_adjusted", "figs", "key-results-spline-adjusted-abg-vbg", "figs", "figure_s5_unweighted_adjusted_spline_abg_vbg", "png",
+  "Table S2", "Table S2", "Crude associations of pCO2 category with clinical outcomes by ABG and VBG", "table", "supplement", "supplement-table-s2-crude", "generated", "notebook_generated", TRUE, "csv,pdf", TRUE, "", "fail", "Standalone crude categorical odds-ratio table; paired CSV also generated.", "crude", "", "table_s2_crude_threelevel", "", "table_s2_crude_threelevel", "pdf",
+  "Table S3", "Table S3", "GBM IPSW-weighted associations of pCO2 category with clinical outcomes by ABG and VBG", "table", "supplement", "supplement-table-s3-gbm", "generated", "notebook_generated", TRUE, "csv,pdf", TRUE, "", "fail", "Standalone GBM IPSW-weighted categorical odds-ratio table; paired CSV also generated.", "gbm_sensitivity", "", "table_s3_gbm_threelevel", "", "table_s3_gbm_threelevel", "pdf",
+  "Figure S6", "Figure S6", "Covariate balance after gradient-boosted propensity weighting for ABG and VBG test-ordering models", "figure", "supplement", "loveplot-ipw-gbm", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Raw-versus-weighted absolute standardized mean differences; dashed line marks |SMD| = 0.1.", "gbm_sensitivity", "figs", "loveplot-ipw-gbm-abg-vbg", "figs", "figure_s6_covariate_balance_gbm_weighting", "png",
+  "Figure S7", "Figure S7", "Propensity-score overlap for gradient-boosted ABG and VBG test-ordering models", "figure", "supplement", "propensity-histograms-conditional", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Tested-versus-untested propensity-score distributions under the GBM sensitivity models.", "gbm_sensitivity", "figs", "propensity-histograms-conditional", "figs", "figure_s7_propensity_score_overlap_gbm", "png",
+  "Figure S8", "Figure S8", "SHAP-style contribution summaries for gradient-boosted ABG and VBG test-ordering models", "figure", "supplement", "shap-top10-ipw-gbm-display", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Mean absolute SHAP value summaries; not interpreted as independent predictors.", "gbm_sensitivity", "figs", "shap-top10-ipw-gbm-abg-vbg", "figs", "figure_s8_shap_style_contributions_gbm", "png",
+  "Supplementary Table 1", "Supplementary Table 1", "Inclusion criteria into the enriched sample", "table", "supplement", "", "external/manual", "external/manual", TRUE, "", FALSE, "", "info", "Defined outside the notebook; intentionally not generated here.", "external", "", "", "", "", "",
+  "Figure 3", "Figure 3", "Deprecated draft-only reference for weighted categorical results", "figure", "draft_only", "", "draft_only", "suppressed/deprecated", FALSE, "", FALSE, "Figure S4", "suppressed", "Weighted categorical display is intentionally harmonized as Figure S4; no Figure 3 alias is generated.", "deprecated", "", "", "", "", ""
 ) |>
   dplyr::mutate(
+    manuscript_label_safe = safe_manuscript_text(manuscript_label),
+    title_safe = safe_manuscript_text(title),
+    caption_safe = manuscript_caption(manuscript_label, title),
+    expected_extension_list = purrr::map(expected_extensions, split_expected_extensions),
     canonical_artifact_file = mapply(
       artifact_file_path,
       stub = canonical_stub,
@@ -12621,11 +13179,282 @@ manuscript_asset_manifest_internal <- manuscript_asset_manifest_internal |>
     alias_artifact_path = vapply(alias_artifact_file, format_manifest_path, character(1L))
   )
 
+active_manuscript_assets <- manuscript_asset_manifest_internal |>
+  dplyr::filter(status != "draft_only")
+
+generated_manuscript_assets <- active_manuscript_assets |>
+  dplyr::filter(status == "generated")
+
+numbering_conflicts <- active_manuscript_assets |>
+  dplyr::count(numbering_slot, name = "n_assets") |>
+  dplyr::filter(n_assets > 1L)
+
+alias_conflicts <- generated_manuscript_assets |>
+  dplyr::filter(!is.na(alias_stub), nzchar(alias_stub)) |>
+  dplyr::count(alias_subdir, alias_stub, name = "n_assets") |>
+  dplyr::filter(n_assets > 1L)
+
+canonical_conflicts <- generated_manuscript_assets |>
+  dplyr::filter(!is.na(canonical_stub), nzchar(canonical_stub)) |>
+  dplyr::count(canonical_subdir, canonical_stub, name = "n_assets") |>
+  dplyr::filter(n_assets > 1L)
+
+deprecated_numbering_conflicts <- active_manuscript_assets |>
+  dplyr::filter(numbering_slot == "Figure 3")
+
+plot_registry_current <- read_plot_registry() |>
+  dplyr::filter(run_id == diag_run_id)
+
+plot_registry_conflicts <- plot_registry_current |>
+  dplyr::count(plot_name, name = "n_rows") |>
+  dplyr::filter(n_rows > 1L)
+
+duplicate_asset_audit <- dplyr::bind_rows(
+  tibble::tibble(
+    audit_scope = "numbering_slot",
+    audit_key = if (nrow(numbering_conflicts)) numbering_conflicts$numbering_slot else "all_active_slots",
+    status = if (nrow(numbering_conflicts)) "conflict" else "pass",
+    severity = if (nrow(numbering_conflicts)) "high" else "none",
+    n_rows = if (nrow(numbering_conflicts)) numbering_conflicts$n_assets else 0L,
+    detail = if (nrow(numbering_conflicts)) "Multiple active assets share one manuscript numbering slot." else "No contradictory active numbering slots detected."
+  ),
+  tibble::tibble(
+    audit_scope = "alias_stub",
+    audit_key = if (nrow(alias_conflicts)) paste0(alias_conflicts$alias_subdir, "::", alias_conflicts$alias_stub) else "all_aliases",
+    status = if (nrow(alias_conflicts)) "conflict" else "pass",
+    severity = if (nrow(alias_conflicts)) "high" else "none",
+    n_rows = if (nrow(alias_conflicts)) alias_conflicts$n_assets else 0L,
+    detail = if (nrow(alias_conflicts)) "Multiple active assets share one manuscript-facing alias." else "No conflicting manuscript alias stubs detected."
+  ),
+  tibble::tibble(
+    audit_scope = "canonical_stub",
+    audit_key = if (nrow(canonical_conflicts)) paste0(canonical_conflicts$canonical_subdir, "::", canonical_conflicts$canonical_stub) else "all_canonical_stubs",
+    status = if (nrow(canonical_conflicts)) "conflict" else "pass",
+    severity = if (nrow(canonical_conflicts)) "high" else "none",
+    n_rows = if (nrow(canonical_conflicts)) canonical_conflicts$n_assets else 0L,
+    detail = if (nrow(canonical_conflicts)) "Multiple active assets share one canonical artifact stub." else "No conflicting canonical artifact stubs detected."
+  ),
+  tibble::tibble(
+    audit_scope = "deprecated_slot",
+    audit_key = "Figure 3",
+    status = if (nrow(deprecated_numbering_conflicts)) "conflict" else "pass",
+    severity = if (nrow(deprecated_numbering_conflicts)) "high" else "none",
+    n_rows = nrow(deprecated_numbering_conflicts),
+    detail = if (nrow(deprecated_numbering_conflicts)) "Deprecated Figure 3 is still active in validation outputs." else "Deprecated Figure 3 numbering is suppressed."
+  ),
+  tibble::tibble(
+    audit_scope = "plot_registry",
+    audit_key = if (nrow(plot_registry_conflicts)) plot_registry_conflicts$plot_name else "plot_registry_run",
+    status = if (nrow(plot_registry_conflicts)) "conflict" else "pass",
+    severity = if (nrow(plot_registry_conflicts)) "high" else "none",
+    n_rows = if (nrow(plot_registry_conflicts)) plot_registry_conflicts$n_rows else nrow(plot_registry_current),
+    detail = if (nrow(plot_registry_conflicts)) "plot_registry.csv contains duplicate figure names for the current run." else "plot_registry.csv has unique figure names for the current run."
+  )
+)
+
+write_csv_safely(duplicate_asset_audit, results_path("duplicate_asset_audit.csv"), row_names = FALSE)
+
+glyph_audit <- dplyr::bind_rows(
+  active_manuscript_assets |>
+    dplyr::transmute(
+      manuscript_label = manuscript_label_safe,
+      field_name = "caption",
+      raw_text = paste0(manuscript_label, ". ", title),
+      safe_text = caption_safe
+    ),
+  tibble::tibble(
+    manuscript_label = "validation",
+    field_name = "section_heading",
+    raw_text = "Validation build summary",
+    safe_text = safe_manuscript_text("Validation build summary")
+  ),
+  tibble::tibble(
+    manuscript_label = "validation",
+    field_name = "section_heading",
+    raw_text = "Diagnostics audit summary",
+    safe_text = safe_manuscript_text("Diagnostics audit summary")
+  )
+) |>
+  dplyr::mutate(
+    raw_is_ascii = is_ascii_text(raw_text),
+    safe_is_ascii = is_ascii_text(safe_text),
+    normalized = raw_text != safe_text,
+    glyph_status = dplyr::if_else(safe_is_ascii, "pass", "fail"),
+    severity = dplyr::if_else(safe_is_ascii, "none", "high")
+  )
+
+write_csv_safely(glyph_audit, results_path("glyph_audit.csv"), row_names = FALSE)
+
+build_artifact_check_rows <- function(row) {
+  row <- as.list(row)
+  if (identical(row$status, "generated")) {
+    roles <- list(
+      canonical = list(stub = row$canonical_stub, subdir = row$canonical_subdir),
+      alias = list(stub = row$alias_stub, subdir = row$alias_subdir)
+    )
+    return(
+      purrr::imap_dfr(roles, function(info, artifact_role) {
+        if (is.null(info$stub) || is.na(info$stub) || !nzchar(info$stub)) {
+          return(tibble::tibble())
+        }
+        purrr::map_dfr(row$expected_extension_list[[1]], function(ext) {
+          artifact_path <- artifact_file_path(info$stub, ext, info$subdir)
+          exists_flag <- file.exists(artifact_path)
+          tibble::tibble(
+            manuscript_label = row$manuscript_label_safe,
+            numbering_slot = row$numbering_slot,
+            kind = row$kind,
+            section = row$section,
+            artifact_role = artifact_role,
+            ext = ext,
+            artifact_path = format_manifest_path(artifact_path),
+            exists = exists_flag,
+            source_type = row$source_type,
+            required_in_validation = row$required_in_validation,
+            pdf_display = row$pdf_display,
+            allowed_missing = FALSE,
+            check_status = dplyr::if_else(exists_flag, "present", "missing_required"),
+            severity = dplyr::if_else(exists_flag, "none", row$missing_artifact_severity),
+            notes = row$notes
+          )
+        })
+      })
+    )
+  }
+  if (identical(row$status, "external/manual")) {
+    return(
+      tibble::tibble(
+        manuscript_label = row$manuscript_label_safe,
+        numbering_slot = row$numbering_slot,
+        kind = row$kind,
+        section = row$section,
+        artifact_role = "external/manual",
+        ext = "",
+        artifact_path = "",
+        exists = NA,
+        source_type = row$source_type,
+        required_in_validation = row$required_in_validation,
+        pdf_display = row$pdf_display,
+        allowed_missing = TRUE,
+        check_status = "external_manual_declared",
+        severity = row$missing_artifact_severity,
+        notes = row$notes
+      )
+    )
+  }
+  tibble::tibble(
+    manuscript_label = row$manuscript_label_safe,
+    numbering_slot = row$numbering_slot,
+    kind = row$kind,
+    section = row$section,
+    artifact_role = "suppressed",
+    ext = "",
+    artifact_path = "",
+    exists = NA,
+    source_type = row$source_type,
+    required_in_validation = row$required_in_validation,
+    pdf_display = row$pdf_display,
+    allowed_missing = TRUE,
+    check_status = "suppressed_draft_only",
+    severity = "none",
+    notes = row$notes
+  )
+}
+
+artifact_check_status <- purrr::map_dfr(
+  seq_len(nrow(manuscript_asset_manifest_internal)),
+  ~ build_artifact_check_rows(manuscript_asset_manifest_internal[.x, , drop = FALSE])
+)
+
+artifact_check_missing <- artifact_check_status |>
+  dplyr::filter(check_status %in% c("missing_required", "external_manual_declared"))
+
+write_csv_safely(artifact_check_status, results_path("artifact_check_status.csv"), row_names = FALSE)
+write_csv_safely(artifact_check_missing, results_path("artifact_check_missing.csv"), row_names = FALSE)
+
+manuscript_asset_audit <- manuscript_asset_manifest_internal |>
+  dplyr::mutate(
+    existence_status = dplyr::case_when(
+      status == "generated" &
+        file.exists(canonical_artifact_file) &
+        file.exists(alias_artifact_file) ~ "generated",
+      status == "external/manual" ~ "external/manual",
+      status == "draft_only" ~ "draft_only",
+      status == "generated" ~ "missing",
+      TRUE ~ status
+    )
+  ) |>
+  dplyr::transmute(
+    manuscript_label = manuscript_label_safe,
+    title = title_safe,
+    canonical_artifact_path,
+    alias_artifact_path,
+    existence_status
+  )
+
+write_csv_safely(manuscript_asset_audit, results_path("manuscript_asset_audit.csv"), row_names = FALSE)
+
+artifact_provenance_manifest <- manuscript_asset_manifest_internal |>
+  dplyr::transmute(
+    manuscript_label = manuscript_label_safe,
+    numbering_slot,
+    title = title_safe,
+    caption = caption_safe,
+    kind,
+    section,
+    chunk_label,
+    status,
+    source_type,
+    required_in_validation,
+    expected_extensions,
+    pdf_display,
+    deprecated_replacement,
+    missing_artifact_severity,
+    canonical_stub,
+    canonical_artifact_path,
+    alias_stub,
+    alias_artifact_path,
+    analysis_family,
+    notes
+  )
+
+canonical_asset_registry <- active_manuscript_assets |>
+  dplyr::transmute(
+    numbering_slot,
+    manuscript_label = manuscript_label_safe,
+    title = title_safe,
+    kind,
+    section,
+    status,
+    source_type,
+    required_in_validation,
+    pdf_display,
+    canonical_stub,
+    canonical_artifact_path,
+    alias_stub,
+    alias_artifact_path,
+    deprecated_replacement,
+    analysis_family
+  )
+
+write_csv_safely(artifact_provenance_manifest, results_path("artifact_provenance_manifest.csv"), row_names = FALSE)
+write_csv_safely(canonical_asset_registry, results_path("canonical_asset_registry.csv"), row_names = FALSE)
+
 write_csv_safely(
   manuscript_asset_manifest_internal |>
-    dplyr::select(
-      manuscript_label, title, kind, section, chunk_label,
-      canonical_artifact_path, alias_artifact_path, status, notes
+    dplyr::transmute(
+      manuscript_label = manuscript_label_safe,
+      title = title_safe,
+      kind,
+      section,
+      chunk_label,
+      canonical_artifact_path,
+      alias_artifact_path,
+      status,
+      source_type,
+      required_in_validation,
+      pdf_display,
+      notes
     ),
   results_path("manuscript_asset_manifest.csv"),
   row_names = FALSE
@@ -12634,8 +13463,8 @@ write_csv_safely(
 supplement_manifest_internal <- manuscript_asset_manifest_internal |>
   dplyr::filter(section == "supplement") |>
   dplyr::transmute(
-    supp_label = manuscript_label,
-    title = title,
+    supp_label = manuscript_label_safe,
+    title = title_safe,
     analysis_family = analysis_family,
     artifact_path = alias_artifact_path,
     chunk_name = chunk_label,
@@ -12649,18 +13478,83 @@ write_csv_safely(
   results_path("supplement_manifest.csv"),
   row_names = FALSE
 )
+
+manuscript_sync_lines <- c(
+  "# Manuscript sync report",
+  "",
+  paste0("- Run ID: ", diag_run_id),
+  paste0("- Active validation assets: ", nrow(active_manuscript_assets)),
+  paste0("- Generated validation assets: ", nrow(generated_manuscript_assets)),
+  paste0("- External/manual assets: ", sum(active_manuscript_assets$status == "external/manual")),
+  paste0("- Draft-only assets suppressed: ", sum(manuscript_asset_manifest_internal$status == "draft_only")),
+  paste0("- Missing required generated artifacts: ", sum(artifact_check_status$check_status == "missing_required", na.rm = TRUE)),
+  paste0("- Allowed external/manual declarations: ", sum(artifact_check_status$check_status == "external_manual_declared", na.rm = TRUE)),
+  paste0("- Glyph audit failures: ", sum(glyph_audit$glyph_status == "fail", na.rm = TRUE)),
+  paste0("- Duplicate/numbering conflicts: ", sum(duplicate_asset_audit$status == "conflict", na.rm = TRUE)),
+  "",
+  "## Active numbering map",
+  ""
+)
+
+active_numbering_lines <- active_manuscript_assets |>
+  dplyr::transmute(line = paste0("- ", numbering_slot, ": ", title_safe, " [", kind, "; ", status, "]")) |>
+  dplyr::pull(line)
+
+write_markdown_report(
+  c(manuscript_sync_lines, active_numbering_lines),
+  results_path("manuscript_sync_report.md")
+)
+
+validation_static_summary <- tibble::tibble(
+  component = c("artifact_registry", "external_manual_assets", "glyph_audit", "duplicate_audit"),
+  status = c(
+    if (any(artifact_check_status$check_status == "missing_required")) "FAIL" else "PASS",
+    if (any(artifact_check_status$check_status == "external_manual_declared")) "PASS_WITH_WARNINGS" else "PASS",
+    if (any(glyph_audit$glyph_status == "fail")) "FAIL" else "PASS",
+    if (any(duplicate_asset_audit$status == "conflict")) "FAIL" else "PASS"
+  ),
+  detail = c(
+    paste0(sum(artifact_check_status$check_status == "missing_required"), " missing required generated artifact rows."),
+    paste0(sum(artifact_check_status$check_status == "external_manual_declared"), " declared external/manual rows."),
+    paste0(sum(glyph_audit$glyph_status == "fail"), " unsafe manuscript glyph rows."),
+    paste0(sum(duplicate_asset_audit$status == "conflict"), " conflicting duplicate/numbering rows.")
+  )
+)
+
+validation_static_failures <- c(
+  if (nrow(numbering_conflicts)) paste0("Conflicting active numbering slots: ", collapse_unique_text(numbering_conflicts$numbering_slot)),
+  if (nrow(alias_conflicts)) paste0("Conflicting manuscript alias stubs: ", collapse_unique_text(alias_conflicts$alias_stub)),
+  if (nrow(canonical_conflicts)) paste0("Conflicting canonical artifact stubs: ", collapse_unique_text(canonical_conflicts$canonical_stub)),
+  if (nrow(deprecated_numbering_conflicts)) "Deprecated Figure 3 remained active in the validation registry.",
+  if (any(glyph_audit$glyph_status == "fail")) "Unsafe manuscript glyphs remained after normalization.",
+  if (any(artifact_check_status$check_status == "missing_required")) paste0(
+    "Missing required generated artifacts: ",
+    collapse_unique_text(artifact_check_status$artifact_path[artifact_check_status$check_status == "missing_required"])
+  ),
+  if (any(duplicate_asset_audit$status == "conflict")) paste0(
+    "Duplicate audit conflicts: ",
+    collapse_unique_text(duplicate_asset_audit$audit_key[duplicate_asset_audit$status == "conflict"])
+  )
+)
+
+if (length(validation_static_failures)) {
+  stop(
+    "Validation registry checks failed: ",
+    paste(validation_static_failures, collapse = " | ")
+  )
+}
 ```
 
 ```{r manuscript-facing-display}
-#| code-block-title: "Manuscript-facing figure and table display"
+#| code-block-title: "Manuscript-facing figure and table helpers"
 #| include: true
 #| echo: false
-#| results: "asis"
+#| results: "hide"
 #| message: false
-# Purpose: display manuscript-facing assets in explicit manuscript order, independent of generation-chunk order.
+# Purpose: define the canonical manuscript-facing display helpers used later in the validation section.
 manifest_row <- function(label) {
   row <- manuscript_asset_manifest_internal |>
-    dplyr::filter(manuscript_label == label)
+    dplyr::filter(manuscript_label_safe == safe_manuscript_text(label))
   if (nrow(row) != 1L) stop("Expected exactly one manifest row for ", label)
   row
 }
@@ -12685,7 +13579,7 @@ manifest_figure_path <- function(label) {
 render_manuscript_figure <- function(label, width = "0.88\\linewidth") {
   row <- manifest_row(label)
   fig_path <- manifest_figure_path(label)
-  caption_text <- paste0(label, ". ", row$title)
+  caption_text <- row$caption_safe[[1]]
   if (knitr::is_latex_output()) {
     latex_caption <- escape_latex_text(caption_text)
     latex_path <- display_path(fig_path)
@@ -12715,7 +13609,7 @@ render_manifest_table <- function(label, df, file_stub, wide = FALSE, digits = 2
   row <- manifest_row(label)
   render_table_pdf(
     df,
-    caption = row$title,
+    caption = row$title_safe[[1]],
     file_stub = file_stub,
     wide = wide,
     digits = digits,
@@ -12727,91 +13621,77 @@ render_manifest_table <- function(label, df, file_stub, wide = FALSE, digits = 2
   )
 }
 
-render_manuscript_figure("Figure 1")
-render_manuscript_figure("Figure 2")
-render_manifest_table(
-  "Table 1",
-  tbl1_combined_csv,
-  file_stub = "table1_combined",
-  wide = TRUE,
-  digits = 2,
-  max_cols = 8,
-  landscape = TRUE
-)
-render_manifest_table(
-  "Table 2",
-  table_2_weighted_categorical_outcomes,
-  file_stub = "table_2_weighted_categorical_outcomes",
-  wide = TRUE,
-  digits = 2,
-  max_cols = 8,
-  landscape = TRUE
-)
-render_manuscript_figure("Figure S1")
-render_manuscript_figure("Figure S2")
-render_manuscript_figure("Figure S3")
-render_manuscript_figure("Figure S4")
-render_manuscript_figure("Figure S5")
-render_manifest_table(
-  "Table S2",
-  table_s2_crude_threelevel,
-  file_stub = "table_s2_crude_threelevel",
-  wide = TRUE,
-  digits = 2
-)
-render_manifest_table(
-  "Table S3",
-  table_s3_gbm_threelevel,
-  file_stub = "table_s3_gbm_threelevel",
-  wide = TRUE,
-  digits = 2
-)
-render_manuscript_figure("Figure S6")
-render_manuscript_figure("Figure S7")
-render_manuscript_figure("Figure S8")
+render_validation_manuscript_assets <- function() {
+  render_manuscript_figure("Figure 1")
+  render_manuscript_figure("Figure 2")
+  render_manifest_table(
+    "Table 1",
+    tbl1_combined_csv,
+    file_stub = "table1_combined",
+    wide = TRUE,
+    digits = 2,
+    max_cols = 8,
+    landscape = TRUE
+  )
+  render_manifest_table(
+    "Table 2",
+    table_2_weighted_categorical_outcomes,
+    file_stub = "table_2_weighted_categorical_outcomes",
+    wide = TRUE,
+    digits = 2,
+    max_cols = 8,
+    landscape = TRUE
+  )
+  render_manuscript_figure("Figure S1")
+  render_manuscript_figure("Figure S2")
+  render_manuscript_figure("Figure S3")
+  render_manuscript_figure("Figure S4")
+  render_manuscript_figure("Figure S5")
+  render_manifest_table(
+    "Table S2",
+    table_s2_crude_threelevel,
+    file_stub = "table_s2_crude_threelevel",
+    wide = TRUE,
+    digits = 2
+  )
+  render_manifest_table(
+    "Table S3",
+    table_s3_gbm_threelevel,
+    file_stub = "table_s3_gbm_threelevel",
+    wide = TRUE,
+    digits = 2
+  )
+  render_manuscript_figure("Figure S6")
+  render_manuscript_figure("Figure S7")
+  render_manuscript_figure("Figure S8")
+  invisible(TRUE)
+}
 ```
 
 ```{r manuscript-asset-audit}
-#| code-block-title: "Manuscript-facing asset audit"
+#| code-block-title: "Manuscript-facing asset audit data"
 #| include: true
-#| echo: true
-#| results: "asis"
-# Purpose: compact manuscript-facing asset audit table.
-manuscript_asset_audit <- manuscript_asset_manifest_internal |>
-  dplyr::mutate(
-    existence_status = dplyr::case_when(
-      status == "generated" &
-        file.exists(canonical_artifact_file) &
-        file.exists(alias_artifact_file) ~ "generated",
-      status == "external/manual" ~ "external/manual",
-      status == "draft_only" ~ "draft_only",
-      status == "generated" ~ "missing",
-      TRUE ~ status
-    )
-  ) |>
-  dplyr::select(
-    manuscript_label, title, canonical_artifact_path,
-    alias_artifact_path, existence_status
-  )
-
-render_table_pdf(
-  manuscript_asset_audit,
-  caption = "Manuscript-facing figure and table asset audit",
-  file_stub = "manuscript_asset_audit",
-  wide = TRUE,
-  digits = 0,
-  max_cols = 5,
-  landscape = TRUE
-)
+#| echo: false
+#| results: "hide"
+# Purpose: keep the compact manuscript-facing asset audit available for the final validation section.
+invisible(manuscript_asset_audit)
 ```
 
 ```{r supplement-artifact-assertions}
 #| include: true
+#| echo: false
 #| message: false
 # Purpose: verify manuscript-facing artifacts are present and numbering stays harmonized.
 required_manifest_files <- c(
   results_path("manuscript_asset_manifest.csv"),
-  results_path("supplement_manifest.csv")
+  results_path("supplement_manifest.csv"),
+  results_path("artifact_provenance_manifest.csv"),
+  results_path("artifact_check_status.csv"),
+  results_path("artifact_check_missing.csv"),
+  results_path("canonical_asset_registry.csv"),
+  results_path("manuscript_sync_report.md"),
+  results_path("glyph_audit.csv"),
+  results_path("duplicate_asset_audit.csv")
 )
 
 generated_manifest_files <- manuscript_asset_manifest_internal |>
@@ -12829,8 +13709,8 @@ missing_manifest_files <- c(
 supplement_manifest_expected <- manuscript_asset_manifest_internal |>
   dplyr::filter(section == "supplement") |>
   dplyr::transmute(
-    supp_label = manuscript_label,
-    title = title,
+    supp_label = manuscript_label_safe,
+    title = title_safe,
     analysis_family = analysis_family,
     artifact_path = alias_artifact_path,
     chunk_name = chunk_label,
@@ -12874,7 +13754,7 @@ figure_3_aliases <- list.files(
 )
 
 has_external_s1 <- any(
-  manuscript_asset_manifest_internal$manuscript_label == "Supplementary Table 1" &
+  manuscript_asset_manifest_internal$manuscript_label_safe == "Supplementary Table 1" &
     manuscript_asset_manifest_internal$status == "external/manual"
 )
 
@@ -13086,7 +13966,7 @@ message("Using memory-safe observed vs imputed plots from mi-diagnostics (no mid
 
 ```{r diagnostics-mi-stability}
 #| code-block-title: "Diagnostics: MI stability across m"
-#| echo: true
+#| echo: false
 #| message: false
 # Purpose: diagnostics mi stability.
 stopifnot(exists("imp"))
@@ -13262,7 +14142,7 @@ append_mem_snapshot("diagnostics", "mi_fmi_glm", "post")
 
 ```{r diagnostics-mi-maxit}
 #| code-block-title: "Diagnostics: MI maxit sensitivity"
-#| echo: true
+#| echo: false
 #| message: false
 # Purpose: diagnostics mi maxit.
 run_maxit_sensitivity <- TRUE
@@ -13361,7 +14241,7 @@ if (run_maxit_sensitivity) {
 
 ```{r diagnostics-weights}
 #| code-block-title: "Diagnostics: propensity and weights"
-#| echo: true
+#| echo: false
 #| message: false
 #| include: true
 # Purpose: diagnostics weights.
@@ -13467,7 +14347,7 @@ save_diag_plot(p_scatter_vbg, results_path("figs", "diag-wt-weights-vs-ps-vbg.pn
 
 ```{r diagnostics-balance}
 #| code-block-title: "Diagnostics: target balance (treated vs target sample)"
-#| echo: true
+#| echo: false
 #| message: false
 
 # Purpose: diagnostics balance.
@@ -13605,7 +14485,7 @@ if (is.finite(ess_vbg) && is.finite(n_vbg) && ess_vbg < 0.2 * n_vbg) {
 
 ```{r diagnostics-outcome}
 #| code-block-title: "Diagnostics: outcome spline curves"
-#| echo: true
+#| echo: false
 #| message: false
 # Purpose: diagnostics outcome.
 stopifnot(exists("abg_curves"), exists("vbg_curves"))
@@ -13642,7 +14522,7 @@ stopifnot(exists("abg_curves"), exists("vbg_curves"))
 
 ```{r diagnostics-summary}
 #| code-block-title: "Diagnostics summary and audit"
-#| echo: true
+#| echo: false
 #| message: false
 # Purpose: diagnostics summary.
 stopifnot(exists("bal_imp_summary"), exists("wt_sum"), exists("chain_diag_stats"))
@@ -13864,7 +14744,7 @@ write_diag_lines(audit_lines, audit_file)
 
 ```{r warnings-summary}
 #| code-block-title: "Warnings summary (captured)"
-#| echo: true
+#| echo: false
 #| message: false
 # Purpose: warnings summary.
 stopifnot(exists("mi_warn_log"), exists("mi_info_log"))
@@ -13906,7 +14786,7 @@ write_csv_safely(plot_drop_log(), results_path("plot_drop_log.csv"), row_names =
 
 ```{r mi-nonconvergence-summary}
 #| code-block-title: "MI Nonconvergence Summary"
-#| echo: true
+#| echo: false
 #| message: false
 
 # Purpose: mi nonconvergence summary.
@@ -14033,7 +14913,7 @@ if (nrow(log_events_summary)) {
 
 ```{r runtime-log-export}
 #| code-block-title: "Runtime log"
-#| echo: true
+#| echo: false
 #| message: false
 # Purpose: runtime log export.
 stopifnot(exists("runtime_log"), nrow(runtime_log) > 0)
@@ -14185,50 +15065,183 @@ if (length(missing_files) || length(run_id_mismatch)) {
 ```{r diagnostics-audit-run}
 #| code-block-title: "Diagnostics audit (auto-run)"
 #| include: true
+#| echo: false
 
 # Purpose: diagnostics audit run.
 audit_script <- here::here("R", "diagnostics_audit.R")
 audit_md <- results_path("diagnostics_audit.md")
+audit_summary <- results_path("diagnostics_audit_summary.csv")
+audit_issues <- results_path("diagnostics_audit_issues.csv")
 stopifnot(file.exists(audit_script))
-
-audit_out <- tryCatch(
-  system2(
-    "Rscript",
-    args = c(shQuote(audit_script)),
-    env = c(paste0("DIAG_RESULTS_DIR=", results_dir)),
-    stdout = TRUE,
-    stderr = TRUE
-  ),
+old_diag_results_dir <- Sys.getenv("DIAG_RESULTS_DIR", unset = "")
+on.exit(Sys.setenv(DIAG_RESULTS_DIR = old_diag_results_dir), add = TRUE)
+Sys.setenv(DIAG_RESULTS_DIR = results_dir)
+audit_env <- new.env(parent = globalenv())
+audit_result <- tryCatch(
+  {
+    sys.source(audit_script, envir = audit_env)
+    TRUE
+  },
   error = function(e) e
 )
-if (inherits(audit_out, "error")) {
-  warning("diagnostics_audit.R failed: ", conditionMessage(audit_out), call. = FALSE)
-} else {
-  status <- attr(audit_out, "status")
-  if (!is.null(status) && status != 0) {
-    warning("diagnostics_audit.R exited with status ", status, ".", call. = FALSE)
-  }
+if (inherits(audit_result, "error")) {
+  stop("diagnostics_audit.R failed: ", conditionMessage(audit_result), call. = FALSE)
 }
+
+read_required_audit_csv <- function(path, required_cols, label) {
+  if (!file.exists(path)) {
+    stop(label, " missing after diagnostics audit: ", path, call. = FALSE)
+  }
+  df <- tryCatch(
+    utils::read.csv(path, stringsAsFactors = FALSE),
+    error = function(e) stop(label, " could not be read: ", conditionMessage(e), call. = FALSE)
+  )
+  missing_cols <- setdiff(required_cols, names(df))
+  if (length(missing_cols)) {
+    stop(
+      label, " missing required columns [",
+      paste(missing_cols, collapse = ", "),
+      "]: ", path,
+      call. = FALSE
+    )
+  }
+  df
+}
+
+diagnostics_audit_summary_df <- read_required_audit_csv(
+  audit_summary,
+  required_cols = c("component", "metric", "value", "status", "severity", "evidence_file", "note", "run_id", "run_ts"),
+  label = "diagnostics_audit_summary.csv"
+)
+
+diagnostics_audit_issues_df <- read_required_audit_csv(
+  audit_issues,
+  required_cols = c("severity", "component", "evidence_file", "evidence_snippet", "why_it_matters", "recommended_fix", "run_id", "run_ts"),
+  label = "diagnostics_audit_issues.csv"
+)
 ```
 
 ```{r diagnostics-audit-summary}
 #| code-block-title: "Diagnostics audit (summary)"
+#| include: true
+#| echo: false
+#| results: "hide"
+# Purpose: stage diagnostics audit outputs for the final validation section.
+diagnostics_audit_issues_df <- diagnostics_audit_issues_df |>
+  dplyr::arrange(factor(severity, levels = c("high", "medium", "low")))
+
+diagnostics_audit_summary_df <- diagnostics_audit_summary_df |>
+  dplyr::arrange(factor(status, levels = c("fail", "warn", "pass")))
+
+invisible(list(
+  summary = diagnostics_audit_summary_df,
+  issues = diagnostics_audit_issues_df
+))
+```
+
+```{r validation-build-summary}
+#| code-block-title: "Validation build summary"
 #| results: "asis"
-# Purpose: diagnostics audit summary.
-audit_issues <- results_path("diagnostics_audit_issues.csv")
-if (file.exists(audit_issues)) {
-  issues_df <- read.csv(audit_issues)
-  issues_df <- issues_df |>
-    dplyr::arrange(factor(severity, levels = c("blocker", "high", "medium", "low")))
-  render_table_pdf_maybe(
-    issues_df,
-    caption = "Diagnostics audit issues (see Results/diagnostics_audit.md for details)",
-    file_stub = "diagnostics_audit_issues",
-    digits = 2,
-    show = FALSE
+#| echo: false
+#| message: false
+# Purpose: render one canonical validation-oriented PDF section: build status,
+# provenance, manuscript-facing outputs, and compact essential audits.
+diagnostics_overall_status <- diagnostics_audit_summary_df |>
+  dplyr::filter(metric == "overall_status") |>
+  dplyr::slice_head(n = 1) |>
+  dplyr::pull(value)
+
+if (!length(diagnostics_overall_status) || !nzchar(diagnostics_overall_status)) {
+  stop("diagnostics_audit_summary.csv did not provide metric == 'overall_status'.", call. = FALSE)
+}
+
+build_status_components <- dplyr::bind_rows(
+  validation_static_summary,
+  tibble::tibble(
+    component = "diagnostics_audit",
+    status = diagnostics_overall_status,
+    detail = paste0(
+      sum(diagnostics_audit_issues_df$severity == "high", na.rm = TRUE), " high / ",
+      sum(diagnostics_audit_issues_df$severity == "medium", na.rm = TRUE), " medium / ",
+      sum(diagnostics_audit_issues_df$severity == "low", na.rm = TRUE), " low diagnostics issues."
+    )
   )
-} else {
-  cat("Diagnostics audit summary not available.\n")
+)
+
+final_build_status <- collapse_validation_status(build_status_components$status)
+
+validation_build_display <- dplyr::bind_rows(
+  tibble::tibble(
+    component = "overall_build",
+    status = final_build_status,
+    detail = "Final validation status derived from artifact checks, glyph audit, duplicate audit, and diagnostics audit."
+  ),
+  build_status_components
+)
+
+provenance_summary_display <- artifact_provenance_manifest |>
+  dplyr::count(section, kind, status, source_type, pdf_display, name = "n_assets") |>
+  dplyr::arrange(section, kind, status)
+
+artifact_check_summary_display <- artifact_check_status |>
+  dplyr::count(check_status, severity, allowed_missing, name = "n_rows") |>
+  dplyr::arrange(dplyr::desc(n_rows), check_status)
+
+diagnostics_audit_summary_display <- diagnostics_audit_summary_df |>
+  dplyr::select(component, metric, status, severity, value, note)
+
+render_table_pdf(
+  validation_build_display,
+  caption = "Validation build status",
+  file_stub = "validation_build_status",
+  wide = TRUE,
+  digits = 0,
+  max_cols = 3,
+  landscape = FALSE
+)
+
+render_table_pdf(
+  provenance_summary_display,
+  caption = "Artifact provenance summary",
+  file_stub = "artifact_provenance_summary",
+  wide = TRUE,
+  digits = 0,
+  max_cols = 6,
+  landscape = TRUE
+)
+
+render_validation_manuscript_assets()
+
+render_table_pdf(
+  artifact_check_summary_display,
+  caption = "Artifact check summary",
+  file_stub = "artifact_check_summary",
+  wide = FALSE,
+  digits = 0,
+  max_cols = 4,
+  landscape = FALSE
+)
+
+render_table_pdf(
+  diagnostics_audit_summary_display,
+  caption = "Diagnostics audit summary",
+  file_stub = "diagnostics_audit_summary_display",
+  wide = TRUE,
+  digits = 0,
+  max_cols = 6,
+  landscape = TRUE
+)
+
+if (any(diagnostics_audit_issues_df$severity %in% c("high", "medium", "low"), na.rm = TRUE)) {
+  render_table_pdf(
+    diagnostics_audit_issues_df,
+    caption = "Diagnostics audit issues",
+    file_stub = "diagnostics_audit_issues",
+    wide = TRUE,
+    digits = 0,
+    max_cols = 6,
+    landscape = TRUE
+  )
 }
 ```
 
@@ -14268,7 +15281,7 @@ writeLines(renv_status_lines, results_path("renv_status.txt"))
 
 ```{r software-statement}
 #| code-block-title: "Software"
-#| echo: true
+#| echo: false
 #| results: "asis"
 #| message: false
 # Purpose: software statement.

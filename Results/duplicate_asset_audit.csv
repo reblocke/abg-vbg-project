@@ -1,0 +1,6 @@
+"audit_scope","audit_key","status","severity","n_rows","detail","run_id","run_ts"
+"numbering_slot","all_active_slots","pass","none",0,"No contradictory active numbering slots detected.","20260416_211701","2026-04-16 21:17:01.49828"
+"alias_stub","all_aliases","pass","none",0,"No conflicting manuscript alias stubs detected.","20260416_211701","2026-04-16 21:17:01.49828"
+"canonical_stub","all_canonical_stubs","pass","none",0,"No conflicting canonical artifact stubs detected.","20260416_211701","2026-04-16 21:17:01.49828"
+"deprecated_slot","Figure 3","pass","none",0,"Deprecated Figure 3 numbering is suppressed.","20260416_211701","2026-04-16 21:17:01.49828"
+"plot_registry","plot_registry_run","pass","none",40,"plot_registry.csv has unique figure names for the current run.","20260416_211701","2026-04-16 21:17:01.49828"

@@ -1,3 +1,9 @@
 \usepackage{fvextra}
 \fvset{breaklines=true,breakanywhere=true}
-\IfFileExists{framed.sty}{\renewenvironment{Shaded}{}{}}{}
+\makeatletter
+\@ifundefined{Shaded}{%
+  \newenvironment{Shaded}{}{}%
+}{%
+  \renewenvironment{Shaded}{}{}%
+}
+\makeatother

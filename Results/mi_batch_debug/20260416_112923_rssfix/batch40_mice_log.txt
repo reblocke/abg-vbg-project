@@ -1,0 +1,7 @@
+2026-04-16 21:36:57 Loaded MI context from Results/archive/pre_run_20260416_211642/mi_batch_context.rds 
+2026-04-16 21:36:57 Loaded accumulator checkpoint from Results/archive/pre_run_20260416_211642/mi_batch_checkpoints/imp_acc_after_batch_39.rds 
+2026-04-16 21:36:57 Checkpoint mids m = 39; size bytes = 1298305080 
+2026-04-16 21:36:57 Requested batch = 40; requested seed = 24251206; expected seed from base rule = 24251206 
+2026-04-16 21:36:57 Context maxit = 20; MI rows = 515286; MI cols = 37 
+2026-04-16 21:36:57 Loaded package set: haven, labelled, dplyr, tibble, mice 
+2026-04-16 21:43:59 batch-40 mice() returned successfully; result size bytes = 454950968 
