@@ -18,6 +18,7 @@ Repository: <https://github.com/reblocke/abg-vbg-project>
 
 - Code: start with `Code Drafts/ABG-VBG analysis 2026-2-28.qmd`, then compare against `Code Drafts/ABG-VBG analysis 2025-12-11.qmd` if you need continuity with the older December workflow.
 - Outputs: use `Results/run_metadata.csv`, `Results/diagnostics_audit.md`, `Results/plot_registry.csv`, `Results/table_summary_adjusted_threelevel.csv`, `Results/Table1.docx`, `Results/Table2.docx`, and `Results/figs/` as the main review surfaces.
+- Validation build outputs: `Results/artifact_provenance_manifest.csv`, `Results/artifact_check_status.csv`, `Results/canonical_asset_registry.csv`, `Results/glyph_audit.csv`, `Results/duplicate_asset_audit.csv`, `Results/diagnostics_audit_summary.csv`, and `Results/diagnostics_audit_issues.csv`.
 - Manuscript: use `Drafts/04-08-25 ABG_VBG_Rough Draft BL.docx` first, then older draft files in `Drafts/` only for revision history.
 
 ## Quick start
@@ -32,31 +33,62 @@ renv::restore()
 3. Run the environment preflight:
 
 ```bash
-Rscript -e "source('scripts/check_env.R')"
+Rscript --vanilla -e "source('scripts/check_env.R')"
 ```
 
-4. Render the current primary notebook:
+4. Run the direct-dependency audit:
 
 ```bash
-quarto render "Code Drafts/ABG-VBG analysis 2026-2-28.qmd" --to pdf
+Rscript --vanilla scripts/check_dependencies.R
 ```
 
-Or use the wrapper:
+5. Render the current primary notebook from the repo root via the canonical wrapper:
 
 ```bash
 ./scripts/render_pdf.sh
 ```
 
+The wrapper is the only sanctioned validation entrypoint. It writes a timestamped combined stdout/stderr log to `Results/render_logs/` and preserves `/usr/bin/time -l` output for the render.
+The canonical PDF is validation-oriented: provenance/build status first, canonical manuscript assets only, and compact essential audits. There is no separate debug render mode.
+Before each wrapper run, existing MI/debug artifacts are archived under `Results/archive/pre_run_<render_ts>/` so abrupt-stop evidence is preserved without moving the rest of `Results/`.
+
+Machine-local MI resource overrides are available when needed for operational troubleshooting:
+
+```bash
+ABGVBG_MI_RAM_GB=8 ABGVBG_MI_BATCH_START=1 ./scripts/render_pdf.sh
+```
+
 Pilot render example matching the current `Results/` snapshot:
 
 ```bash
-quarto render "Code Drafts/ABG-VBG analysis 2026-2-28.qmd" --to pdf -P run_mode:pilot -P pilot_frac:0.01
+./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01
+```
+
+Manual postmortem recovery for an abrupt render stop:
+
+```bash
+Rscript --vanilla scripts/collect_render_postmortem.R \
+  --render-ts 20260416_112907 \
+  --results-dir Results \
+  --log-path Results/render_logs/render_20260416_112907.log \
+  --pdf-path "Code Drafts/ABG-VBG-analysis-2026-2-28.pdf"
+```
+
+Standalone batch-40 `mice()` reproduction from the archived batch-39 boundary:
+
+```bash
+Rscript --vanilla scripts/debug_batch40_mice.R \
+  --context Results/archive/pre_run_20260416_211642/mi_batch_context.rds \
+  --checkpoint Results/archive/pre_run_20260416_211642/mi_batch_checkpoints/imp_acc_after_batch_39.rds \
+  --batch 40 \
+  --seed 24251206 \
+  --outdir Results/mi_batch_debug/20260416_112923
 ```
 
 If you need to reproduce the older December notebook for comparison:
 
 ```bash
-quarto render "Code Drafts/ABG-VBG analysis 2025-12-11.qmd" --to pdf
+./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2025-12-11.qmd"
 ```
 
 ## Repository map
@@ -91,6 +123,8 @@ Use these as the main crosswalk from analysis outputs into the manuscript:
 - Core adjusted 3-level OR summary: `Results/table_summary_adjusted_threelevel.csv` and the cohort-specific split CSVs
 - Plot lookup and figure registry: `Results/plot_registry.csv`
 - Diagnostics summary: `Results/diagnostics_summary.csv`, `Results/diagnostics_audit.md`, `Results/runtime_summary.csv`
+- Validation-only audit surfaces: `Results/artifact_provenance_manifest.csv`, `Results/artifact_check_status.csv`, `Results/artifact_check_missing.csv`, `Results/canonical_asset_registry.csv`, `Results/manuscript_sync_report.md`, `Results/glyph_audit.csv`, `Results/duplicate_asset_audit.csv`, `Results/diagnostics_audit_summary.csv`, `Results/diagnostics_audit_issues.csv`
+- MI/debug postmortem surfaces: `Results/render_logs/rss_trace_<render_ts>.csv`, `Results/render_logs/postmortem_<render_ts>.md`, `Results/mi_run_status_<render_ts>.json`, `Results/mice_batches_log.csv`, `Results/mice_combine_log.csv`, `Results/mi_batch_context.rds`, `Results/mi_batch_checkpoints/`
 - Figure files: `Results/figs/`
 
 Note: figure filenames in `Results/figs/` can include chunk index suffixes; use `Results/plot_registry.csv` as the canonical crosswalk.
@@ -98,8 +132,7 @@ Note: figure filenames in `Results/figs/` can include chunk index suffixes; use 
 ## Stable outputs vs transient scratch files
 
 - Treat the CSV, DOCX, PNG, PDF, JSON, and Markdown files in `Results/` as the stable review artifacts.
-- MI scratch files such as `Results/mi_abg_vbg_mids.rds`, `Results/subset_data_pre_mi.rds`, `Results/mi_logistic_ps_*.rds`, and `Results/mi_weights/` are transient by design and may be auto-cleaned during renders.
-- If you need those transient MI artifacts for debugging, render with `KEEP_MI_TRANSIENT=1`.
+- MI scratch files such as `Results/mi_abg_vbg_mids.rds`, `Results/subset_data_pre_mi.rds`, `Results/mi_logistic_ps_*.rds`, and `Results/mi_weights/` are transient by design and are auto-cleaned during renders.
 
 ## Data access and governance
 
@@ -110,10 +143,37 @@ Note: figure filenames in `Results/figs/` can include chunk index suffixes; use 
 
 ## Reproducibility and checks
 
+- Direct dependency manifest: `DESCRIPTION`
 - Dependency lockfile: `renv.lock`
-- Preflight check before long renders: `Rscript -e "source('scripts/check_env.R')"`
+- Canonical render root: the repo root only. Do not validate renders from `Code Drafts/` or any other subdirectory.
+- Preflight check before long renders: `Rscript --vanilla -e "source('scripts/check_env.R')"`
+- Direct dependency audit before long renders: `Rscript --vanilla scripts/check_dependencies.R`
+- Canonical render command: `./scripts/render_pdf.sh` from the repo root
+- Render contract: one canonical report path only. Do not add alternate render modes that change figure embedding, table inclusion, scratch retention, or other report content/presentation.
+- Wrapper postflight now requires the validation artifact set named above; a render is not considered valid if any of those artifacts are missing or malformed.
+- The only sanctioned execution variation is dataset scope (`run_mode` with `pilot_frac`) plus machine-local path/resource controls that do not change analytical outputs.
 - The checked-in `Results/` snapshot reflects a pilot run; rerender the primary notebook for a fresh production run
 - No `testthat` suite is currently present in this repository
+
+## Dependency workflow
+
+- `DESCRIPTION` is the canonical list of direct R dependencies used by the notebook and reproducibility scripts.
+- `renv.lock` is the canonical fully resolved environment that collaborators restore onto a machine.
+- Lockfile-first recovery workflow on a new or drifted machine:
+  - `Rscript --vanilla -e "source('renv/activate.R'); renv::restore(clean = TRUE, prompt = FALSE)"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - only after a validated render, `Rscript --vanilla -e "source('renv/activate.R'); renv::snapshot(prompt = FALSE)"` if dependencies intentionally changed
+- Approved workflow for any dependency change:
+  - update code,
+  - add or remove the direct dependency in `DESCRIPTION`,
+  - install only the intended package change with `renv::install(...)`,
+  - run `Rscript --vanilla scripts/check_dependencies.R`,
+  - run a 1% pilot render through `./scripts/render_pdf.sh`,
+  - run `Rscript --vanilla -e "source('renv/activate.R'); renv::snapshot(prompt = FALSE)"`,
+  - commit code, `DESCRIPTION`, and `renv.lock` together.
+- If `renv::status()` shows version drift but the dependency audit passes and declared packages are installed, validate with a wrapper pilot render and only then snapshot the intentional working state.
 
 ## Citation, license, and support
 
