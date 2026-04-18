@@ -775,3 +775,24 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Next steps:
   - Compare this failed full-run window against outer terminal/app/session lifetime limits, because the isolated batch-40 reproduction succeeded while the full render died abruptly without a caught R error.
   - If another full rerun is attempted, keep the wrapper RSS trace enabled and treat notebook-side MI breadcrumbs plus manual collector output as the authoritative postmortem path.
+
+## 2026-04-18 10:21 MDT
+- Task: After merging PR #1 into `main`, promote the successful full-run artifacts onto `main` and prepare the merged feature branch for deletion.
+- Files changed:
+  - `WORKLOG.md`
+  - `Code Drafts/ABG-VBG-analysis-2026-2-28.pdf`
+  - `Results/mi_run_status_20260417_085351.json`
+  - `Results/render_logs/postmortem_20260417_085351.md`
+  - `Results/render_logs/render_20260417_085351.log`
+  - `Results/render_logs/rss_trace_20260417_085351.csv`
+- Commands run:
+  - merged PR `#1` into `main` with GitHub merge commit `06b9711`
+  - clean-clone verification of `main`
+  - copied the successful full-run PDF, status, postmortem, wrapper log, and RSS trace into a clean `main` checkout for commit
+- Outcomes:
+  - `main` contains the tested branch tip `ee66076` via merge commit `06b9711`.
+  - The successful full-run artifacts that had remained local-only are now being committed directly onto `main`.
+  - The artifact set being promoted is limited to the successful full-run outputs relied on during validation, not the entire dirty local render tree.
+- Next steps:
+  - Commit and push the artifact bundle onto `origin/main`.
+  - Delete the merged remote feature branch `codex/root-render-manuscript-checkpoint`.
