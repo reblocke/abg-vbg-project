@@ -68,6 +68,44 @@ watch_pid_markers() {
   done
 }
 
+detect_timing_mode() {
+  if [[ -x /usr/bin/time ]] && /usr/bin/time -l true >/dev/null 2>&1; then
+    echo "usrbin_time_l"
+    return 0
+  fi
+
+  if command -v gtime >/dev/null 2>&1 && gtime -v true >/dev/null 2>&1; then
+    echo "gtime_v"
+    return 0
+  fi
+
+  echo "none"
+}
+
+run_with_timing() {
+  local timing_mode="$1"
+  shift
+
+  case "${timing_mode}" in
+    usrbin_time_l)
+      echo "[render:timing] /usr/bin/time -l"
+      /usr/bin/time -l "$@"
+      ;;
+    gtime_v)
+      echo "[render:timing] gtime -v"
+      gtime -v "$@"
+      ;;
+    none)
+      echo "[render:timing] unavailable"
+      "$@"
+      ;;
+    *)
+      echo "[render:timing] unknown mode: ${timing_mode}"
+      return 1
+      ;;
+  esac
+}
+
 archive_debug_artifacts() {
   local archive_root="${RESULTS_DIR}/archive/pre_run_${RUN_TS}"
   local moved_any=0
@@ -247,7 +285,7 @@ start_rss_sampler "${RSS_TRACE_PATH}" "$$" "${QMD_PATH}"
 
 RENDER_STATUS=0
 set +e
-/usr/bin/time -l quarto render "${QMD_PATH}" --to pdf "${QUARTO_ARGS[@]}"
+run_with_timing "$(detect_timing_mode)" quarto render "${QMD_PATH}" --to pdf "${QUARTO_ARGS[@]}"
 RENDER_STATUS=$?
 set -e
 if [[ ${RENDER_STATUS} -ne 0 ]]; then
