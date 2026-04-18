@@ -1,0 +1,59 @@
+[render:start] 2026-04-15 20:11:59 -0700
+[render:qmd] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+[render:log] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Results/render_logs/render_20260415_201159.log
+[render:pdf_target] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf
+[render:args] -P run_mode:pilot -P pilot_frac:0.01
+[render:cleanup] removed stale /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.rmarkdown
+[render:cleanup] removed stale /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.rmarkdown
+[render:root] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project
+[render:preflight] check_env
+Starting environment preflight...
+Environment preflight passed.
+[render:preflight] check_dependencies
+Dependency audit targets:
+- /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+- /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/check_env.R
+- /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/check_dependencies.R
+
+Dependency audit note (renv::dependencies only):
+- rmarkdown
+- shiny
+
+Dependency audit passed for 44 declared direct packages.
+[render:quarto] begin
+[render:cwd] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project
+
+
+processing file: ABG-VBG-analysis-2026-2-28.rmarkdown
+1/299                                          
+2/299 [todo-notes]                             
+3/299                                          
+4/299 [setup-table-helpers]                    
+5/299                                          
+6/299 [setup-packages]                         
+7/299                                          
+8/299 [cohort-flow-helpers]                    
+9/299                                          
+10/299 [cohort-flow-figure]                     
+11/299                                          
+12/299 [setup-run-config]                       
+13/299                                          
+14/299 [setup-diagnostics-output]               
+15/299                                          
+16/299 [setup-diagnostics-helpers]              
+17/299                                          
+18/299 [latex-codeblock-risk-scan]              
+19/299                                          
+20/299 [setup-model-diagrams]                   
+21/299                                          
+22/299 [setup-shapviz]                          
+23/299                                          
+24/299 [runtime-hooks]                          
+25/299                                          
+26/299 [seed-escrow]                            
+27/299                                          
+28/299 [gt-pdf-helper]                          
+29/299                                          
+30/299 [stage1-start]                           
+31/299                                          
+32/299 [load-trinetx-data]                      

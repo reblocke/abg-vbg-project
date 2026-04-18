@@ -1,16 +1,1 @@
-The following package(s) are in an inconsistent state:
-
- package  installed recorded used
- consort  y         n        y   
- pdftools y         n        y   
- qpdf     y         n        y   
-
-The following package(s) are out of sync [lockfile != library]:
-
-# CRAN -----------------------------------------------------------------------
-- cluster    [2.1.8.1 != 2.1.8.2]
-- foreign    [0.8-90 != 0.8-91]
-- lattice    [0.22-7 != 0.22-9]
-- survival   [3.8-3 != 3.8-6]
-
-See `?renv::status` for advice on resolving these issues.
+No issues found -- the project is in a consistent state.

@@ -1,6 +1,6 @@
 # WORKLOG
 
-Persistent handoff record for analysis and notebook work in `/Users/reblocke/Research/abg-vbg-project`.
+Persistent handoff record for analysis and notebook work in this repository (`WORKLOG.md` at the repo root).
 
 ## Entry template
 - Date/time:
@@ -9,6 +9,62 @@ Persistent handoff record for analysis and notebook work in `/Users/reblocke/Res
 - Commands run:
 - Outcomes:
 - Next steps:
+
+## 2026-04-12
+- Date/time: 2026-04-12 09:48 AKDT
+- Task: Assess this machine's readiness for a monitored 1% pilot render and patch repo-level portability issues.
+- Files changed:
+  - `scripts/check_env.R`
+  - `scripts/render_pdf.sh`
+  - `README.md`
+  - `AGENTS.MD`
+  - `WORKLOG.md`
+- Commands run:
+  - `tail -n 60 WORKLOG.md`
+  - `rg -n "ABGVBG_DATA_DIR|ABGVBG_RESULTS_DIR|pilot_frac|run_mode|MI_BATCH_THRESHOLD|mem.maxVSize|check_env|full_db\\.dta|KEEP_MI_TRANSIENT" "Code Drafts/ABG-VBG analysis 2026-2-28.qmd" README.md scripts/check_env.R scripts/render_pdf.sh`
+  - `ls -lh data/full_db.dta Results/run_config.json renv.lock`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `git diff -- scripts/check_env.R scripts/render_pdf.sh README.md AGENTS.MD WORKLOG.md`
+- Outcomes:
+  - Confirmed the primary notebook is mostly machine-agnostic for execution: it resolves `data/` and `Results/` relative to the repo and supports `ABGVBG_DATA_DIR` / `ABGVBG_RESULTS_DIR` overrides.
+  - Confirmed local input readiness: `data/full_db.dta` is present on this machine.
+  - Patched `scripts/check_env.R` so the project-local `renv` package is discoverable under `Rscript --vanilla`; this removes the false "renv missing" failure mode on clean machines.
+  - Updated `scripts/render_pdf.sh` and README preflight commands to use the deterministic `--vanilla` path.
+  - Replaced the hard-coded `/Users/reblocke/.../WORKLOG.md` instruction with repo-local `WORKLOG.md` guidance.
+  - Preflight now runs correctly and reports the real remaining blocker: `renv` is out of sync with the lockfile. Reported inconsistencies were unrecorded-but-used `consort`, `pdftools`, and `qpdf`, plus lockfile/library version drift for `cluster`, `foreign`, `lattice`, and `survival`.
+  - Prior worklog measurements suggest a 1% pilot is feasible but close to the limit on an ~8 GB machine: recent 1% pilots peaked around 7.1-8.2 GB RSS on the other machine.
+- Next steps:
+  - Decide whether this machine should be aligned to the checked-in lockfile (`renv::restore()`) or whether the current working library should become the new recorded state (`renv::snapshot()` after confirming dependency intent).
+  - Once `renv` is synchronized, run a monitored 1% pilot:
+    - `/usr/bin/time -l quarto render "Code Drafts/ABG-VBG analysis 2026-2-28.qmd" --to pdf -P run_mode:pilot -P pilot_frac:0.01`
+
+- Date/time: 2026-04-12 10:30 AKDT
+- Task: Continue lockfile-first recovery after interrupted restore, classify package/system barriers, and harden dependency governance for this machine.
+- Files changed:
+  - `DESCRIPTION`
+  - `renv/settings.json`
+  - `scripts/check_env.R`
+  - `scripts/check_dependencies.R`
+  - `scripts/render_pdf.sh`
+  - `README.md`
+  - `WORKLOG.md`
+- Commands run:
+  - `ps -Ao pid,ppid,etime,%cpu,rss,stat,command | rg "renv::restore|source\\('scripts/check_env.R'\\)|/Library/Frameworks/R.framework/Resources/bin/exec/R"`
+  - `kill ...` on orphaned R restore/preflight processes from the interrupted turn
+  - `Rscript --vanilla -e "source('renv/activate.R'); renv::install('consort', prompt = FALSE)"`
+  - `Rscript --vanilla -e "source('renv/activate.R'); renv::install(c('consort', 'pdftools', 'cluster@2.1.8.1', 'foreign@0.8-90', 'lattice@0.22-7', 'survival@3.8-3'), prompt = FALSE)"`
+  - `Rscript --vanilla -e "lib <- normalizePath('renv/library/macos/R-4.5/aarch64-apple-darwin20', mustWork = TRUE); install.packages('pdftools', repos = 'https://cloud.r-project.org', type = 'binary', lib = lib)"`
+  - `Rscript --vanilla -e "lib <- normalizePath('renv/library/macos/R-4.5/aarch64-apple-darwin20', mustWork = TRUE); install.packages(c('cluster','foreign','lattice','survival'), repos = 'https://cloud.r-project.org', type = 'binary', lib = lib)"`
+- Outcomes:
+  - The interrupted turn left multiple orphaned R jobs running; cleared them before resuming recovery.
+  - `consort` was installed into the project library successfully.
+  - Exact lockfile-pinned source installs for `cluster`, `foreign`, `lattice`, `survival`, and `pdftools` are not viable on this machine due local toolchain/header issues (`libintl.h` / `ctime` missing for source builds).
+  - Current CRAN macOS binaries are available for `pdftools` (`3.7.0`) and for the recommended packages (`cluster 2.1.8.2`, `foreign 0.8-91`, `lattice 0.22-9`, `survival 3.8-6`), so the recovery path on this machine is validate-then-snapshot rather than exact source replay of the older lockfile versions.
+  - Added a repo-root `DESCRIPTION`, switched `renv` to explicit snapshots, added a deterministic dependency-audit script, and updated the render wrapper/README to enforce the new contract.
+- Next steps:
+  - Run `Rscript --vanilla -e "source('scripts/check_env.R')"` and `Rscript --vanilla scripts/check_dependencies.R`.
+  - Run the monitored 1% pilot render.
+  - If the pilot succeeds, run `Rscript --vanilla -e "source('renv/activate.R'); renv::snapshot(prompt = FALSE)"` and re-run preflight.
 
 ## 2026-04-09
 - Date/time: 2026-04-09 America/Denver
@@ -188,3 +244,534 @@ Persistent handoff record for analysis and notebook work in `/Users/reblocke/Res
 - Prior full render cleared the MI count bottleneck and reached `288/293 [pdf-hygiene-scan]` before failing on leaked absolute paths in the visible key-results audit table.
 - Patched `key-results-output-audit` so printed paths use `pretty_path()` while file existence still checks the internal absolute path.
 - Restarting a clean full render from the top with renewed process/resource monitoring.
+
+## 2026-04-12 canonical render path cleanup
+- Date/time: 2026-04-12 AKDT
+- Task: Remove alternate render-mode branches and document a single canonical render path while the full render continues in the background.
+- Files changed:
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/README.md`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/AGENTS.MD`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md`
+- Outcomes:
+  - Removed the user-facing `report_embed_mode` parameter and collapsed future renders to one canonical figure-display path.
+  - Canonical behavior is now: save manuscript-quality figure artifacts to `Results/figs/` and embed a lower-DPI temporary PNG preview inline in the notebook PDF.
+  - Removed the external `KEEP_MI_TRANSIENT` cleanup override so MI scratch cleanup is deterministic.
+  - Collapsed `mi_batch_threshold_*` out of YAML params into fixed notebook constants, keeping the same pilot/full thresholds without exposing them as render switches.
+  - Replaced the shared `SHOW_LOW_VALUE_TABLES` switch with explicit `show = FALSE` calls, removing the last notebook-wide content-mode toggle without changing current output behavior.
+  - Removed dormant chunk-runtime-text and MI replay debug branches from the notebook.
+  - Added an explicit repo policy in `README.md` and `AGENTS.MD` prohibiting alternate render modes beyond pilot/full dataset scope and machine-local path/resource controls that do not change analytical outputs.
+- Validation/commands run:
+  - `rg -n "report_embed_mode|KEEP_MI_TRANSIENT|LIGHT_REPORT|REPORT_EMBED_MODE|mi_batch_threshold_pilot|mi_batch_threshold_full" "Code Drafts/ABG-VBG analysis 2026-2-28.qmd" README.md AGENTS.MD`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+- Notes:
+  - The live full render was left untouched. It is still running under the older in-memory notebook state and will need a fresh rerender later if you want the completed full PDF to reflect the new canonical path.
+
+## 2026-04-13 full render postmortem (canonical rerender)
+- Date/time: 2026-04-13 AKDT
+- Task: Determine whether the canonical full rerender finished, stalled, or failed, and collect evidence for the failure mode.
+- Files changed:
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md`
+- Commands run:
+  - `ps -Ao pid,ppid,etime,state,%cpu,rss,command | rg 'render_pdf.sh|quarto render|quarto/bin/deno|/Applications/quarto/share/rmd/rmd.R|ABG-VBG analysis 2026-2-28.qmd|/R --slave|/R$'`
+  - `ls -lt Results | head -n 40`
+  - `stat -f '%Sm %N' -t '%Y-%m-%d %H:%M:%S %z' Results/run_metadata.csv Results/run_rowcounts.csv Results/mice_smoketest.log Results/subset_data_pre_mi.rds`
+  - `nl -ba 'Code Drafts/ABG-VBG analysis 2026-2-28.qmd' | sed -n '6370,6415p'`
+  - `nl -ba 'Code Drafts/ABG-VBG analysis 2026-2-28.qmd' | sed -n '7330,7545p'`
+  - `pmset -g log | grep -E 'Wake from|Entering (DarkWake|Sleep) state' | grep -E '2026-04-(12 2[2-3]|13 0[0-8])'`
+  - `/usr/bin/log show --start '2026-04-12 23:15:00' --end '2026-04-13 08:30:00' --style compact --predicate 'process == "kernel"' | grep -Ei 'memorystatus|jetsam|kill|out of memory|exc_resource|corpse|terminated'`
+- Outcomes:
+  - The canonical full rerender did not finish successfully. There is no live Quarto/R process tree and no final PDF at `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf`.
+  - The latest artifacts from this run stop at MI preflight / MI handoff:
+    - `Results/subset_data_pre_mi.rds` at `2026-04-12 23:21:22 -0800`
+    - `Results/mice_smoketest.log` at `2026-04-12 23:21:44 -0800`
+  - No MI completion or batch-progress artifacts were written:
+    - no `Results/mice_batches_log.csv`
+    - no `Results/mi_abg_vbg_mids.rds`
+    - no `Results/mice_logged_events_raw.csv`
+    - no `Results/runtime_log.csv`
+  - Notebook code shows that full mode must have entered batched MI (`subset_n = 515286` > `MI_BATCH_THRESHOLD_FULL = 200000`), then called `run_mice_batched()` and immediately `mice::mice(...)` for batch 1. Because `mice_batches_log.csv` is written both on caught batch failure and on successful batch completion, its absence implies the process stopped before the first batch returned to notebook-level error handling.
+  - No sleep/wake events occurred during the failure window, and there was no reboot. No relevant kernel `memorystatus`/`jetsam`/`out of memory` events or crash reports were found for the run window.
+  - Highest-confidence diagnosis: the run failed during the first full batched `mice()` call inside `mi-exec`, with a hard termination or external stop outside the notebook's normal error/logging path.
+  - Important likely contributor for the next rerun: the notebook still hard-codes `MI_RAM_GB <- 16L` even though this machine has `8.0 GiB` physical RAM, so batch sizing is being chosen as if this were the larger machine.
+- Next steps:
+  - Add a machine-local resource control so MI batch sizing reflects actual RAM on this machine.
+  - Capture stdout/stderr for the next full rerun to preserve the exact terminal failure message if the same hard stop recurs.
+
+## 2026-04-13 RAM-aware MI controls and render logging
+- Date/time: 2026-04-13 AKDT
+- Task: Implement machine-local MI resource detection, persist MI batch breadcrumbs, and capture wrapper stdout/stderr for future full-run troubleshooting.
+- Files changed:
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/render_pdf.sh`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/README.md`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md`
+- Outcomes:
+  - Added notebook-level machine resource detection with automatic physical RAM detection on macOS/Linux and optional env overrides:
+    - `ABGVBG_MI_RAM_GB`
+    - `ABGVBG_MI_BATCH_START`
+  - Changed automatic MI batch-start policy to be more conservative on low-memory machines:
+    - `<= 8 GiB -> 1`
+    - `<= 16 GiB -> 2`
+    - `> 16 GiB -> 5`
+  - Added effective `mi_ram_gb`, `mi_ram_gb_source`, `mi_batch_start`, and `mi_batch_start_source` to both `run_metadata` and `run_config.json`.
+  - Added pre-batch breadcrumb writes to `Results/mice_batches_log.csv` before each long `mice::mice(...)` call so a hard stop during batch 1 still leaves evidence on disk.
+  - Updated `scripts/render_pdf.sh` to write a timestamped combined stdout/stderr log under `Results/render_logs/`, preserve `/usr/bin/time -l` output, and record start/end/status lines.
+  - Documented the wrapper log location and MI resource overrides in `README.md`.
+- Validation/commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `Rscript --vanilla -e "tf <- tempfile(fileext='.R'); knitr::purl('Code Drafts/ABG-VBG analysis 2026-2-28.qmd', output = tf, quiet = TRUE); parse(file = tf); cat('QMD chunk parse passed\n')"`
+- Notes:
+  - `check_env.R` still reports the existing `renv` lockfile/library drift warning on this machine; this patch does not change the dependency state.
+
+## 2026-04-13 figure path hardening
+- Date/time: 2026-04-13 AKDT
+- Task: Remove the remaining manuscript-figure display fallback that could silently downgrade a PDF render, and normalize the cohort-flow inline preview path.
+- Files changed:
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md`
+- Outcomes:
+  - `manifest_figure_path()` now fails fast during LaTeX/PDF renders if a manuscript figure PDF artifact is missing, instead of silently falling back to PNG.
+  - The cohort-flow figure now writes its manuscript PNG/PDF artifacts as before, but embeds a temporary low-DPI preview PNG inline, matching the canonical preview pattern used by other figures.
+- Validation/commands run:
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `Rscript --vanilla -e "tf <- tempfile(fileext='.R'); knitr::purl('Code Drafts/ABG-VBG analysis 2026-2-28.qmd', output = tf, quiet = TRUE); parse(file = tf); cat('QMD chunk parse passed\n')"`
+- Notes:
+  - `check_env.R` still reports the existing `renv` lockfile/library drift warning on this machine; no dependency changes were made.
+
+## 2026-04-13 1% wrapper validation attempts
+- Date/time: 2026-04-13 AKDT
+- Task: Run a 1% pilot through the canonical wrapper and verify the new render logging plus RAM-aware MI controls.
+- Files changed:
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/render_pdf.sh`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md`
+- Outcomes:
+  - Wrapper argument passthrough now supports `-P run_mode:pilot -P pilot_frac:0.01`.
+  - Wrapper now removes stale sanitized `.rmarkdown` files before render, which fixed the initial Quarto special-character copy failure.
+  - A 1% pilot reached and completed all 20 pilot MI batches successfully with the new machine-local settings:
+    - `mi_ram_gb = 8`
+    - `mi_batch_start = 1`
+    - `mice_batches_log.csv` now records both `started` and `completed` batch states as intended.
+  - The first two full wrapper validation attempts failed at the PDF-build stage, not in the analysis:
+    - first on a temp preview path under `/private/var/...`
+    - then on project-local preview paths rendered as `../Results/...` in the generated `.tex`
+  - Updated wrapper to invoke Quarto from `Code Drafts` so `../Results/...` paths resolve in the same directory as the generated `.tex`.
+  - That exposed a new blocker: Quarto's R bootstrap then looked for `renv/activate.R` relative to `Code Drafts` and failed before chunk execution, despite `R_PROFILE_USER` and `RENV_PROJECT` being exported.
+- Validation/commands run:
+  - repeated `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - `bash -n scripts/render_pdf.sh`
+  - repeated notebook parse checks with `knitr::purl(...); parse(...)`
+  - inspection of generated:
+    - `Results/render_logs/render_20260413_090659.log`
+    - `Results/render_logs/render_20260413_091819.log`
+    - `Results/render_logs/render_20260413_094642.log`
+    - `Code Drafts/ABG-VBG-analysis-2026-2-28.tex`
+- Next steps:
+  - fix Quarto/renv bootstrap so rendering from `Code Drafts` can still load the repo-root `renv` activation cleanly, or adopt an equivalent path strategy that keeps PDF image paths valid without moving the working directory.
+
+## 2026-04-14 canonical root-scoped render fix
+- Date/time: 2026-04-14 AKDT
+- Task: Implement the repo-root render contract end-to-end, harden `renv` bootstrap, normalize root-safe figure paths, and validate the canonical 1% wrapper render.
+- Files changed:
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/.Rprofile`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/render_pdf.sh`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/README.md`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md`
+- Outcomes:
+  - `.Rprofile` now activates `renv` from the repo root via `RENV_PROJECT` or the `.Rprofile` file location, rather than assuming the current working directory contains `renv/activate.R`.
+  - The notebook now runs with `knitr::opts_knit$set(root.dir = project_root)` and uses a root-safe `display_path()` helper for inline report assets.
+  - Canonical inline notebook previews now go through `render_inline_graphic()`, which emits explicit LaTeX `\\includegraphics[width=..., height=0.72\\textheight, keepaspectratio]` output. This replaced `knitr::include_graphics()` for the cohort-flow preview and the standard plot preview helpers.
+  - That height cap eliminated the prior TeX runaway where lualatex generated effectively unbounded blank-page output under subsection headings in the manuscript-facing preview blocks.
+  - Root-safe TeX image lookup is now handled with `\\graphicspath{{../}{./}}` in the notebook header, while the canonical render launch stays at the repo root.
+  - The notebook no longer carries `output-dir: ".."`; the wrapper now treats the rendered PDF beside the notebook in `Code Drafts/` as the canonical output target for validation.
+  - Wrapper postflight now targets the actual PDF path, and the notebook PDF format metadata now sets `keep-tex: true` so wrapper path-hygiene validation can inspect the generated `.tex` after successful renders.
+- Validation/commands run:
+  - `Rscript --vanilla -e "source('.Rprofile'); cat('root .Rprofile ok\\n')"`
+  - `cd 'Code Drafts' && RENV_PROJECT='..' Rscript --vanilla -e "source('../.Rprofile'); cat('subdir .Rprofile ok\\n')"`
+  - repeated `bash -n scripts/render_pdf.sh`
+  - repeated `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - repeated `Rscript --vanilla scripts/check_dependencies.R`
+  - repeated `Rscript --vanilla -e "tf <- tempfile(fileext='.R'); knitr::purl('Code Drafts/ABG-VBG analysis 2026-2-28.qmd', output = tf, quiet = TRUE); invisible(parse(file = tf)); cat('QMD chunk parse passed\\n')"`
+  - repeated `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - targeted lualatex smoke test on `Code Drafts/ABG-VBG-analysis-2026-2-28-graphicspath-test.tex`
+- Important failures resolved:
+  - root-scoped render initially failed because inline figure paths in generated TeX were resolved relative to `Code Drafts/` rather than the repo root.
+  - switching to `Code Drafts/` as the working directory then broke `renv` bootstrap; this was fixed by the new `.Rprofile` loader and by restoring repo-root execution as the only supported launch context.
+  - a 1% wrapper pilot later completed notebook execution and PDF build, but wrapper postflight failed because Quarto removed the intermediate `.tex`; this was fixed by moving `keep-tex: true` into the notebook PDF format metadata.
+  - one failed wrapper attempt also exposed a code-ordering bug: `render_inline_graphic()` was first defined too late in the notebook. The helper was moved earlier so the notebook remains strictly top-to-bottom executable.
+  - Current state at time of entry:
+    - Final validated canonical 1% wrapper render:
+      - `Results/render_logs/render_20260414_103958.log`
+      - exited `0` at `2026-04-14 11:02:31 -0800`
+      - rendered PDF: `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf`
+      - wrapper postflight passed:
+        - `Results/render_path_hygiene_scan.csv` = passed
+        - `Results/pdf_hygiene_scan.csv` = passed (`pdftools`)
+  - Temporary `graphicspath-test` smoke-test artifacts in `Code Drafts/` were removed after the canonical wrapper validation succeeded.
+
+## 2026-04-15 conservative lockfile pruning + pilot validation
+- Date/time: 2026-04-15 00:30:32 AKDT
+- Task: Narrow the lockfile to intentional direct dependencies plus expected transitives, then rerun the canonical 1% wrapper render and only add back packages if the render proved they were needed.
+- Files changed:
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/renv.lock`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md`
+- Commands run:
+  - `Rscript --vanilla -e "source('renv/activate.R'); renv::restore(clean = TRUE, prompt = FALSE)"`
+  - `Rscript --vanilla -e "source('renv/activate.R'); renv::record(c('consort@1.2.2', 'lubridate@1.9.5', 'pdftools@3.7.0', 'qpdf@1.4.1', 'timechange@0.4.0'))"`
+  - `Rscript --vanilla -e "source('renv/activate.R'); renv::record('foreign@0.8-91')"`
+  - `Rscript --vanilla -e "source('renv/activate.R'); renv::record('cluster@2.1.8.2')"`
+  - `Rscript --vanilla -e "source('renv/activate.R'); renv::snapshot(prompt = FALSE)"`
+  - `Rscript --vanilla -e "source('renv/activate.R'); renv::status()"`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+- Outcomes:
+  - `renv::snapshot()` in explicit mode removed the recorded-but-unused `shiny` chain from the lockfile:
+    - `httpuv`
+    - `later`
+    - `otel`
+    - `promises`
+    - `shiny`
+    - `sourcetools`
+    - `xtable`
+  - The lockfile now records the intentional direct dependencies that are actually used by the notebook and wrapper:
+    - `consort`
+    - `lubridate`
+    - `pdftools`
+    - plus expected transitives `qpdf` and `timechange`
+  - `cluster` and `foreign` were moved to the locally buildable patch versions (`2.1.8.2`, `0.8-91`) after restore failures against the older locked versions on this macOS toolchain.
+  - `renv::status()` finished cleanly: `No issues found -- the project is in a consistent state.`
+  - Canonical wrapper pilot render completed successfully:
+    - log: `Results/render_logs/render_20260415_002056.log`
+    - exit status: `0`
+    - finished at `2026-04-15 00:30:12 -0800`
+    - PDF: `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf`
+  - Wrapper postflight passed again:
+    - `Results/render_path_hygiene_scan.csv` = passed
+    - `Results/pdf_hygiene_scan.csv` = passed
+  - Pilot run metadata confirmed the machine-local resource controls and MI breadcrumbing worked as intended:
+    - `run_id = 20260415_002115`
+    - `run_mode = pilot`
+    - `pilot_frac = 0.01`
+    - `mi_ram_gb = 8`
+    - `mi_batch_start = 1`
+    - `Results/mice_batches_log.csv` recorded all 20 imputations through completion
+- Conclusion:
+  - The ambiguous `shiny`-related packages did not need to be added back.
+  - The narrowed lockfile is sufficient for the canonical 1% render path on this machine.
+- Next steps:
+  - decide whether to keep the lockfile/R-version update as the new validated baseline and, if so, proceed to larger-scope renders from this clean `renv` state.
+
+## 2026-04-15 canonical 50% subset validation
+- Date/time: 2026-04-15 01:42:03 AKDT
+- Task: Run the canonical wrapper render at `pilot_frac = 0.5` from the clean post-pruning `renv` state and confirm whether the half-cohort subset completes on this machine.
+- Files changed:
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md`
+  - generated outputs under `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Results/`
+  - rendered PDF `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf`
+- Commands run:
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.5`
+- Outcomes:
+  - The 50% subset render completed successfully end-to-end through Quarto, LaTeX PDF build, and wrapper postflight.
+  - Render log:
+    - `Results/render_logs/render_20260415_003135.log`
+    - exit status `0`
+    - finished at `2026-04-15 01:41:50 -0800`
+  - PDF output:
+    - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf`
+  - Run metadata:
+    - `run_id = 20260415_003149`
+    - `run_mode = pilot`
+    - `pilot_frac = 0.5`
+    - `full_n = 833476`
+    - `sampled_n = 416738`
+    - `subset_n = 257753`
+    - `mi_ram_gb = 8`
+    - `mi_batch_start = 1`
+  - MI batch breadcrumbs confirmed all 20 one-imputation batches completed successfully with stable runtime:
+    - batches completed in roughly `54–58s` each
+    - `Results/mice_batches_log.csv` reached `m_done_after = 20`
+    - pre/post GC vector-cell fraction remained well below the configured ceiling throughout the run
+  - Wrapper postflight passed:
+    - `Results/render_path_hygiene_scan.csv` = passed
+    - `Results/pdf_hygiene_scan.csv` = passed
+  - Resource summary from `/usr/bin/time -l`:
+    - wall time `4210.83s` (`~70.2 min`)
+    - maximum resident set size `3772678144` bytes (`~3.77 GB`)
+- Conclusion:
+  - A canonical 50% subset render is feasible on this machine under the current notebook/resource controls and narrowed lockfile.
+- Next steps:
+  - if needed, proceed to the next larger staged render from the same clean `renv` state rather than changing dependencies again.
+
+## 2026-04-15 intermediate artifact cleanup for commit review
+- Date/time: 2026-04-15 07:37:02 AKDT
+- Task: Remove obvious generated intermediates so the remaining working tree is easier to review for commit scope.
+- Files removed:
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.tex`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/Results/`
+  - `Results/figs/*-report-preview.png`
+  - `Results/render_logs/`
+  - `Results/render_path_hygiene_scan.csv`
+  - `Results/pdf_hygiene_scan.csv`
+- Commands run:
+  - `rm -f "Code Drafts/ABG-VBG-analysis-2026-2-28.tex"`
+  - `rm -rf "Code Drafts/Results"`
+  - `find Results/figs -maxdepth 1 -name '*-report-preview.png' -delete`
+  - `rm -rf Results/render_logs`
+  - `rm -f Results/render_path_hygiene_scan.csv Results/pdf_hygiene_scan.csv`
+  - repeated `git status --short`
+- Outcome:
+  - The most obvious operational byproducts from the canonical renders were removed.
+  - Remaining untracked files are now mainly new diagnostics, new analysis summaries, and new figure/data artifacts rather than TeX, preview PNGs, or wrapper logs.
+  - Remaining tracked changes still include the rendered PDF, refreshed manuscript/supporting outputs, and the code/config changes that produced them.
+
+## 2026-04-15 diagnostics/supporting data checkpoint
+- Date/time: 2026-04-15 07:50:00 AKDT
+- Task: Commit the remaining diagnostics, runtime, balance, MI-detail, and supporting summary outputs that were intentionally left out of the first manuscript-export checkpoint.
+- Files included:
+  - remaining modified and untracked files under `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Results/`
+  - `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md`
+- Validation note:
+  - No executable code changed after the prior passing checks (`check_env`, `check_dependencies`, QMD parse, wrapper render validation), so this checkpoint only adds generated outputs and the handoff log entry.
+- Outcome:
+  - This second checkpoint captures the diagnostics/supporting data layer separately from the manuscript-export commit on the same branch.
+
+## 2026-04-15 validation-only PDF/QMD hardening for ticket issues 2-6
+- Date/time: $(date '+%Y-%m-%d %H:%M:%S %Z')
+- Task: Implement the validation-only manuscript asset registry, glyph/duplicate audits, diagnostics audit hardening, and wrapper postflight checks for ticket issues 2-6; confirm behavior on the canonical 1% wrapper render.
+- Files changed:
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/tex/pandoc-code-wrap.tex
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/R/diagnostics_audit.R
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/render_pdf.sh
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/README.md
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `Rscript --vanilla -e "tf <- tempfile(fileext='.R'); knitr::purl('Code Drafts/ABG-VBG analysis 2026-2-28.qmd', output = tf, quiet = TRUE); invisible(parse(file = tf)); cat('QMD chunk parse passed\n')"`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+- Outcomes:
+  - Implemented a normalized canonical asset registry in the notebook and emitted:
+    - `Results/artifact_provenance_manifest.csv`
+    - `Results/canonical_asset_registry.csv`
+    - `Results/artifact_check_status.csv`
+    - `Results/artifact_check_missing.csv`
+    - `Results/manuscript_sync_report.md`
+    - `Results/glyph_audit.csv`
+    - `Results/duplicate_asset_audit.csv`
+  - Kept `Supplementary Table 1` as `external/manual` and validated it through the registry/check outputs rather than notebook generation.
+  - Centralized manuscript-facing labels/captions through safe-text helpers and added glyph audit enforcement.
+  - Restructured the PDF tail into a single validation-oriented build summary with canonical assets plus essential audits only.
+  - Hardened `R/diagnostics_audit.R` to always write stable `diagnostics_audit_summary.csv` and `diagnostics_audit_issues.csv` outputs with aligned severity/status.
+  - Extended wrapper postflight to require the new validation artifacts and validate their schemas.
+  - First reruns exposed two implementation bugs:
+    - `manuscript_caption()` was scalar-only and failed inside `dplyr::mutate()`; fixed by making it vector-safe.
+    - notebook diagnostics audit subprocess invocation was brittle under Quarto; replaced with `sys.source()` inside the notebook render path.
+  - A subsequent full notebook pass failed at LaTeX with `Environment Shaded undefined`; fixed by updating `Code Drafts/tex/pandoc-code-wrap.tex` to explicitly define-or-renew `Shaded` instead of conditionally `\renewenvironment` based on `framed.sty`.
+  - Final canonical validation command succeeded:
+    - wrapper log: `Results/render_logs/render_20260415_224656.log`
+    - exit status: `0`
+    - PDF output: `/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf`
+  - Wrapper postflight passed, including render-path and PDF validation.
+  - Required validation artifacts were all present with expected headers.
+  - Validation inventory results:
+    - `artifact_check_missing.csv` contained exactly one allowed missing row for `Supplementary Table 1` (`external/manual`)
+    - no active numbering conflicts
+    - no active `Figure 3` reuse
+    - no blocking glyph audit rows
+    - no blocking duplicate audit rows
+  - Final build-status outputs in the PDF/TeX agree with `Results/diagnostics_audit_summary.csv`: overall build status = `FAIL` due to two high-severity diagnostics findings, not due to render infrastructure failure.
+  - High-severity diagnostics findings surfaced by the new validation path:
+    - `Balance`: `ABG max|SMD|=0.100` exceeded the configured threshold in `Results/balance_target_imp_summary.csv`
+    - `Outcome`: `162` separation flags reported in `Results/model_fit_diagnostics.csv`
+- Next steps:
+  - decide whether to relax/clarify the diagnostics thresholds or treat the new `FAIL` as the intended strict validation outcome
+  - if the strict outcome is intended, triage the balance and separation findings before moving to larger-scope validation renders
+
+## 2026-04-16 MI instrumentation + diagnostic full rerun (11:39:55 MDT)
+- Task: Implement stage-specific batched-MI diagnostics and wrapper hard-stop postmortem capture, validate on 1% pilot, and launch the diagnostic full rerun.
+- Files changed:
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/render_pdf.sh
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md
+- Commands run:
+  -         bash -n scripts/render_pdf.sh
+  - Rscript --vanilla -e "source('scripts/check_env.R')"
+  - Rscript --vanilla scripts/check_dependencies.R
+  - Rscript --vanilla -e "tf <- tempfile(fileext='.R'); knitr::purl('Code Drafts/ABG-VBG analysis 2026-2-28.qmd', output = tf, quiet = TRUE); invisible(parse(file = tf)); cat('QMD chunk parse passed\n')"
+  - ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01
+  - ./scripts/render_pdf.sh -P run_mode:full -P pilot_frac:1
+- Outcomes:
+  - Extended notebook batched MI logging to emit stage-specific rows in Results/mice_batches_log.csv with stages:
+    - batch_started
+    - mice_returned
+    - ibind_started
+    - ibind_completed
+    - checkpoint_saved
+    - batch_failed
+  - Added Results/mice_combine_log.csv with one row per combine step.
+  - Added per-batch checkpoint artifacts under Results/mi_batch_checkpoints/ and saved Results/mi_batch_context.rds for later standalone reproduction.
+  - Added notebook-side RSS / object-size / gc-vcells telemetry to distinguish batch-generation failures from combine failures.
+  - Hardened scripts/render_pdf.sh to:
+    - log wrapper PID
+    - discover/log Quarto and main R PIDs when discoverable
+    - append notebook-side MI postmortem tails on non-zero exit
+  - The first two pilot reruns failed in the new wrapper PID logging path due to quoting/awk bugs; these were fixed without changing the notebook logic.
+  - The validated pilot rerun succeeded end-to-end:
+    - wrapper log: Results/render_logs/render_20260416_111637.log
+    - wrapper status: 0
+    - PDF/postflight passed
+    - stage-level mice_batches_log.csv rows were written as expected
+    - mice_combine_log.csv was present with ibind_started / ibind_completed rows
+    - mi_batch_checkpoints/ and mi_batch_context.rds were created
+  - Diagnostic full rerun launched successfully and is currently in progress:
+    - wrapper log: Results/render_logs/render_20260416_112907.log
+    - command: ./scripts/render_pdf.sh -P run_mode:full -P pilot_frac:1
+- Next steps:
+  - let the diagnostic full rerun reach or fail within batched MI
+  - use the new notebook-side stage logs to classify the failure as mice(), ibind(), or checkpoint/write
+  - if ibind is confirmed, replace linear append with balanced combine and rerun full
+
+## 2026-04-16 12:32 MDT
+- Task: Confirm full-scale MI instrumentation is live during the diagnostic full rerun.
+- Files changed:
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md
+- Commands run:
+  - tail -n 20 Results/mice_batches_log.csv
+  - tail -n 20 Results/mice_combine_log.csv
+  - ps -p 1300 -o pid=,etime=,state=,%cpu=,rss=,command=
+- Outcomes:
+  - Diagnostic full rerun reached `140/299 [mi-exec]`.
+  - Full-scale batch 1 completed the new stage chain successfully:
+    - `batch_started`
+    - `mice_returned`
+    - `ibind_started`
+    - `ibind_completed`
+    - `checkpoint_saved`
+  - `Results/mice_combine_log.csv` recorded the corresponding `ibind_started` / `ibind_completed` entries.
+  - Batch 1 telemetry at full scale showed:
+    - `mice()` elapsed about 539 seconds
+    - `imp_b_size_bytes = 454949568`
+    - `rss_mb` around 1215-1348 during return/combine
+  - Batch 2 has started and the full diagnostic rerun remains active.
+- Next steps:
+  - continue monitoring toward the historical failure region around batch 39
+  - if the rerun dies, classify the exact terminal stage from `mice_batches_log.csv` and `mice_combine_log.csv`
+  - only then decide whether balanced combine is required
+
+## 2026-04-16 18:01 MDT
+- Task: Monitor the diagnostic full rerun through the historical failure region.
+- Files changed:
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md
+- Commands run:
+  - repeated watcher polls against `Results/mice_batches_log.csv`
+  - repeated process-tree checks for the live Quarto/R render
+  - batch 39 row inspection from `Results/mice_batches_log.csv`
+- Outcomes:
+  - The diagnostic full rerun passed the historical failure point successfully.
+  - Batch 39 completed the full stage chain:
+    - `batch_started`
+    - `mice_returned`
+    - `ibind_started`
+    - `ibind_completed`
+    - `checkpoint_saved`
+  - Batch 39 details:
+    - `mice()` finished at `2026-04-16 17:59:08 MDT`
+    - `ibind()` finished at `2026-04-16 17:59:21 MDT`
+    - `checkpoint_saved` finished at `2026-04-16 18:00:00 MDT`
+    - accumulated mids size after checkpoint: `1298305080` bytes
+    - RSS during checkpoint row: about `3015.9 MB`
+  - The full render process tree is still alive after clearing batch 39 and has already advanced into batch 40.
+- Next steps:
+  - The original fail point has been disproven for the current instrumented run.
+  - If the user wants, continue to full completion and only revisit balanced combine if a later-stage failure emerges.
+
+## 2026-04-16 21:45 MDT
+- Task: Implement the revised batch-40 troubleshooting workflow, validate it on a pilot render, and launch the next full rerun with wrapper RSS tracing.
+- Files changed:
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/render_pdf.sh
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/collect_render_postmortem.R
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/debug_batch40_mice.R
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/README.md
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `Rscript --vanilla -e "tf <- tempfile(fileext='.R'); knitr::purl('Code Drafts/ABG-VBG analysis 2026-2-28.qmd', output = tf, quiet = TRUE); invisible(parse(file = tf)); cat('QMD chunk parse passed\n')"`
+  - `Rscript --vanilla scripts/collect_render_postmortem.R --render-ts 20260416_112907 --results-dir Results --log-path Results/render_logs/render_20260416_112907.log --pdf-path "Code Drafts/ABG-VBG-analysis-2026-2-28.pdf"`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - `Rscript --vanilla scripts/debug_batch40_mice.R --context Results/archive/pre_run_20260416_211642/mi_batch_context.rds --checkpoint Results/archive/pre_run_20260416_211642/mi_batch_checkpoints/imp_acc_after_batch_39.rds --batch 40 --seed 24251206 --outdir Results/mi_batch_debug/20260416_112923`
+  - `Rscript --vanilla scripts/debug_batch40_mice.R --context Results/archive/pre_run_20260416_211642/mi_batch_context.rds --checkpoint Results/archive/pre_run_20260416_211642/mi_batch_checkpoints/imp_acc_after_batch_39.rds --batch 40 --seed 24251206 --outdir Results/mi_batch_debug/20260416_112923_rssfix`
+  - `./scripts/render_pdf.sh -P run_mode:full -P pilot_frac:1`
+- Outcomes:
+  - Notebook changes:
+    - default YAML now uses an internally consistent full-mode pair: `run_mode: "full"` and `pilot_frac: 1`
+    - `run_mice_batched()` now emits `mice_call_entered` immediately before `mice::mice()`
+    - `run_mice_batched()` now emits `checkpoint_started` immediately before saving the accumulated mids checkpoint
+  - Wrapper changes:
+    - archives only prior MI/debug artifacts to `Results/archive/pre_run_<render_ts>/`
+    - writes wrapper-side RSS traces to `Results/render_logs/rss_trace_<render_ts>.csv`
+    - calls `scripts/collect_render_postmortem.R` on wrapper exit so successful and caught-failure renders both write a postmortem/status summary
+    - corrected render/postflight exit-status capture so nonzero Quarto exits are no longer masked by `if ! ...; then $?` semantics
+  - Collector validation:
+    - `Results/render_logs/postmortem_20260416_112907.md` was created for the already-failed full run
+    - `Results/mi_run_status_20260416_112907.json` classified that run as `failed_abrupt_termination_suspected`
+  - Pilot validation:
+    - wrapper log: `Results/render_logs/render_20260416_211642.log`
+    - wrapper status: `0`
+    - PDF/postflight passed
+    - wrapper RSS trace and postmortem/status files were created as expected
+    - `Results/mice_batches_log.csv` now includes the new `mice_call_entered` and `checkpoint_started` stages
+    - prior failed-run MI/debug artifacts were archived under `Results/archive/pre_run_20260416_211642/`
+  - Standalone batch-40 reproduction:
+    - a bare `Rscript --vanilla` reproduction initially failed immediately with `Can't convert x <haven_labelled> to <double>`
+    - after loading the notebook-equivalent package subset (`haven`, `labelled`, `dplyr`, `tibble`, `mice`), the isolated batch-40 `mice()` call succeeded twice from the archived batch-39 checkpoint boundary
+    - successful reproduction artifact paths:
+      - `Results/mi_batch_debug/20260416_112923/batch40_result.json`
+      - `Results/mi_batch_debug/20260416_112923/batch40_mids.rds`
+      - `Results/mi_batch_debug/20260416_112923_rssfix/batch40_result.json`
+      - `Results/mi_batch_debug/20260416_112923_rssfix/batch40_mids.rds`
+    - the standalone self-RSS sampler still has a quoting/serialization bug and currently writes only the CSV header row
+  - Interpretation before the next full rerun:
+    - the full-run batch-40 failure is not reproduced as a deterministic caught R error once the isolated call is run in a faithful notebook-style package environment
+    - the remaining leading suspects are external/low-level termination or a runtime interaction that only appears in the full wrapper/render context
+  - A new full rerun has been launched from the clean archived state:
+    - command: `./scripts/render_pdf.sh -P run_mode:full -P pilot_frac:1`
+    - wrapper log: `Results/render_logs/render_20260416_214501.log`
+- Next steps:
+  - monitor the new full rerun through the old batch-40 failure region using `Results/mice_batches_log.csv` and the wrapper RSS trace
+  - if the rerun dies again, compare the death window to `Results/render_logs/rss_trace_20260416_214501.csv` and the new collector/postmortem outputs
+  - fix the standalone RSS-sampler quoting bug after the full rerun decision point unless that bug becomes critical sooner
+
+## 2026-04-17 08:31 MDT
+- Task: Generate a manual postmortem for failed full render `render_ts = 20260416_214501` and summarize the new failure evidence.
+- Files changed:
+  - /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/WORKLOG.md
+- Commands run:
+  - `Rscript --vanilla scripts/collect_render_postmortem.R --render-ts 20260416_214501 --results-dir Results --log-path Results/render_logs/render_20260416_214501.log --pdf-path "Code Drafts/ABG-VBG-analysis-2026-2-28.pdf"`
+  - `tail -n 120 Results/render_logs/postmortem_20260416_214501.md`
+  - `tail -n 20 Results/render_logs/rss_trace_20260416_214501.csv`
+  - `tail -n 20 Results/mice_batches_log.csv`
+  - `tail -n 20 Results/mice_combine_log.csv`
+- Outcomes:
+  - Manual collector outputs created:
+    - `Results/render_logs/postmortem_20260416_214501.md`
+    - `Results/mi_run_status_20260416_214501.json`
+  - Collector classified the failed full rerun as `failed_abrupt_termination_suspected`.
+  - No final PDF exists for this render and there is no wrapper trailer or wrapper status line.
+  - The authoritative notebook-side MI log shows the run died in batch `10` after `mice_call_entered` and before `mice_returned`.
+  - The current failure therefore localizes to the long batch-10 `mice()` call or a low-level termination during that call, not to `ibind()` or checkpoint saving.
+  - `mice_combine_log.csv` confirms batches `1` through `9` combined cleanly.
+  - The wrapper RSS trace shows the main R worker still alive and CPU-active through `2026-04-16 23:42:14 MDT`, with R RSS oscillating around roughly `1.3-2.1 GB` in the final samples.
+  - The postmortem system-log snippets show several contemporaneous `jetsam` / memory-pressure-related entries for other macOS processes, which is suggestive of host memory pressure but not direct proof that the Quarto/R process itself was jetsam-killed.
+- Next steps:
+  - Compare this failed full-run window against outer terminal/app/session lifetime limits, because the isolated batch-40 reproduction succeeded while the full render died abruptly without a caught R error.
+  - If another full rerun is attempted, keep the wrapper RSS trace enabled and treat notebook-side MI breadcrumbs plus manual collector output as the authoritative postmortem path.

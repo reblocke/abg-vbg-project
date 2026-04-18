@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "batch": 40,
+  "seed": 24251206,
+  "expected_seed": 24251206,
+  "checkpoint_m": 39,
+  "checkpoint_size_bytes": 1298305080,
+  "result_size_bytes": 454950968,
+  "elapsed_seconds": 402.8829,
+  "rss_mb_before": 306.6562,
+  "rss_mb_after": 1457.453,
+  "warning_count": 0,
+  "finished_at": "2026-04-16 21:36:17.912418",
+  "mids_path": "/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Results/mi_batch_debug/20260416_112923/batch40_mids.rds"
+}

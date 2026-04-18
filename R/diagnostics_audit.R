@@ -71,6 +71,18 @@ expected_tbl <- data.frame(
 diag_sum <- safe_read_csv(file.path(results_dir, "diagnostics_summary.csv"))
 runtime_log <- safe_read_csv(file.path(results_dir, "runtime_log.csv"))
 
+run_id_val <- if (!is.null(runtime_log) && "run_id" %in% names(runtime_log) && nrow(runtime_log) > 0) {
+  as.character(runtime_log$run_id[[1]])
+} else {
+  format(Sys.time(), "%Y%m%d_%H%M%S")
+}
+
+run_ts_val <- if (!is.null(runtime_log) && "run_ts" %in% names(runtime_log) && nrow(runtime_log) > 0) {
+  as.character(runtime_log$run_ts[[1]])
+} else {
+  as.character(Sys.time())
+}
+
 run_mode <- if (!is.null(runtime_log) && "run_mode" %in% names(runtime_log)) {
   paste(unique(runtime_log$run_mode), collapse = ", ")
 } else {
@@ -223,6 +235,29 @@ add_issue <- function(severity, component, file, snippet, why, fix) {
   )
 }
 
+if (any(!expected_tbl$present)) {
+  missing_expected <- expected_tbl$artifact[!expected_tbl$present]
+  add_issue(
+    "medium",
+    "Inventory",
+    "Results/diagnostics_audit.md",
+    paste0("Missing expected artifacts: ", paste(missing_expected, collapse = ", ")),
+    "Missing diagnostics artifacts weaken validation coverage and can hide silent regressions.",
+    "Regenerate the missing diagnostics artifacts or adjust the expected inventory if the contract changed intentionally."
+  )
+}
+
+if (isTRUE(smoke_failed)) {
+  add_issue(
+    "high",
+    "MI",
+    "Results/mice_smoketest.log",
+    "Smoke test failed",
+    "A failed MI smoke test indicates the imputation path is unstable before full validation.",
+    "Inspect the smoke-test log and fix the underlying MI execution error before relying on downstream pooled outputs."
+  )
+}
+
 if (!exists_expected[match("mice_logged_events_summary.csv", expected)]) {
   add_issue(
     "medium",
@@ -267,6 +302,17 @@ if (!is.na(bal_max_abg) && bal_max_abg > 0.10) {
   )
 }
 
+if (!is.na(bal_max_vbg) && bal_max_vbg > 0.10) {
+  add_issue(
+    "high",
+    "Balance",
+    "Results/balance_target_imp_summary.csv",
+    paste0("VBG max|SMD|=", fmt_num(bal_max_vbg)),
+    "VBG target balance exceeds 0.10 threshold across imputations.",
+    "Revisit GBM tuning, covariate set, or truncation to improve VBG balance."
+  )
+}
+
 if (!is.null(model_diag) && sep_total > 0) {
   add_issue(
     "high",
@@ -308,13 +354,122 @@ issues_df <- if (length(issues)) do.call(rbind, issues) else {
   )
 }
 
+severity_rank <- c(high = 3L, medium = 2L, low = 1L)
+overall_status <- if (nrow(issues_df) && any(issues_df$severity == "high")) {
+  "FAIL"
+} else if (nrow(issues_df) && any(issues_df$severity %in% c("medium", "low"))) {
+  "PASS_WITH_WARNINGS"
+} else {
+  "PASS"
+}
+
+add_summary_row <- function(component, metric, value, status, severity = "none",
+                            evidence_file = "", note = "") {
+  data.frame(
+    component = component,
+    metric = metric,
+    value = as.character(value),
+    status = status,
+    severity = severity,
+    evidence_file = evidence_file,
+    note = note,
+    stringsAsFactors = FALSE
+  )
+}
+
+expected_missing_n <- sum(!expected_tbl$present)
+
+summary_rows <- list(
+  add_summary_row(
+    "Audit",
+    "overall_status",
+    overall_status,
+    tolower(if (identical(overall_status, "PASS")) "pass" else if (identical(overall_status, "PASS_WITH_WARNINGS")) "warn" else "fail"),
+    if (identical(overall_status, "FAIL")) "high" else if (identical(overall_status, "PASS_WITH_WARNINGS")) "medium" else "none",
+    "Results/diagnostics_audit_issues.csv",
+    "Overall diagnostics audit status derived from the highest-severity unresolved issue."
+  ),
+  add_summary_row(
+    "Inventory",
+    "expected_artifacts_missing",
+    expected_missing_n,
+    if (expected_missing_n > 0) "warn" else "pass",
+    if (expected_missing_n > 0) "medium" else "none",
+    "Results/diagnostics_audit.md",
+    "Count of expected diagnostics artifacts missing from Results/."
+  ),
+  add_summary_row(
+    "MI",
+    "smoke_test_failed",
+    smoke_failed,
+    if (isTRUE(smoke_failed)) "fail" else "pass",
+    if (isTRUE(smoke_failed)) "high" else "none",
+    "Results/mice_smoketest.log",
+    "Smoke test failure indicates the MI execution path is unstable."
+  ),
+  add_summary_row(
+    "MI",
+    "chain_diagnostics_issue",
+    chain_issue,
+    if (isTRUE(chain_issue)) "warn" else "pass",
+    if (isTRUE(chain_issue)) "medium" else "none",
+    "Results/mice_chain_diagnostics.csv",
+    chain_issue_note
+  ),
+  add_summary_row(
+    "Balance",
+    "abg_max_abs_smd",
+    fmt_num(bal_max_abg),
+    if (is.finite(bal_max_abg) && bal_max_abg > 0.10) "fail" else "pass",
+    if (is.finite(bal_max_abg) && bal_max_abg > 0.10) "high" else "none",
+    "Results/balance_target_imp_summary.csv",
+    "ABG target balance threshold is 0.10."
+  ),
+  add_summary_row(
+    "Balance",
+    "vbg_max_abs_smd",
+    fmt_num(bal_max_vbg),
+    if (is.finite(bal_max_vbg) && bal_max_vbg > 0.10) "fail" else "pass",
+    if (is.finite(bal_max_vbg) && bal_max_vbg > 0.10) "high" else "none",
+    "Results/balance_target_imp_summary.csv",
+    "VBG target balance threshold is 0.10."
+  ),
+  add_summary_row(
+    "Outcome",
+    "separation_flags_total",
+    sep_total,
+    if (sep_total > 0) "fail" else "pass",
+    if (sep_total > 0) "high" else "none",
+    "Results/model_fit_diagnostics.csv",
+    "Separation or near-separation can bias ORs and confidence intervals."
+  ),
+  add_summary_row(
+    "Plotting",
+    "plot_drop_log_present",
+    !is.null(plot_drop),
+    if (!is.null(plot_drop)) "pass" else "warn",
+    if (!is.null(plot_drop)) "none" else "low",
+    "Results/plot_drop_log.csv",
+    "Plot drop logging should exist even if no rows are present."
+  )
+)
+
+summary_df <- do.call(rbind, summary_rows)
+
+issues_df$run_id <- run_id_val
+issues_df$run_ts <- run_ts_val
+summary_df$run_id <- run_id_val
+summary_df$run_ts <- run_ts_val
+
 write.csv(issues_df, file.path(results_dir, "diagnostics_audit_issues.csv"), row.names = FALSE)
+write.csv(summary_df, file.path(results_dir, "diagnostics_audit_summary.csv"), row.names = FALSE)
 
 # --- Markdown report ----------------------------------------------------------
 lines <- c(
   "# Diagnostics Audit",
   "",
   "## Executive Summary",
+  paste0("- Overall status: ", overall_status),
   paste0("- Run mode: ", run_mode, "; pilot_frac: ", pilot_frac, "; m: ", m_used, "; maxit: ", maxit_used),
   paste0("- Runtime total (sec): ", fmt_num(total_seconds)),
   paste0("- MI batch status: ", batch_note),

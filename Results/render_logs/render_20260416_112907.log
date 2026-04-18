@@ -1,0 +1,170 @@
+[render:start] 2026-04-16 11:29:07 -0600
+[render:qmd] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+[render:log] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Results/render_logs/render_20260416_112907.log
+[render:pdf_target] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf
+[render:wrapper_pid] 1218
+[render:args] -P run_mode:full -P pilot_frac:1
+[render:cleanup] removed stale /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.tex
+[render:cleanup] removed stale /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-2-28.pdf
+[render:root] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project
+[render:preflight] check_env
+Starting environment preflight...
+Environment preflight passed.
+[render:preflight] check_dependencies
+Dependency audit targets:
+- /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-2-28.qmd
+- /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/check_env.R
+- /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/scripts/check_dependencies.R
+
+Dependency audit note (renv::dependencies only):
+- rmarkdown
+- shiny
+
+Dependency audit passed for 44 declared direct packages.
+[render:quarto] begin
+[render:cwd] /Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project
+[render:quarto_pid] 1298
+[render:r_pid] 1300
+
+
+processing file: ABG-VBG-analysis-2026-2-28.rmarkdown
+1/299                                          
+2/299 [todo-notes]                             
+3/299                                          
+4/299 [setup-table-helpers]                    
+5/299                                          
+6/299 [setup-packages]                         
+7/299                                          
+8/299 [cohort-flow-helpers]                    
+9/299                                          
+10/299 [cohort-flow-figure]                     
+11/299                                          
+12/299 [setup-run-config]                       
+13/299                                          
+14/299 [setup-diagnostics-output]               
+15/299                                          
+16/299 [setup-diagnostics-helpers]              
+17/299                                          
+18/299 [latex-codeblock-risk-scan]              
+19/299                                          
+20/299 [setup-model-diagrams]                   
+21/299                                          
+22/299 [setup-shapviz]                          
+23/299                                          
+24/299 [runtime-hooks]                          
+25/299                                          
+26/299 [seed-escrow]                            
+27/299                                          
+28/299 [gt-pdf-helper]                          
+29/299                                          
+30/299 [stage1-start]                           
+31/299                                          
+32/299 [load-trinetx-data]                      
+33/299                                          
+34/299 [propensity-config]                      
+35/299                                          
+36/299 [build-subset-data]                      
+37/299                                          
+38/299 [schema-normalize]                       
+39/299                                          
+40/299 [machine-resource-controls]              
+41/299                                          
+42/299 [run-metadata]                           
+43/299                                          
+44/299 [codebook-export-full]                   
+45/299                                          
+46/299 [derive-death-60d]                       
+47/299                                          
+48/299 [death-60d-summary]                      
+49/299                                          
+50/299 [derive-table1-cohorts]                  
+51/299                                          
+52/299 [float-barrier-table1abg]                
+53/299                                          
+54/299 [export-table1a-table1b-word]            
+55/299                                          
+56/299 [table1-everyone-abg-vbg]                
+57/299                                          
+58/299 [float-barrier-table1-everyone]          
+59/299                                          
+60/299 [co2-category-definitions]               
+61/299                                          
+62/299 [binary-hypercapnia-check]               
+63/299                                          
+64/299 [tbl2-co2-cohorts]                       
+65/299                                          
+66/299 [float-barrier-table2]                   
+67/299                                          
+68/299 [tbl2-outcome-panel]                     
+69/299                                          
+70/299 [export-table1-tbl2-word]                
+71/299                                          
+72/299 [or-data-three-level-unweighted]         
+73/299                                          
+74/299 [supplement-table-s2-crude]              
+75/299                                          
+76/299 [or-data-three-level-unweighted-post-s2] 
+77/299                                          
+78/299 [or-plot-three-level-unweighted]         
+79/299                                          
+80/299 [co2-binned-rates-unweighted]            
+81/299                                          
+82/299 [rcs-abg-data-prep]                      
+83/299                                          
+84/299 [rcs-abg-unweighted-models]              
+85/299                                          
+86/299 [rcs-vbg-data-prep]                      
+87/299                                          
+88/299 [rcs-vbg-unweighted-models]              
+89/299                                          
+90/299 [float-barrier-spline-unweighted]        
+91/299                                          
+92/299 [encode-encounter-type]                  
+93/299                                          
+94/299 [ipw-abg-weighting]                      
+95/299                                          
+96/299 [ipw-abg-rcs-models]                     
+97/299                                          
+98/299 [ipw-abg-rcs-trimmed]                    
+99/299                                          
+100/299 [ipw-vbg-workflow]                       
+101/299                                          
+102/299 [ipw-three-level-pco2-all]               
+103/299                                          
+104/299 [supplement-table-s3-gbm]                
+105/299                                          
+106/299 [or-data-three-level-weighted-post-s3]   
+107/299                                          
+108/299 [co2-binned-rates-ipw-nonmi]             
+109/299                                          
+110/299 [propensity-histograms-conditional]      
+111/299                                          
+112/299 [propensity-histograms-all]              
+113/299                                          
+114/299 [shap-top10-ipw-gbm]                     
+115/299                                          
+116/299 [loveplot-ipw-gbm]                       
+117/299                                          
+118/299 [shap-top10-ipw-gbm-display]             
+119/299                                          
+120/299 [stage2-cleanup]                         
+121/299                                          
+122/299 [mi-packages]                            
+123/299                                          
+124/299 [mi-settings]                            
+125/299                                          
+126/299 [mi-missing-summary]                     
+127/299                                          
+128/299 [mi-ps-helpers]                          
+129/299                                          
+130/299 [mi-missing-structure]                   
+131/299                                          
+132/299 [float-barrier-missingness]              
+133/299                                          
+134/299 [missingness-drivers]                    
+135/299                                          
+136/299 [mi-prep]                                
+137/299                                          
+138/299 [type-invariants]                        
+139/299                                          
+140/299 [mi-exec]                                

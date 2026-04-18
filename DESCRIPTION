@@ -1,0 +1,56 @@
+Package: abgvbgproject
+Type: Project
+Title: ABG Versus VBG Analysis Project
+Version: 0.0.0.9000
+Authors@R: person("Brian", "Locke", role = c("aut", "cre"))
+Description: Reproducible R and Quarto analysis project for the ABG versus
+    VBG clinical study.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends:
+    R (>= 4.3.0)
+Imports:
+    Matrix,
+    WeightIt,
+    broom,
+    cobalt,
+    codebookr,
+    consort,
+    dagitty,
+    digest,
+    dplyr,
+    fastshap,
+    flextable,
+    fs,
+    future,
+    future.apply,
+    gbm,
+    ggdag,
+    ggplot2,
+    gt,
+    gtsummary,
+    haven,
+    here,
+    kableExtra,
+    knitr,
+    labelled,
+    lubridate,
+    mice,
+    miceadds,
+    mitools,
+    naniar,
+    officer,
+    patchwork,
+    pdftools,
+    progressr,
+    purrr,
+    ragg,
+    renv,
+    rlang,
+    rms,
+    scales,
+    skimr,
+    survey,
+    tibble,
+    tidyr,
+    visdat
