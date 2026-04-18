@@ -456,8 +456,13 @@ summary_rows <- list(
 
 summary_df <- do.call(rbind, summary_rows)
 
-issues_df$run_id <- run_id_val
-issues_df$run_ts <- run_ts_val
+if (nrow(issues_df)) {
+  issues_df$run_id <- rep(run_id_val, nrow(issues_df))
+  issues_df$run_ts <- rep(run_ts_val, nrow(issues_df))
+} else {
+  issues_df$run_id <- character()
+  issues_df$run_ts <- character()
+}
 summary_df$run_id <- run_id_val
 summary_df$run_ts <- run_ts_val
 

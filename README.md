@@ -48,7 +48,7 @@ Rscript --vanilla scripts/check_dependencies.R
 ./scripts/render_pdf.sh
 ```
 
-The wrapper is the only sanctioned validation entrypoint. It writes a timestamped combined stdout/stderr log to `Results/render_logs/` and preserves `/usr/bin/time -l` output for the render.
+The wrapper is the only sanctioned validation entrypoint. It writes a timestamped combined stdout/stderr log to `Results/render_logs/` and records timing output from the best available host tool for the render.
 The canonical PDF is validation-oriented: provenance/build status first, canonical manuscript assets only, and compact essential audits. There is no separate debug render mode.
 Before each wrapper run, existing MI/debug artifacts are archived under `Results/archive/pre_run_<render_ts>/` so abrupt-stop evidence is preserved without moving the rest of `Results/`.
 

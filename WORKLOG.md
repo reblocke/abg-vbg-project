@@ -796,3 +796,31 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Next steps:
   - Commit and push the artifact bundle onto `origin/main`.
   - Delete the merged remote feature branch `codex/root-render-manuscript-checkpoint`.
+
+## 2026-04-18 10:31 MDT
+- Task: Patch the three remaining Codex review findings directly on `main` without rerendering the notebook.
+- Files changed:
+  - `scripts/render_pdf.sh`
+  - `R/diagnostics_audit.R`
+  - `scripts/debug_batch40_mice.R`
+  - `README.md`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - host timing-mode check reproducing the wrapper selection logic
+  - `Rscript --vanilla` zero-row `issues_df` regression snippet for `R/diagnostics_audit.R`
+  - `Rscript --vanilla scripts/debug_batch40_mice.R --context x --checkpoint y --outdir z`
+  - `Rscript --vanilla scripts/debug_batch40_mice.R --context x --checkpoint y --batch foo --seed 24251206 --outdir z`
+  - `Rscript --vanilla scripts/debug_batch40_mice.R --context x --checkpoint y --batch 40 --seed bar --outdir z`
+  - `Rscript --vanilla scripts/debug_batch40_mice.R --context x --checkpoint y --batch 40.5 --seed 24251206 --outdir z`
+  - `Rscript --vanilla scripts/debug_batch40_mice.R --context /tmp/does-not-exist.rds --checkpoint /tmp/does-not-exist.rds --batch 40 --seed 24251206 --outdir <tmpdir>`
+- Outcomes:
+  - `scripts/render_pdf.sh` now selects timing instrumentation portably:
+    - `/usr/bin/time -l` when supported,
+    - `gtime -v` when available,
+    - otherwise runs without an external timing wrapper and logs `[render:timing] unavailable`.
+  - `R/diagnostics_audit.R` now handles the zero-issue path without failing when attaching `run_id` / `run_ts`.
+  - `scripts/debug_batch40_mice.R` now rejects invalid numeric values for `--batch` and `--seed` with explicit errors while still allowing valid integer inputs through parsing.
+  - `README.md` now documents the wrapper timing behavior generically rather than promising macOS-specific `/usr/bin/time -l` output.
+- Next steps:
+  - Commit and push the direct-on-`main` cleanup if no additional review-scope fixes are needed.

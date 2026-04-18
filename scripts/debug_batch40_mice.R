@@ -30,8 +30,21 @@ parse_args <- function(args) {
   if (length(missing)) {
     stop("Missing required arguments: ", paste(missing, collapse = ", "), call. = FALSE)
   }
-  out$batch <- as.integer(out$batch)
-  out$seed <- as.integer(out$seed)
+  parse_integer_arg <- function(value, flag) {
+    if (!is.character(value) || length(value) != 1L || is.na(value) || !nzchar(value)) {
+      stop("Missing required argument: ", flag, call. = FALSE)
+    }
+    if (!grepl("^[0-9]+$", value)) {
+      stop("Invalid value for ", flag, ": expected integer, got ", shQuote(value), call. = FALSE)
+    }
+    parsed <- suppressWarnings(as.integer(value))
+    if (is.na(parsed)) {
+      stop("Invalid value for ", flag, ": expected integer, got ", shQuote(value), call. = FALSE)
+    }
+    parsed
+  }
+  out$batch <- parse_integer_arg(out$batch, "--batch")
+  out$seed <- parse_integer_arg(out$seed, "--seed")
   out
 }
 
