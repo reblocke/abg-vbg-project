@@ -891,3 +891,26 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
   - Let the heartbeat monitor follow `render_20260418_181830.log`, the RSS trace, and MICE batch logs through the MICE section.
   - If the full run completes, verify `Results/pdf_asset_presence_scan.csv` and commit the successful full-run artifact bundle.
   - If the full run fails, collect the postmortem/status evidence and do not auto-retry.
+
+## 2026-04-19 08:54 MDT
+- Task: Monitor full all-preview rerender outcome.
+- Files changed:
+  - `Results/render_logs/render_20260418_181830.log`
+  - `Results/render_logs/rss_trace_20260418_181830.csv`
+  - `Results/render_logs/postmortem_20260418_181830.md`
+  - `Results/mi_run_status_20260418_181830.json`
+  - `Results/mice_batches_log.csv`
+  - `Results/mice_combine_log.csv`
+  - `WORKLOG.md`
+- Commands run:
+  - Heartbeat checks of the render log, RSS trace, MI batch/combine logs, postmortem, MI status JSON, process table, and disk usage.
+- Outcomes:
+  - Full render failed at chunk `140/299 [mi-exec]` after about `14h 35m`.
+  - Failure cause was disk exhaustion: `No space left on device` while R/knitr attempted to write `ABG-VBG-analysis-2026-2-28.knit.md` and `run_mice_batched()` attempted to update batch logs.
+  - Batch 35 had returned from `mice::mice()` and completed `mice::ibind()` to `m = 70`, but failed before `imp_acc_after_batch_35.rds` checkpoint was confirmed saved.
+  - No final PDF was produced and PDF postflight did not run.
+  - Disk state during failure investigation: `/System/Volumes/Data` reported `1.2Gi` available and `100%` capacity; `Results` was `14G`, including `Results/archive` at `7.7G` and `Results/mi_batch_checkpoints` at `6.0G`.
+- Next steps:
+  - Free disk space before any rerun, especially old archives/checkpoints or unrelated large files after user review.
+  - If resuming is desired, inspect whether `Results/mi_batch_checkpoints/imp_acc_after_batch_34.rds` and any batch 35 partial artifacts are usable; the current notebook does not automatically resume from checkpoints.
+  - Do not auto-retry this full run without user approval.

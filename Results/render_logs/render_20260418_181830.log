@@ -185,3 +185,47 @@ processing file: ABG-VBG-analysis-2026-2-28.rmarkdown
 138/299 [type-invariants]                        
 139/299                                          
 140/299 [mi-exec]                                
+Error in `file()`:
+! cannot open the connection
+Backtrace:
+     x
+  1. \-global run_mice_batched(M_IMP_RUN, MI_BATCH_START, MAXIT_RUN, MI_SEED)
+  2.   \-append_batch_log(...)
+  3.     \-write_batch_log()
+  4.       \-global write_csv_safely(...)
+  5.         +-utils::write.csv(df, path, row.names = row_names)
+  6.         | \-base::eval.parent(Call)
+  7.         |   \-base::eval(expr, p)
+  8.         |     \-base::eval(expr, p)
+  9.         \-utils::write.table(...)
+ 10.           \-base::file(file, ifelse(append, "a", "w"))
+Error in file(con, "w") : cannot open the connection
+Calls: .main ... <Anonymous> -> handler -> write_utf8 -> writeLines -> file
+In addition: Warning message:
+In file(con, "w") :
+  cannot open file 'ABG-VBG-analysis-2026-2-28.knit.md': No space left on device
+Execution halted
+WARN: Error encountered when rendering files
+    52534.40 real     26924.80 user      2833.28 sys
+          7559479296  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+          1188611989  page reclaims
+               16549  page faults
+                   0  swaps
+                   0  block input operations
+                  49  block output operations
+                  18  messages sent
+                  14  messages received
+                  10  signals received
+              191975  voluntary context switches
+             6305018  involuntary context switches
+            40326085  instructions retired
+            23164257  cycles elapsed
+             1360160  peak memory footprint
+[render:end] 2026-04-19 08:54:08 -0600
+[render:status] 1
+[render:log] /Users/reblocke/Research/abg-vbg-project/Results/render_logs/render_20260418_181830.log
+[collect_render_postmortem] wrote /Users/reblocke/Research/abg-vbg-project/Results/render_logs/postmortem_20260418_181830.md
+[collect_render_postmortem] wrote /Users/reblocke/Research/abg-vbg-project/Results/mi_run_status_20260418_181830.json
