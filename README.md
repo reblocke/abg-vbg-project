@@ -49,7 +49,7 @@ Rscript --vanilla scripts/check_dependencies.R
 ```
 
 The wrapper is the only sanctioned validation entrypoint. It writes a timestamped combined stdout/stderr log to `Results/render_logs/` and records timing output from the best available host tool for the render.
-The canonical PDF is validation-oriented: provenance/build status first, canonical manuscript assets only, and compact essential audits. There is no separate debug render mode.
+The canonical PDF includes inline analysis preview figures, manuscript-facing assets, and compact essential audits. There is no separate debug render mode.
 Before each wrapper run, existing MI/debug artifacts are archived under `Results/archive/pre_run_<render_ts>/` so abrupt-stop evidence is preserved without moving the rest of `Results/`.
 
 Machine-local MI resource overrides are available when needed for operational troubleshooting:
@@ -150,7 +150,7 @@ Note: figure filenames in `Results/figs/` can include chunk index suffixes; use 
 - Direct dependency audit before long renders: `Rscript --vanilla scripts/check_dependencies.R`
 - Canonical render command: `./scripts/render_pdf.sh` from the repo root
 - Render contract: one canonical report path only. Do not add alternate render modes that change figure embedding, table inclusion, scratch retention, or other report content/presentation.
-- Wrapper postflight now requires the validation artifact set named above; a render is not considered valid if any of those artifacts are missing or malformed.
+- Wrapper postflight now requires the validation artifact set named above and PDF asset-presence checks; a render is not considered valid if artifacts are missing/malformed or if the rendered PDF is missing the expected figure/table display content.
 - The only sanctioned execution variation is dataset scope (`run_mode` with `pilot_frac`) plus machine-local path/resource controls that do not change analytical outputs.
 - The checked-in `Results/` snapshot reflects a pilot run; rerender the primary notebook for a fresh production run
 - No `testthat` suite is currently present in this repository
