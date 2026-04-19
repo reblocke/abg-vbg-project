@@ -139,9 +139,9 @@ render_inline_graphic <- function(file,
   knitr::include_graphics(inline_path)
 }
 
-# Canonical PDF path: export all figure/table artifacts, but keep the rendered
-# notebook focused on manuscript-facing assets and essential audits only.
-VALIDATION_INLINE_ANALYSIS_PREVIEWS <- FALSE
+# Canonical PDF path: export all figure/table artifacts and include analysis
+# previews plus manuscript-facing assets in the rendered notebook.
+VALIDATION_INLINE_ANALYSIS_PREVIEWS <- TRUE
 
 # helper: normalize manuscript-facing text to a plain-ASCII representation so
 # PDF labels/captions do not depend on platform-specific glyph handling.
@@ -13622,49 +13622,59 @@ render_manifest_table <- function(label, df, file_stub, wide = FALSE, digits = 2
 }
 
 render_validation_manuscript_assets <- function() {
-  render_manuscript_figure("Figure 1")
-  render_manuscript_figure("Figure 2")
-  render_manifest_table(
-    "Table 1",
-    tbl1_combined_csv,
-    file_stub = "table1_combined",
-    wide = TRUE,
-    digits = 2,
-    max_cols = 8,
-    landscape = TRUE
+  as_asis_text <- function(x) {
+    if (is.null(x)) return("")
+    paste(as.character(x), collapse = "\n")
+  }
+
+  blocks <- list(
+    render_manuscript_figure("Figure 1"),
+    render_manuscript_figure("Figure 2"),
+    render_manifest_table(
+      "Table 1",
+      tbl1_combined_csv,
+      file_stub = "table1_combined",
+      wide = TRUE,
+      digits = 2,
+      max_cols = 8,
+      landscape = TRUE
+    ),
+    render_manifest_table(
+      "Table 2",
+      table_2_weighted_categorical_outcomes,
+      file_stub = "table_2_weighted_categorical_outcomes",
+      wide = TRUE,
+      digits = 2,
+      max_cols = 8,
+      landscape = TRUE
+    ),
+    render_manuscript_figure("Figure S1"),
+    render_manuscript_figure("Figure S2"),
+    render_manuscript_figure("Figure S3"),
+    render_manuscript_figure("Figure S4"),
+    render_manuscript_figure("Figure S5"),
+    render_manifest_table(
+      "Table S2",
+      table_s2_crude_threelevel,
+      file_stub = "table_s2_crude_threelevel",
+      wide = TRUE,
+      digits = 2
+    ),
+    render_manifest_table(
+      "Table S3",
+      table_s3_gbm_threelevel,
+      file_stub = "table_s3_gbm_threelevel",
+      wide = TRUE,
+      digits = 2
+    ),
+    render_manuscript_figure("Figure S6"),
+    render_manuscript_figure("Figure S7"),
+    render_manuscript_figure("Figure S8")
   )
-  render_manifest_table(
-    "Table 2",
-    table_2_weighted_categorical_outcomes,
-    file_stub = "table_2_weighted_categorical_outcomes",
-    wide = TRUE,
-    digits = 2,
-    max_cols = 8,
-    landscape = TRUE
-  )
-  render_manuscript_figure("Figure S1")
-  render_manuscript_figure("Figure S2")
-  render_manuscript_figure("Figure S3")
-  render_manuscript_figure("Figure S4")
-  render_manuscript_figure("Figure S5")
-  render_manifest_table(
-    "Table S2",
-    table_s2_crude_threelevel,
-    file_stub = "table_s2_crude_threelevel",
-    wide = TRUE,
-    digits = 2
-  )
-  render_manifest_table(
-    "Table S3",
-    table_s3_gbm_threelevel,
-    file_stub = "table_s3_gbm_threelevel",
-    wide = TRUE,
-    digits = 2
-  )
-  render_manuscript_figure("Figure S6")
-  render_manuscript_figure("Figure S7")
-  render_manuscript_figure("Figure S8")
-  invisible(TRUE)
+
+  block_text <- vapply(blocks, as_asis_text, character(1L))
+  block_text <- block_text[nzchar(trimws(block_text))]
+  knitr::asis_output(paste(block_text, collapse = "\n\n"))
 }
 ```
 

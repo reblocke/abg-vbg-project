@@ -1,15 +1,15 @@
 {
-  "run_id": "20260416_214517",
-  "run_mode": "full",
-  "pilot_frac": 1,
-  "mi_ram_gb": 8,
+  "run_id": "20260418_180228",
+  "run_mode": "pilot",
+  "pilot_frac": 0.01,
+  "mi_ram_gb": 16,
   "mi_ram_gb_source": "auto:Darwin",
-  "mi_batch_threshold": 200000,
-  "mi_batch_start": 1,
+  "mi_batch_threshold": 5000,
+  "mi_batch_start": 2,
   "mi_batch_start_source": "auto:auto:Darwin",
-  "data_dir": "/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/data",
-  "results_dir": "/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/abg-vbg-project/Results",
+  "data_dir": "/Users/reblocke/Research/abg-vbg-project/data",
+  "results_dir": "/Users/reblocke/Research/abg-vbg-project/Results",
   "full_n": 833476,
-  "sampled_n": 833476,
-  "subset_n": 515286
+  "sampled_n": 8335,
+  "subset_n": 5175
 }
