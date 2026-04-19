@@ -871,3 +871,23 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
   - Commit the code/documentation/worklog fix without staging unrelated render churn.
   - Launch `./scripts/render_pdf.sh -P run_mode:full -P pilot_frac:1`.
   - Monitor the full run through the wrapper log, RSS trace, MI batch logs, postmortem, and status JSON.
+
+## 2026-04-18 18:18 MDT
+- Task: Launch the monitored full rerun after the validated all-preview 1% pilot.
+- Files changed:
+  - `WORKLOG.md`
+- Commands run:
+  - `git push origin main`
+  - `./scripts/render_pdf.sh -P run_mode:full -P pilot_frac:1`
+- Outcomes:
+  - Full render started successfully:
+    - wrapper log: `Results/render_logs/render_20260418_181830.log`
+    - wrapper PID: `3695`
+    - RSS trace: `Results/render_logs/rss_trace_20260418_181830.csv`
+    - command arguments: `-P run_mode:full -P pilot_frac:1`
+  - First monitor poll showed the render active after preflight/dependency audit at chunk `32/299 [load-trinetx-data]`.
+  - Created heartbeat automation `monitor-full-render` to check the render every ~30 minutes, summarize stage/RSS/MICE status, commit successful full-run artifacts after completion, and delete itself after completion or failure.
+- Next steps:
+  - Let the heartbeat monitor follow `render_20260418_181830.log`, the RSS trace, and MICE batch logs through the MICE section.
+  - If the full run completes, verify `Results/pdf_asset_presence_scan.csv` and commit the successful full-run artifact bundle.
+  - If the full run fails, collect the postmortem/status evidence and do not auto-retry.

@@ -1,6 +1,6 @@
 R version 4.5.3 (2026-03-11)
 Platform: aarch64-apple-darwin20
-Running under: macOS Tahoe 26.3
+Running under: macOS Tahoe 26.3.1
 
 Matrix products: default
 BLAS:   /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRblas.0.dylib 
@@ -18,7 +18,7 @@ attached base packages:
 
 other attached packages:
  [1] WeightIt_1.5.1      visdat_0.6.0        tidyr_1.3.2        
- [4] tibble_3.3.1        survey_4.4-8        survival_3.8-3     
+ [4] tibble_3.3.1        survey_4.4-8        survival_3.8-6     
  [7] skimr_2.2.2         scales_1.4.0        rms_8.1-0          
 [10] Hmisc_5.2-5         rlang_1.1.7         renv_1.1.7         
 [13] ragg_1.5.0          purrr_1.2.1         progressr_0.18.0   
@@ -37,7 +37,7 @@ other attached packages:
 loaded via a namespace (and not attached):
   [1] polspline_1.1.25        polyclip_1.10-7         rpart_4.1.24           
   [4] lifecycle_1.0.5         Rdpack_2.6.5            rprojroot_2.1.1        
-  [7] globals_0.19.0          lattice_0.22-7          MASS_7.3-65            
+  [7] globals_0.19.0          lattice_0.22-9          MASS_7.3-65            
  [10] backports_1.5.0         magrittr_2.0.4          rmarkdown_2.30         
  [13] yaml_2.3.12             otel_0.2.0              zip_2.3.3              
  [16] askpass_1.2.1           DBI_1.2.3               minqa_1.2.8            
@@ -66,9 +66,10 @@ loaded via a namespace (and not attached):
  [85] cachem_1.1.0            repr_1.1.7              zoo_1.8-15             
  [88] stringr_1.6.0           foreign_0.8-91          pillar_1.11.1          
  [91] vctrs_0.7.1             jomo_2.7-6              cluster_2.1.8.2        
- [94] htmlTable_2.4.3         evaluate_1.0.5          readr_2.1.6            
- [97] mvtnorm_1.3-3           cli_3.6.5               compiler_4.5.3         
-[100] labeling_0.4.3          forcats_1.0.1           stringi_1.8.7          
-[103] viridisLite_0.4.3       glmnet_4.1-10           V8_8.0.1               
-[106] quantreg_6.1            fontquiver_0.2.1        hms_1.1.4              
-[109] rbibutils_2.4.1         memoise_2.0.1           igraph_2.2.1           
+ [94] htmlTable_2.4.3         evaluate_1.0.5          magick_2.9.0           
+ [97] tinytex_0.58            readr_2.1.6             mvtnorm_1.3-3          
+[100] cli_3.6.5               compiler_4.5.3          labeling_0.4.3         
+[103] forcats_1.0.1           stringi_1.8.7           viridisLite_0.4.3      
+[106] glmnet_4.1-10           V8_8.0.1                quantreg_6.1           
+[109] fontquiver_0.2.1        hms_1.1.4               rbibutils_2.4.1        
+[112] memoise_2.0.1           igraph_2.2.1           

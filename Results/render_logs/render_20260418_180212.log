@@ -183,3 +183,253 @@ processing file: ABG-VBG-analysis-2026-2-28.rmarkdown
 132/299 [float-barrier-missingness]              
 133/299                                          
 134/299 [missingness-drivers]                    
+135/299                                          
+136/299 [mi-prep]                                
+137/299                                          
+138/299 [type-invariants]                        
+139/299                                          
+140/299 [mi-exec]                                
+141/299                                          
+142/299 [mi-mcerror]                             
+143/299                                          
+144/299 [mi-diagnostics]                         
+145/299                                          
+146/299 [mi-missing-pattern]                     
+147/299                                          
+148/299 [mi-imputation-diagnostics]              
+149/299                                          
+150/299 [mi-mcerr-progress]                      
+151/299                                          
+152/299 [mi-missing-audit]                       
+153/299                                          
+154/299 [fail-fast-checks]                       
+155/299                                          
+156/299 [mi-single-pass]                         
+157/299                                          
+158/299 [mi-propensity-abg]                      
+159/299                                          
+160/299 [mi-weight-diagnostics-abg]              
+161/299                                          
+162/299 [target-balance-helpers]                 
+163/299                                          
+164/299 [mi-balance-abg]                         
+165/299                                          
+166/299 [mi-propensity-vbg]                      
+167/299                                          
+168/299 [mi-weight-diagnostics-vbg]              
+169/299                                          
+170/299 [mi-balance-vbg]                         
+171/299                                          
+172/299 [mi-pool-helpers]                        
+173/299                                          
+174/299 [mi-abg-outcomes]                        
+175/299                                          
+176/299 [mi-vbg-outcomes]                        
+177/299                                          
+178/299 [shap-top10-mi-logistic]                 
+179/299                                          
+180/299 [mi_pco2_threelevel]                     
+181/299                                          
+182/299 [mi-co2-cat-checks]                      
+183/299                                          
+184/299 [mi-ipw-abg-threelevel]                  
+185/299                                          
+186/299 [mi-ipw-vbg-threelevel]                  
+187/299                                          
+188/299 [table3-ipw-mi-co2]                      
+189/299                                          
+190/299 [table-summary-adjusted-threelevel]      
+191/299                                          
+192/299 [key-results-cat3-track-prep]            
+193/299                                          
+194/299 [key-results-cat3-crude-abg-vbg]         
+195/299                                          
+196/299 [key-results-cat3-adjusted-abg-vbg]      
+197/299                                          
+198/299 [key-results-cat3-imputed-abg-vbg]       
+199/299                                          
+200/299 [key-results-cat3-main-mi-ipw-abg-vbg]   
+201/299                                          
+202/299 [key-results-cat3-gbm-weighted-abg-vbg]  
+203/299                                          
+204/299 [stage1-cleanup]                         
+205/299                                          
+206/299 [co2-binned-rates-mi-ipw]                
+207/299                                          
+208/299 [manuscript-outputs]                     
+209/299                                          
+210/299 [mi-threelevel-sanity]                   
+211/299                                          
+212/299 [ipw-three-level-pco2-mi-abg-vbg]        
+213/299                                          
+214/299 [ipw-three-level-pco2-mi-abg-vbg-prob]   
+215/299                                          
+216/299 [mi-propensity-histograms-logistic]      
+217/299                                          
+218/299 [loveplot-mi-logistic]                   
+219/299                                          
+220/299 [shap-top10-mi-logistic-display]         
+221/299                                          
+222/299 [float-barrier-mi-or-plot]               
+223/299                                          
+224/299 [ipw-rcs-overlay-mi-abg-vbg]             
+225/299                                          
+226/299 [ipw-rcs-overlay-mi-abg-vbg-prob]        
+227/299                                          
+228/299 [key-results-track-prep]                 
+229/299                                          
+230/299 [key-results-spline-crude-abg-vbg]       
+231/299                                          
+232/299 [key-results-spline-adjusted-abg-vbg]    
+233/299                                          
+234/299 [key-results-spline-imputed-abg-vbg]     
+235/299                                          
+236/299 [key-results-spline-main-mi-ipw-abg-vbg] 
+237/299                                          
+238/299 [key-results-spline-gbm-weighted-abg-vbg]
+239/299                                          
+240/299 [float-barrier-mi-spline]                
+241/299                                          
+242/299 [ipw-output-parity]                      
+243/299                                          
+244/299 [key-results-output-audit]               
+245/299                                          
+246/299 [supplement-artifact-manifest]           
+247/299                                          
+248/299 [manuscript-facing-display]              
+249/299                                          
+250/299 [manuscript-asset-audit]                 
+251/299                                          
+252/299 [supplement-artifact-assertions]         
+253/299                                          
+254/299 [diagnostics-inputs]                     
+255/299                                          
+256/299 [diagnostics-missingness]                
+257/299                                          
+258/299 [diagnostics-mi-convergence]             
+259/299                                          
+260/299 [diagnostics-mi-stability]               
+261/299                                          
+262/299 [diagnostics-mi-maxit]                   
+263/299                                          
+264/299 [diagnostics-weights]                    
+265/299                                          
+266/299 [diagnostics-balance]                    
+267/299                                          
+268/299 [diagnostics-outcome]                    
+269/299                                          
+270/299 [diagnostics-summary]                    
+271/299                                          
+272/299 [warnings-summary]                       
+273/299                                          
+274/299 [mi-nonconvergence-summary]              
+275/299                                          
+276/299 [runtime-log-export]                     
+277/299                                          
+278/299 [diagnostics-completeness]               
+279/299                                          
+280/299 [diagnostics-audit-run]                  
+281/299                                          
+282/299 [diagnostics-audit-summary]              
+283/299                                          
+284/299 [validation-build-summary]               
+285/299                                          
+286/299 [mi-save-exports]                        
+287/299                                          
+288/299 [mi-session]                             
+289/299                                          
+290/299 [software-statement]                     
+291/299                                          
+292/299 [render-path-hygiene-scan]               
+293/299                                          
+294/299 [pdf-hygiene-scan]                       
+295/299                                          
+296/299 [numbering-hygiene-scan]                 
+297/299                                          
+298/299 [mi-transient-cleanup]                   
+299/299                                          
+output file: ABG-VBG-analysis-2026-2-28.knit.md
+
+pandoc 
+  to: latex
+  output-file: ABG-VBG-analysis-2026-2-28.tex
+  standalone: true
+  pdf-engine: lualatex
+  variables:
+    graphics: true
+    tables: true
+  default-image-extension: pdf
+  toc: true
+  number-sections: true
+  pdf-engine-opts:
+    - '--cnf-line=dest_names_size=300000'
+  
+metadata
+  documentclass: scrartcl
+  classoption:
+    - DIV=11
+    - numbers=noendperiod
+  papersize: letter
+  header-includes:
+    - \KOMAoption{captions}{tableheading}
+    - \usepackage{float}
+    - \usepackage{placeins}
+    - \graphicspath{{../}{./}}
+  block-headings: true
+  title: ABG‑VBG Analysis
+  author: Brian Locke, Anila Mehta
+  editor: visual
+  fontsize: 11pt
+  hyperrefoptions:
+    - draft
+  mainfont: Latin Modern Roman
+  code-block-bg: false
+  geometry:
+    - landscape
+    - margin=0.8in
+  
+
+Rendering PDF
+running lualatex - 1
+  This is LuaHBTeX, Version 1.22.0 (TeX Live 2025) 
+   restricted system commands enabled.
+  
+running lualatex - 2
+  This is LuaHBTeX, Version 1.22.0 (TeX Live 2025) 
+   restricted system commands enabled.
+  
+running lualatex - 3
+  This is LuaHBTeX, Version 1.22.0 (TeX Live 2025) 
+   restricted system commands enabled.
+  
+
+Output created: ABG-VBG-analysis-2026-2-28.pdf
+
+      376.19 real       349.17 user        13.71 sys
+          5828788224  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             2439178  page reclaims
+               18694  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                  15  messages sent
+                  13  messages received
+                   9  signals received
+                8117  voluntary context switches
+              646992  involuntary context switches
+            38176154  instructions retired
+            18570372  cycles elapsed
+             1360160  peak memory footprint
+[render:postflight] validate_outputs
+[render:postflight] render path and PDF validation passed
+[render:postflight] check_pdf_assets
+Error: PDF asset-presence validation failed: page_count; see /Users/reblocke/Research/abg-vbg-project/Results/pdf_asset_presence_scan.csv
+Execution halted
+[render:end] 2026-04-18 18:08:31 -0600
+[render:status] 1
+[render:log] /Users/reblocke/Research/abg-vbg-project/Results/render_logs/render_20260418_180212.log
+[collect_render_postmortem] wrote /Users/reblocke/Research/abg-vbg-project/Results/render_logs/postmortem_20260418_180212.md
+[collect_render_postmortem] wrote /Users/reblocke/Research/abg-vbg-project/Results/mi_run_status_20260418_180212.json

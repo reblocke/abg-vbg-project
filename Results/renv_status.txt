@@ -1,1 +1,7 @@
-No issues found -- the project is in a consistent state.
+The following package(s) are out of sync [lockfile != library]:
+
+# CRAN -----------------------------------------------------------------------
+- lattice    [0.22-7 != 0.22-9]
+- survival   [3.8-3 != 3.8-6]
+
+See `?renv::status` for advice on resolving these issues.
