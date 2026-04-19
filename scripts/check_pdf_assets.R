@@ -4,7 +4,7 @@ parse_args <- function(args) {
   out <- list(
     pdf_path = "",
     results_dir = "Results",
-    min_pages = 150L,
+    min_pages = 120L,
     min_images = 70L
   )
   idx <- 1L
