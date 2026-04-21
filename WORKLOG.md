@@ -968,3 +968,32 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Next steps:
   - Commit the successful full-run artifact bundle.
   - Delete the `monitor-full-render` heartbeat after the commit.
+
+## 2026-04-20 20:03 MDT
+- Task: Relabel and quick-audit the completed full all-preview PDF render.
+- Files changed:
+  - `Code Drafts/2026-4-20-complete render.pdf`
+  - `WORKLOG.md`
+- Commands run:
+  - `cp -p "Code Drafts/ABG-VBG-analysis-2026-2-28.pdf" "Code Drafts/2026-4-20-complete render.pdf"`
+  - `pdfinfo "Code Drafts/2026-4-20-complete render.pdf"`
+  - `pdfimages -list "Code Drafts/2026-4-20-complete render.pdf"`
+  - `pdftotext -layout "Code Drafts/2026-4-20-complete render.pdf" tmp/pdf_review/complete_render.txt`
+  - `pdftoppm -png -r 150` spot checks for pages `19`, `20`, `21`, `22`, `110`, `111`, and `123`.
+  - Inspected `Results/pdf_asset_presence_scan.csv`, `Results/artifact_check_missing.csv`, `Results/diagnostics_audit_summary.csv`, and `Results/diagnostics_audit_issues.csv`.
+- Outcomes:
+  - Labeled copy exists at `Code Drafts/2026-4-20-complete render.pdf` and matches the completed canonical full render.
+  - PDF structure still matches the successful full run:
+    - pages: `126`
+    - embedded images: `76`
+    - required Figure 1, Figure 2, Figure S1-S8, Table 1, Table 2, Table S2, and Table S3 text: all found by the asset-presence scan.
+  - Visual spot checks confirmed Figure 1 on page `110`, Figure 2 on page `111`, and Figure S8 on page `123` render as visible graphics.
+  - Artifact inventory shows no missing required generated artifacts. The only missing artifact row is the allowed external/manual Supplementary Table 1; deprecated draft-only Figure 3 remains suppressed.
+  - Render/log postflight still reports wrapper status `0` and PDF asset validation passed.
+  - Problems identified:
+    - Pages `19`-`22` contain raw markdown table formatting (`**...**`, `__...__`) in early inline baseline-summary preview tables.
+    - Pages `21`-`22` also show literal `textsubscript2` in PaCO2/PvCO2 row labels.
+    - `Results/diagnostics_audit_summary.csv` remains `FAIL` because `Results/model_fit_diagnostics.csv` has `sep_flag TRUE for 328 / 2612 fits`; this is a model-diagnostic issue, not a PDF-render failure.
+- Next steps:
+  - If the inline baseline preview tables are retained in the canonical PDF, fix their gtsummary-to-LaTeX rendering path so markdown and CO2 subscripts are rendered instead of printed literally.
+  - Separately decide whether the outcome separation audit issue should block manuscript use or be handled as a modeling sensitivity/follow-up.
