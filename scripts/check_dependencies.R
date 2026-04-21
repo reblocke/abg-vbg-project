@@ -70,7 +70,7 @@ extract_seed_pkgs <- function(path) {
 }
 
 audit_paths <- c(
-  file.path(project_root, "Code Drafts", "ABG-VBG analysis 2026-2-28.qmd"),
+  file.path(project_root, "Code Drafts", "ABG-VBG analysis 2026-4-21.qmd"),
   file.path(project_root, "scripts", "check_env.R"),
   file.path(project_root, "scripts", "check_dependencies.R")
 )

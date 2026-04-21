@@ -1036,3 +1036,50 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Next steps:
   - Add notebook-generated Supplementary Table 4 if the missingness table should become part of the canonical supplement.
   - Decide whether MI diagnostics should be promoted from narrative/diagnostic sections into a numbered Figure S9 or Table S5.
+
+## 2026-04-21 06:19 MDT
+- Task: Preserve the prior runnable notebook, make a new code-visible canonical notebook, and validate a 1% pilot render.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `Code Drafts/tex/pandoc-code-wrap.tex`
+  - `README.md`
+  - `scripts/check_dependencies.R`
+  - `scripts/check_pdf_assets.R`
+  - `scripts/render_pdf.sh`
+  - `WORKLOG.md`
+- Commands run:
+  - `cp -p "Code Drafts/ABG-VBG analysis 2026-2-28.qmd" "Code Drafts/ABG-VBG analysis 2026-4-21.qmd"`
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - `Rscript --vanilla scripts/check_pdf_assets.R --pdf-path "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+  - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+  - `pdfimages -list "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+- Outcomes:
+  - Preserved `Code Drafts/ABG-VBG analysis 2026-2-28.qmd` as the last completed no-code full-render notebook snapshot.
+  - Created `Code Drafts/ABG-VBG analysis 2026-4-21.qmd` and made it the canonical wrapper/dependency-audit target.
+  - Changed the new notebook to render executed R source in the PDF by enabling global echo and converting local hidden-source chunk options to visible source with hidden setup results where needed.
+  - Added a code-block background through the project LaTeX include using `fvextra` line-level `bgcolor`; full framed chunk boxes were not used because the notebook contains very large chunks and the framed approach failed with a LaTeX `Dimension too large` error.
+  - Initial Quarto `code-block-bg` attempts failed because `tcolorbox.sty` was unavailable and TinyTeX could not auto-install it due local TeX Live 2025 versus remote repository 2026 mismatch.
+  - Extended `scripts/check_pdf_assets.R` to require source-code identifiers in the rendered PDF: `VALIDATION_INLINE_ANALYSIS_PREVIEWS`, `ensure_packages_loaded`, `print_plot_once`, `run_mice_batched`, and `render_validation_manuscript_assets`.
+  - Static checks passed:
+    - shell syntax for `scripts/render_pdf.sh`
+    - purl/parse check with `parsed_expressions=1791`
+    - dependency audit passed for 44 declared direct packages
+    - environment preflight passed with the existing `lattice` and `survival` lockfile/library drift warning
+  - Final successful 1% pilot:
+    - log: `Results/render_logs/render_20260421_061046.log`
+    - PDF: `Code Drafts/ABG-VBG-analysis-2026-4-21.pdf`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `393.68` seconds
+    - max resident set size from `/usr/bin/time -l`: `3906224128` bytes
+  - PDF validation passed:
+    - pages: `534`
+    - embedded images: `76`
+    - required Figure 1, Figure 2, Figure S1-S8, Table 1, Table 2, Table S2, and Table S3 text all found
+    - required source-code identifiers all found
+  - Visual spot checks confirmed code appears with a light gray background and that representative figure pages still render.
+- Next steps:
+  - Commit only the source/documentation/worklog changes; leave pilot-generated PDFs, logs, archives, and result artifacts unstaged unless a later full-run artifact bundle is requested.
