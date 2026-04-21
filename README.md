@@ -11,14 +11,14 @@ Repository: <https://github.com/reblocke/abg-vbg-project>
 - Secondary maintained notebook: `Code Drafts/ABG-VBG analysis 2025-12-11.qmd`
 - Reproducible render wrapper: `scripts/render_pdf.sh` (now defaults to the 2026-4-21 notebook)
 - Latest rendered analysis PDF: `Code Drafts/ABG-VBG-analysis-2026-4-21.pdf`
-- Latest `Results/` snapshot: pilot run `run_id = 20260301_131122`; see `Results/run_metadata.csv`
+- Latest `Results/` snapshot: pilot run `run_id = 20260421_090421`; see `Results/run_metadata.csv`
 - Run settings snapshot for that output set: `Results/run_config.json` (includes machine-specific absolute paths from the render environment)
 - Most recently modified manuscript draft: `Drafts/04-08-25 ABG_VBG_Rough Draft BL.docx` (mtime 2026-04-08)
 
 ## Start here for review
 
 - Code: start with `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`, then compare against `Code Drafts/ABG-VBG analysis 2026-2-28.qmd` for the last completed no-code full render or `Code Drafts/ABG-VBG analysis 2025-12-11.qmd` for the older December workflow.
-- Outputs: use `Results/run_metadata.csv`, `Results/diagnostics_audit.md`, `Results/plot_registry.csv`, `Results/table_summary_adjusted_threelevel.csv`, `Results/Table1.docx`, `Results/Table2.docx`, and `Results/figs/` as the main review surfaces.
+- Outputs: use `Results/run_metadata.csv`, `Results/diagnostics_audit.md`, `Results/plot_registry.csv`, `Results/table_summary_adjusted_threelevel.csv`, `Results/discordance_interpretation_summary.csv`, `Results/Table1.docx`, `Results/Table2.docx`, and `Results/figs/` as the main review surfaces.
 - Validation build outputs: `Results/artifact_provenance_manifest.csv`, `Results/artifact_check_status.csv`, `Results/canonical_asset_registry.csv`, `Results/glyph_audit.csv`, `Results/duplicate_asset_audit.csv`, `Results/diagnostics_audit_summary.csv`, and `Results/diagnostics_audit_issues.csv`.
 - Manuscript: use `Drafts/04-08-25 ABG_VBG_Rough Draft BL.docx` first, then older draft files in `Drafts/` only for revision history.
 
@@ -111,6 +111,7 @@ The primary notebook `Code Drafts/ABG-VBG analysis 2026-4-21.qmd` covers:
 - Non-MI IPSW using GBM propensity models
 - MI + IPSW analyses with pooled estimates
 - Restricted cubic spline outcome modeling
+- End-of-notebook NIV/IMV diagnostics for probability-versus-OR discordance, including common-reference, marginal-standardization, scale, missingness/capture, support, setting, subgroup, and timing checks under `Results/discordance_*`
 - Diagnostics export and audit outputs to `Results/`
 - Manuscript-oriented tables and figure registries for review
 
@@ -125,6 +126,7 @@ Use these as the main crosswalk from analysis outputs into the manuscript:
 - Core adjusted 3-level OR summary sidecars: `Results/table_summary_adjusted_threelevel.csv` and the cohort-specific split CSVs
 - Plot lookup and figure registry: `Results/plot_registry.csv`
 - Diagnostics summary: `Results/diagnostics_summary.csv`, `Results/diagnostics_audit.md`, `Results/runtime_summary.csv`
+- NIV/IMV probability-OR discordance diagnostics: `Results/discordance_current_summary.csv`, `Results/discordance_gap_metrics.csv`, `Results/discordance_standardization_summary.csv`, `Results/discordance_marginal_standardization_status.csv`, `Results/discordance_scale_summary.csv`, `Results/discordance_missingness_capture_summary.csv`, `Results/discordance_tail_support_summary.csv`, `Results/discordance_setting_sensitivity.csv`, `Results/discordance_setting_rate_ranges.csv`, `Results/discordance_interpretation_summary.csv`, and `Results/discordance_validation_status.csv`
 - Validation-only audit surfaces: `Results/artifact_provenance_manifest.csv`, `Results/artifact_check_status.csv`, `Results/artifact_check_missing.csv`, `Results/canonical_asset_registry.csv`, `Results/manuscript_sync_report.md`, `Results/glyph_audit.csv`, `Results/duplicate_asset_audit.csv`, `Results/diagnostics_audit_summary.csv`, `Results/diagnostics_audit_issues.csv`
 - MI/debug postmortem surfaces: `Results/render_logs/rss_trace_<render_ts>.csv`, `Results/render_logs/postmortem_<render_ts>.md`, `Results/mi_run_status_<render_ts>.json`, `Results/mice_batches_log.csv`, `Results/mice_combine_log.csv`, `Results/mi_batch_context.rds`, `Results/mi_batch_checkpoints/`
 - Figure files: `Results/figs/`
@@ -154,7 +156,7 @@ Note: figure filenames in `Results/figs/` can include chunk index suffixes; use 
 - Direct dependency audit before long renders: `Rscript --vanilla scripts/check_dependencies.R`
 - Canonical render command: `./scripts/render_pdf.sh` from the repo root
 - Render contract: one canonical report path only. Do not add alternate render modes that change figure embedding, table inclusion, scratch retention, or other report content/presentation.
-- Wrapper postflight now requires the validation artifact set named above and PDF asset-presence checks; a render is not considered valid if artifacts are missing/malformed, if the rendered PDF is missing the expected figure/table/source-code display content, or if known table-layout failure text appears near the manuscript tables.
+- Wrapper postflight now requires the validation artifact set named above, the NIV/IMV discordance section, and PDF asset-presence checks; a render is not considered valid if artifacts are missing/malformed, if the rendered PDF is missing the expected figure/table/source-code display content, or if known table-layout failure text appears near the manuscript tables.
 - The only sanctioned execution variation is dataset scope (`run_mode` with `pilot_frac`) plus machine-local path/resource controls that do not change analytical outputs.
 - The checked-in `Results/` snapshot reflects a pilot run; rerender the primary notebook for a fresh production run
 - No `testthat` suite is currently present in this repository

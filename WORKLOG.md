@@ -1138,3 +1138,132 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
   - Pilot-generated PDFs, logs, archives, and `Results/` churn were left unstaged by design.
 - Next steps:
   - Commit only source/docs/worklog changes for this ticket; do not commit pilot-generated artifacts unless explicitly requested.
+
+## 2026-04-21 08:48 MDT
+- Task: Add NIV/IMV probability-OR discordance diagnostics.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `scripts/check_pdf_assets.R`
+  - `README.md`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+  - `pdftotext -layout "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf" tmp/pdf_text_20260421_discordance_final.txt`
+  - `pdftoppm -png -r 120 -f 429 -l 429 "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf" tmp/pdf_spot_20260421_discordance_final/page429_section`
+  - `pdftoppm -png -r 120 -f 442 -l 442 "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf" tmp/pdf_spot_20260421_discordance_final/page442_current_summary`
+  - `pdftoppm -png -r 120 -f 452 -l 452 "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf" tmp/pdf_spot_20260421_discordance_final/page452_standardization`
+  - `pdftoppm -png -r 120 -f 464 -l 464 "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf" tmp/pdf_spot_20260421_discordance_final/page464_tail_support`
+- Outcomes:
+  - Added a diagnostic-only end-of-notebook section titled `Analysis of the discordance between predicted probabilities and OR for NIV and IMV`, before transient MI cleanup and without changing manuscript-facing figures, tables, estimates, or render modes.
+  - Extended compact MI categorical and spline fit storage to retain `terms`, `xlevels`, and `contrasts`, allowing diagnostic predictions to reuse the fitted model encoding instead of rebuilding spline bases independently.
+  - Generated required `Results/discordance_*` artifacts for current discordance summaries, gap metrics, common-reference curves, marginal-standardized curves, scale summaries, missingness/capture checks, tail support, setting/subgroup/timing sensitivities, interpretation summary, validation status, and artifact manifest.
+  - Generated diagnostic figures `Results/figs/discordance_probability_standardization_niv_imv.png` and `Results/figs/discordance_tail_support_niv_imv.png`.
+  - Updated `scripts/check_pdf_assets.R` to require the new section heading, final interpretation heading, and source identifiers in the rendered PDF without adding these diagnostics to the manuscript-facing figure/table registry.
+  - First pilot completed but inspection found repeated categorical diagnostic values caused by data-mask name resolution in helper filters; patched the helpers to use local variables with `.env$...` and reran the 1% pilot.
+  - Final successful 1% pilot:
+    - log: `Results/render_logs/render_20260421_083511.log`
+    - run_id: `20260421_083530`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `535.78` seconds
+    - max resident set size from `/usr/bin/time -l`: `4165910528` bytes
+    - PDF pages: `511`
+  - PDF asset scan passed in `Results/pdf_asset_presence_scan.csv`; required discordance heading, interpretation heading, and source identifiers were found.
+  - PDF text and visual spot checks found:
+    - discordance section page `429`
+    - current discordance summary table page `442`
+    - probability standardization figure page `452`
+    - tail support figure page `464`
+  - Corrected diagnostic values no longer repeat across modalities or outcomes. Examples: IMV categorical ABG low/high ORs `1.413`/`1.261`, IMV VBG `1.240`/`1.631`, NIV ABG `1.042`/`3.049`, and NIV VBG `0.760`/`2.689`.
+  - Interpretation summary ranked reference-profile/standardization, differential missingness/capture, tail/support, and setting/workflow explanations as supported; scale/noncollapsibility as not supported; timing as inconclusive because unambiguous procedure/gas timestamp pairs were unavailable.
+  - Optional site-specific sensitivity skipped with an explicit status row because no separate feasible site/facility identifier with 2-50 levels was available; timing sensitivity also skipped explicitly for unavailable timestamp pairing.
+  - Environment preflight still reports existing `lattice` and `survival` lockfile/library drift warnings; dependency audit passed for 44 declared direct packages.
+  - Pilot-generated PDFs, logs, archives, and `Results/` churn were left unstaged by design.
+- Next steps:
+  - Commit only source/docs/worklog changes for this ticket if desired; full-mode execution is deferred until explicitly requested.
+
+## 2026-04-21 09:13 MDT
+- Task: Fix compact MI fit metadata environment retention flagged in code review.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `README.md`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - targeted `Rscript --vanilla` check with a small `survey::svyglm()` spline model confirming stripped `terms` rebuild the same `model.matrix()`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-pilot checks of `Results/discordance_validation_status.csv`, `Results/pdf_asset_presence_scan.csv`, `Results/discordance_current_summary.csv`, `Results/discordance_standardization_summary.csv`, and `Results/render_logs/rss_trace_20260421_090403.csv`
+- Outcomes:
+  - Added `strip_terms_environment()` and `compact_model_metadata()` helpers so compact categorical and spline fit metadata retains `terms`, `xlevels`, and `contrasts` without keeping the fitting function frame alive.
+  - Updated `fit_cat3_imp()` and `fit_spline_imp()` to use the stripped metadata helper; removed stored `formula` objects from spline compact fits and replaced them with lightweight `formula_text`.
+  - Added a defensive assertion in `predict_spline_prob_from_compact()` so discordance predictions fail if compact terms retain a non-base environment.
+  - Static checks passed:
+    - shell syntax for `scripts/render_pdf.sh`
+    - purl/parse check with `parsed_expressions=1971`
+    - targeted compact metadata check passed for both spline and categorical `survey::svyglm()` fits
+    - dependency audit passed for 44 declared direct packages
+    - environment preflight passed with the existing `lattice` and `survival` lockfile/library drift warning
+  - Final successful 1% pilot:
+    - log: `Results/render_logs/render_20260421_090403.log`
+    - run_id: `20260421_090421`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `509.26` seconds
+    - max resident set size from `/usr/bin/time -l`: `3983015936` bytes
+    - sampled RSS peak from `rss_trace_20260421_090403.csv`: `3.465` GB across 98 samples
+    - PDF pages: `511`
+  - PDF asset scan passed in `Results/pdf_asset_presence_scan.csv`.
+  - All required discordance validation components completed; optional site-specific and timing sensitivities remained explicitly skipped with reasons, and first-encounter sensitivity completed using `patient_id`.
+  - Discordance summaries remained plausible and non-repeated after the compact metadata change: IMV categorical ABG low/high ORs `1.413`/`1.261`, IMV VBG `1.240`/`1.631`, NIV ABG `1.042`/`3.049`, and NIV VBG `0.760`/`2.689`.
+  - Pilot-generated PDFs, logs, archives, and `Results/` churn were left unstaged by design.
+- Next steps:
+  - Commit only source/docs/worklog changes for this review fix if desired; full-mode execution remains deferred until explicitly requested.
+
+## 2026-04-21 09:33 MDT
+- Task: Address discordance diagnostics review findings for marginal-standardization failures and setting/workflow heterogeneity.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `README.md`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - targeted `Rscript --vanilla` threshold check confirming 8/10 completed marginal predictions fail against a 9/10 minimum
+  - targeted `Rscript --vanilla` setting-range check confirming within-modality grouping avoids a false positive from ABG/VBG baseline-rate differences
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-pilot checks of `Results/discordance_validation_status.csv`, `Results/discordance_marginal_standardization_status.csv`, `Results/discordance_setting_rate_ranges.csv`, `Results/pdf_asset_presence_scan.csv`, `Results/discordance_current_summary.csv`, and `Results/discordance_standardization_summary.csv`
+- Outcomes:
+  - Added per-imputation marginal-standardization status tracking in `Results/discordance_marginal_standardization_status.csv`, with `completed`, `skipped_no_compact_fit`, and `failed_prediction` statuses plus error messages and denominator fields.
+  - Enforced `min_marginal_ok_frac = 0.9`; the notebook now stops if any required NIV/IMV group/outcome has fewer than `ceiling(0.9 * imp_n)` completed marginal predictions.
+  - Added `m_used`, `m_total`, and `min_required` to `Results/discordance_standardization_summary.csv`.
+  - Added `Results/discordance_setting_rate_ranges.csv`, grouped by `setting_var`, `outcome`, and `group`, and changed the setting/workflow interpretation rule to use within-modality ranges rather than a combined ABG/VBG range.
+  - Registered the new marginal-status and setting-rate-range CSVs in the discordance artifact manifest and diagnostics completeness checks.
+  - Updated `README.md` to list the new discordance review artifacts.
+  - Static checks passed:
+    - shell syntax for `scripts/render_pdf.sh`
+    - purl/parse check with `parsed_expressions=1985`
+    - dependency audit passed for 44 declared direct packages
+    - environment preflight passed with the existing `lattice` and `survival` lockfile/library drift warning
+  - Successful 1% pilot:
+    - log: `Results/render_logs/render_20260421_092421.log`
+    - run_id: `20260421_092434`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `515.71` seconds
+    - max resident set size from `/usr/bin/time -l`: `4176576512` bytes
+    - PDF pages: `517`
+  - PDF asset scan passed with 39/39 checks and no failures.
+  - Discordance validation had 15 rows with zero required failures; optional site-specific and timing sensitivities remained explicitly skipped with reasons.
+  - Marginal-standardization status passed all required thresholds: ABG/IMV, ABG/NIV, VBG/IMV, and VBG/NIV each completed `20/20` imputations with `min_required = 18`.
+  - Setting-rate ranges are now within modality. Pilot maxima were `0.1676` for VBG/IMV by encounter type, `0.1361` for ABG/IMV by encounter type, `0.1219` for ABG/NIV by location, and `0.1140` for VBG/NIV by location.
+  - Discordance current summaries remained plausible and non-repeated: IMV categorical ABG low/high ORs `1.413`/`1.261`, IMV VBG `1.240`/`1.631`, NIV ABG `1.042`/`3.049`, and NIV VBG `0.760`/`2.689`.
+  - Pilot-generated PDFs, logs, archives, and `Results/` churn were left unstaged by design.
+- Next steps:
+  - Commit only source/docs/worklog changes for this fix if desired; full-mode execution remains deferred until explicitly requested.
