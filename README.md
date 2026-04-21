@@ -50,7 +50,7 @@ Rscript --vanilla scripts/check_dependencies.R
 ```
 
 The wrapper is the only sanctioned validation entrypoint. It writes a timestamped combined stdout/stderr log to `Results/render_logs/` and records timing output from the best available host tool for the render.
-The canonical PDF includes shaded R source-code boxes, inline analysis preview figures, manuscript-facing assets, and compact essential audits. There is no separate debug render mode.
+The canonical PDF keeps all executed R source visible in shaded code blocks. Rendered output is reserved for manuscript-facing displays, compact required status/provenance summaries, and essential validation tables; long QA/debug displays are suppressed while their CSV/PDF/PNG artifacts continue to write under `Results/`. There is no separate debug render mode.
 Before each wrapper run, existing MI/debug artifacts are archived under `Results/archive/pre_run_<render_ts>/` so abrupt-stop evidence is preserved without moving the rest of `Results/`.
 
 Machine-local MI resource overrides are available when needed for operational troubleshooting:
@@ -120,13 +120,16 @@ The December notebook remains useful as a stable comparison point, but it is no 
 
 Use these as the main crosswalk from analysis outputs into the manuscript:
 
-- Baseline tables: `Results/Table1.docx`, `Results/Table2.docx`, `Results/Table1_ABG_VBG.docx`
-- Core adjusted 3-level OR summary: `Results/table_summary_adjusted_threelevel.csv` and the cohort-specific split CSVs
+- Main display tables: `Results/table1_combined.csv`, `Results/table_2_weighted_categorical_outcomes.csv`, `Results/table_s1_inclusion_criteria.csv`, `Results/table_s2_crude_threelevel.csv`, `Results/table_s3_gbm_threelevel.csv`, `Results/table_s4_missingness_primary_analysis.csv`, and `Results/table_s5_mi_diagnostic_summary.csv`
+- Legacy DOCX baseline tables: `Results/Table1.docx`, `Results/Table2.docx`, `Results/Table1_ABG_VBG.docx`
+- Core adjusted 3-level OR summary sidecars: `Results/table_summary_adjusted_threelevel.csv` and the cohort-specific split CSVs
 - Plot lookup and figure registry: `Results/plot_registry.csv`
 - Diagnostics summary: `Results/diagnostics_summary.csv`, `Results/diagnostics_audit.md`, `Results/runtime_summary.csv`
 - Validation-only audit surfaces: `Results/artifact_provenance_manifest.csv`, `Results/artifact_check_status.csv`, `Results/artifact_check_missing.csv`, `Results/canonical_asset_registry.csv`, `Results/manuscript_sync_report.md`, `Results/glyph_audit.csv`, `Results/duplicate_asset_audit.csv`, `Results/diagnostics_audit_summary.csv`, `Results/diagnostics_audit_issues.csv`
 - MI/debug postmortem surfaces: `Results/render_logs/rss_trace_<render_ts>.csv`, `Results/render_logs/postmortem_<render_ts>.md`, `Results/mi_run_status_<render_ts>.json`, `Results/mice_batches_log.csv`, `Results/mice_combine_log.csv`, `Results/mi_batch_context.rds`, `Results/mi_batch_checkpoints/`
 - Figure files: `Results/figs/`
+
+Canonical manuscript display set: Figure 1, Figure 2, Table 1, Table 2, Figure S1-S8, and Table S1-S5. Main Figure 3 remains deprecated; the categorical visual companion to Table 2 is Figure S4.
 
 Note: figure filenames in `Results/figs/` can include chunk index suffixes; use `Results/plot_registry.csv` as the canonical crosswalk.
 
@@ -151,7 +154,7 @@ Note: figure filenames in `Results/figs/` can include chunk index suffixes; use 
 - Direct dependency audit before long renders: `Rscript --vanilla scripts/check_dependencies.R`
 - Canonical render command: `./scripts/render_pdf.sh` from the repo root
 - Render contract: one canonical report path only. Do not add alternate render modes that change figure embedding, table inclusion, scratch retention, or other report content/presentation.
-- Wrapper postflight now requires the validation artifact set named above and PDF asset-presence checks; a render is not considered valid if artifacts are missing/malformed or if the rendered PDF is missing the expected figure/table display content.
+- Wrapper postflight now requires the validation artifact set named above and PDF asset-presence checks; a render is not considered valid if artifacts are missing/malformed, if the rendered PDF is missing the expected figure/table/source-code display content, or if known table-layout failure text appears near the manuscript tables.
 - The only sanctioned execution variation is dataset scope (`run_mode` with `pilot_frac`) plus machine-local path/resource controls that do not change analytical outputs.
 - The checked-in `Results/` snapshot reflects a pilot run; rerender the primary notebook for a fresh production run
 - No `testthat` suite is currently present in this repository

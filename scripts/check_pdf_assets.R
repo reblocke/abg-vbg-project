@@ -5,7 +5,7 @@ parse_args <- function(args) {
     pdf_path = "",
     results_dir = "Results",
     min_pages = 120L,
-    min_images = 70L
+    min_images = 0L
   )
   idx <- 1L
   while (idx <= length(args)) {
@@ -119,7 +119,7 @@ rows[[length(rows) + 1L]] <- scan_row(
   observed = image_count,
   threshold = paste0(">=", args$min_images),
   scanner = "pdfimages",
-  detail = "All-preview report should include the expected set of embedded plot images."
+  detail = "Image-count threshold is optional because manuscript figures may render as vector PDF inclusions."
 )
 
 tmp_txt <- tempfile(fileext = ".txt")
@@ -154,8 +154,11 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
     "Figure S8. SHAP-style contribution summaries for gradient-boosted",
     "Table 1. Baseline characteristics",
     "Table 2. MI-pooled, MI-logistic IPSW-weighted 3-level categorical results",
+    "Table S1. Inclusion criteria",
     "Table S2. Crude associations",
-    "Table S3. GBM IPSW-weighted associations"
+    "Table S3. GBM IPSW-weighted associations",
+    "Table S4. Missingness of baseline covariates",
+    "Table S5. Multiple-imputation diagnostic summary"
   )
   found <- vapply(required_snippets, grepl, logical(1L), x = pdf_text, fixed = TRUE)
   for (idx in seq_along(required_snippets)) {
@@ -173,7 +176,10 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
     "ensure_packages_loaded",
     "print_plot_once",
     "run_mice_batched",
-    "render_validation_manuscript_assets"
+    "render_validation_manuscript_assets",
+    "table_s1_inclusion_criteria",
+    "table_s4_missingness_primary_analysis",
+    "table_s5_mi_diagnostic_summary"
   )
   source_found <- vapply(required_source_snippets, grepl, logical(1L), x = pdf_text, fixed = TRUE)
   for (idx in seq_along(required_source_snippets)) {
@@ -183,6 +189,81 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
       observed = if (source_found[[idx]]) "found" else "missing",
       scanner = "pdftotext",
       detail = required_source_snippets[[idx]]
+    )
+  }
+
+  last_window <- function(text, anchor, width = 5000L) {
+    starts <- gregexpr(anchor, text, fixed = TRUE)[[1L]]
+    if (identical(starts, -1L)) return("")
+    start <- starts[[length(starts)]]
+    substring(text, start, min(nchar(text), start + width))
+  }
+
+  required_window_checks <- list(
+    list(
+      check = "figure_2_note_below_display",
+      anchor = "Figure 2. Primary MI-logistic IPSW-weighted spline associations",
+      snippet = "Note: These curves come from the primary MI-logistic IPSW analysis"
+    ),
+    list(
+      check = "figure_s4_note_below_display",
+      anchor = "Figure S4. MI-logistic IPSW-weighted categorical associations",
+      snippet = "Note: MI-pooled, MI-logistic IPSW-adjusted categorical odds ratios"
+    ),
+    list(
+      check = "figure_s5_note_below_display",
+      anchor = "Figure S5. Unweighted covariate-adjusted spline associations",
+      snippet = "Note: Odds ratio curves are relative to the test-specific reference CO2 values"
+    )
+  )
+  for (item in required_window_checks) {
+    window <- last_window(pdf_text, item$anchor)
+    ok <- nzchar(window) && grepl(item$snippet, window, fixed = TRUE)
+    rows[[length(rows) + 1L]] <- scan_row(
+      item$check,
+      if (ok) "passed" else "failed",
+      observed = if (ok) "found" else "missing",
+      scanner = "pdftotext",
+      detail = paste(item$anchor, "=>", item$snippet)
+    )
+  }
+
+  forbidden_window_checks <- list(
+    list(
+      check = "table_1_no_internal_columns",
+      anchor = "Table 1. Baseline characteristics",
+      snippets = c("var_type", "row_type", "run_id", "run_ts")
+    ),
+    list(
+      check = "table_2_no_split_parts",
+      anchor = "Table 2. MI-pooled, MI-logistic IPSW-weighted 3-level categorical results",
+      snippets = c("(Part A)", "(Part B)", "Part A", "Part B")
+    ),
+    list(
+      check = "table_s2_no_split_parts",
+      anchor = "Table S2. Crude associations",
+      snippets = c("(Part A)", "(Part B)", "Part A", "Part B")
+    ),
+    list(
+      check = "table_s3_no_split_parts",
+      anchor = "Table S3. GBM IPSW-weighted associations",
+      snippets = c("(Part A)", "(Part B)", "Part A", "Part B")
+    )
+  )
+  for (item in forbidden_window_checks) {
+    window <- last_window(pdf_text, item$anchor)
+    present <- if (nzchar(window)) {
+      item$snippets[vapply(item$snippets, grepl, logical(1L), x = window, fixed = TRUE)]
+    } else {
+      item$snippets
+    }
+    ok <- nzchar(window) && !length(present)
+    rows[[length(rows) + 1L]] <- scan_row(
+      item$check,
+      if (ok) "passed" else "failed",
+      observed = if (ok) "absent" else paste(present, collapse = ", "),
+      scanner = "pdftotext",
+      detail = paste0("Forbidden table-layout/internal text near ", item$anchor)
     )
   }
 }

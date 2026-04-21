@@ -1083,3 +1083,58 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
   - Visual spot checks confirmed code appears with a light gray background and that representative figure pages still render.
 - Next steps:
   - Commit only the source/documentation/worklog changes; leave pilot-generated PDFs, logs, archives, and result artifacts unstaged unless a later full-run artifact bundle is requested.
+
+## 2026-04-21 07:42 MDT
+- Task: Harmonize canonical manuscript outputs while keeping all executed R source visible.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `scripts/check_pdf_assets.R`
+  - `scripts/render_pdf.sh`
+  - `README.md`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+  - `pdftotext -layout "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf" tmp/pdf_text_20260421_pilot_final2.txt`
+  - `pdftoppm -png -r 120 -f 438 -l 438 "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf" tmp/pdf_spot_20260421_final2/page438_figure2`
+  - `pdftoppm -png -r 120 -f 439 -l 441 "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf" tmp/pdf_spot_20260421_final2/page439_441_tables`
+  - `pdftoppm -png -r 120 -f 445 -l 446 "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf" tmp/pdf_spot_20260421_final2/page445_446_figs`
+  - `pdftoppm -png -r 120 -f 452 -l 453 "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf" tmp/pdf_spot_20260421_final2/page452_453_tables`
+- Outcomes:
+  - Kept executed R source visible globally, but disabled automatic inline analysis previews so QA/debug plots and long audit displays write sidecar artifacts without inflating the PDF.
+  - Rebuilt Table 1 as a publication-facing display with only `Characteristic`, `Everyone`, `Did not get ABG`, `Did get ABG`, `Did not get VBG`, and `Did get VBG`; raw/internal columns remain in `Results/table1_combined_internal.csv`.
+  - Rebuilt Table 2 as one numbered display with explicit odds-ratio and predicted-probability panels, avoiding detached wide-table final columns.
+  - Simplified visible Table S2 and Table S3 displays to `group`, `outcome`, `contrast`, and `OR (95% CI)`.
+  - Added notebook-generated Table S1, Table S4, and Table S5 and registered them as required manuscript-facing supplement assets.
+  - Moved long notes for Figure 2, Figure S4, and Figure S5 out of plot canvases and into rendered Quarto text immediately below each figure.
+  - Extended `scripts/check_pdf_assets.R` to require Figure 1, Figure 2, Table 1, Table 2, Figure S1-S8, Table S1-S5, source-code identifiers, figure-note window checks, and table-layout/internal-column guards.
+  - Final static checks passed:
+    - shell syntax for `scripts/render_pdf.sh`
+    - purl/parse check with `parsed_expressions=1823`
+    - dependency audit passed for 44 declared direct packages
+    - environment preflight passed with the existing `lattice` and `survival` lockfile/library drift warning
+  - Final successful 1% pilot:
+    - log: `Results/render_logs/render_20260421_073343.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `478.00` seconds
+    - max resident set size from `/usr/bin/time -l`: `2817114112` bytes
+    - PDF pages: `459`
+    - embedded raster images: `1` because manuscript figures are primarily included as vector PDFs
+  - PDF asset scan passed in `Results/pdf_asset_presence_scan.csv`.
+  - PDF text locations from the final pilot:
+    - Figure 2 page `438`
+    - Table 1 page `439`
+    - Table 2 page `440`
+    - Table S1 page `441`
+    - Figure S4 page `445`
+    - Figure S5 page `446`
+    - Table S4 page `452`
+    - Table S5 page `453`
+  - Visual spot checks confirmed Table 1, Table 2, Table S1, Table S4, Table S5, Figure 2, Figure S4, and Figure S5 render without the previously observed Table S1 subscript artifact or detached table-column blocks.
+  - Pilot-generated PDFs, logs, archives, and `Results/` churn were left unstaged by design.
+- Next steps:
+  - Commit only source/docs/worklog changes for this ticket; do not commit pilot-generated artifacts unless explicitly requested.
