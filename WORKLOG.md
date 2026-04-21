@@ -1267,3 +1267,40 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
   - Pilot-generated PDFs, logs, archives, and `Results/` churn were left unstaged by design.
 - Next steps:
   - Commit only source/docs/worklog changes for this fix if desired; full-mode execution remains deferred until explicitly requested.
+
+## 2026-04-21 09:59 MDT
+- Task: Run a random 10% pilot subset for NIV/IMV discordance troubleshooting and package relevant outputs.
+- Files/output changed:
+  - `Code Drafts/ABG-VBG-analysis-2026-4-21.pdf`
+  - `Results/discordance_*`
+  - `Results/figs/discordance_*`
+  - `Results/render_logs/render_20260421_093959.log`
+  - `Results/render_logs/rss_trace_20260421_093959.csv`
+  - `Results/render_logs/postmortem_20260421_093959.md`
+  - `Results/mi_run_status_20260421_093959.json`
+  - `Results/discordance_troubleshoot_20260421_093959/`
+  - `Results/discordance_troubleshoot_20260421_093959.zip`
+  - `WORKLOG.md`
+- Commands run:
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.10`
+  - post-run `Rscript --vanilla` validation of `Results/discordance_validation_status.csv`, `Results/discordance_marginal_standardization_status.csv`, `Results/discordance_setting_rate_ranges.csv`, and `Results/pdf_asset_presence_scan.csv`
+  - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+  - one-time shell packaging into `Results/discordance_troubleshoot_20260421_093959.zip`
+- Outcomes:
+  - 10% pilot completed successfully:
+    - log: `Results/render_logs/render_20260421_093959.log`
+    - run_id: `20260421_094018`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `1087.32` seconds
+    - max resident set size from `/usr/bin/time -l`: `4247732224` bytes
+    - PDF pages: `517`
+  - PDF asset postflight passed in `Results/pdf_asset_presence_scan.csv` with 39 rows and zero failures.
+  - Discordance validation had 15 rows with zero required failures.
+  - Marginal-standardization status passed all required thresholds: ABG/IMV, ABG/NIV, VBG/IMV, and VBG/NIV each completed `20/20` imputations with `min_required = 18`.
+  - Setting-rate range output was generated with 8 rows; maximum within-modality setting range was `0.1352054`.
+  - MICE generation completed 10 two-imputation batches to reach `m = 20`; no memory or disk failure signal was observed.
+  - Disk was tight throughout the run, ending around `7.9GiB` free on `/System/Volumes/Data`.
+  - A one-time troubleshooting bundle was created at `Results/discordance_troubleshoot_20260421_093959.zip` (`2.7M`, 82 zip entries). Contents include all `Results/discordance_*.csv`, discordance figures, render/RSS/postmortem logs, MI/MICE status logs, validation/audit/runtime summaries, primary OR/probability context CSVs, the rendered PDF, and the source QMD snapshot.
+  - A monitoring worker was spawned for periodic checks and then shut down after the render completed.
+- Next steps:
+  - Use the zip package for discordance troubleshooting. No full-mode rerun was launched.

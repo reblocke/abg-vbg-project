@@ -4459,7 +4459,7 @@ models}\label{configuration-for-the-ipw-models}
 \toprule
 run\_id & run\_mode & pilot\_frac & mi\_ram\_gb & mi\_ram\_gb\_source & mi\_batch\_threshold\\
 \midrule
-20260421\_092434 & pilot & 0.01 & 16 & auto:Darwin & 5000\\
+20260421\_094018 & pilot & 0.1 & 16 & auto:Darwin & 5000\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -4473,7 +4473,7 @@ run\_id & run\_mode & pilot\_frac & mi\_ram\_gb & mi\_ram\_gb\_source & mi\_batc
 \toprule
 mi\_batch\_start & mi\_batch\_start\_source & full\_n & sampled\_n & subset\_n\\
 \midrule
-2 & auto:auto:Darwin & 833476 & 8335 & 5175\\
+2 & auto:auto:Darwin & 833476 & 83348 & 51409\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -4606,8 +4606,8 @@ Creation}\label{outcome-variable-creation}
 
 \begin{verbatim}
 
-   0    1 
-4641  534 
+    0     1 
+45973  5436 
 \end{verbatim}
 
 \begin{Shaded}
@@ -4619,7 +4619,7 @@ Creation}\label{outcome-variable-creation}
 \begin{verbatim}
 
         0         1 
-0.8968116 0.1031884 
+0.8942598 0.1057402 
 \end{verbatim}
 
 \begin{Shaded}
@@ -4630,7 +4630,7 @@ Creation}\label{outcome-variable-creation}
 
 \begin{verbatim}
    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
- 0.0000  0.0000  0.0000  0.1032  0.0000  1.0000 
+ 0.0000  0.0000  0.0000  0.1057  0.0000  1.0000 
 \end{verbatim}
 
 \subsection{Baseline tables}\label{baseline-tables}
@@ -4807,52 +4807,52 @@ Creation}\label{outcome-variable-creation}
 
 \begin{longtable*}{>{\raggedright\arraybackslash}p{2.0in}ccc}
 \toprule
-Variable & **Overall**  N = 5,175 & **No ABG**  N = 3,264 & **ABG**  N = 1,911\\
+Variable & **Overall**  N = 51,409 & **No ABG**  N = 32,832 & **ABG**  N = 18,577\\
 \midrule
 \endfirsthead
 \multicolumn{4}{@{}l}{\textit{(continued)}}\\
 \toprule
-Variable & **Overall**  N = 5,175 & **No ABG**  N = 3,264 & **ABG**  N = 1,911\\
+Variable & **Overall**  N = 51,409 & **No ABG**  N = 32,832 & **ABG**  N = 18,577\\
 \midrule
 \endhead
 
 \endfoot
 \bottomrule
 \endlastfoot
-Age & 59.5 ± 17.6; 0.0/5,175.0 missing (0.0\%) & 58.4 ± 17.7; 0.0/3,264.0 missing (0.0\%) & 61.3 ± 17.2; 0.0/1,911.0 missing (0.0\%)\\
-BMI & 31.3 ± 8.5; 2,934.0/5,175.0 missing (56.7\%) & 32.6 ± 8.9; 1,821.0/3,264.0 missing (55.8\%) & 28.8 ± 7.0; 1,113.0/1,911.0 missing (58.2\%)\\
+Age & 59.3 ± 17.7; 0.0/51,409.0 missing (0.0\%) & 58.2 ± 18.1; 0.0/32,832.0 missing (0.0\%) & 61.2 ± 16.9; 0.0/18,577.0 missing (0.0\%)\\
+BMI & 31.2 ± 8.3; 29,393.0/51,409.0 missing (57.2\%) & 32.3 ± 8.7; 18,533.0/32,832.0 missing (56.4\%) & 29.1 ± 7.1; 10,860.0/18,577.0 missing (58.5\%)\\
 Sex &  &  & \\
-Female & 2,591 (50\%) & 1,737 (53\%) & 854 (45\%)\\
-Male & 2,584 (50\%) & 1,527 (47\%) & 1,057 (55\%)\\
+Female & 25,584 (50\%) & 17,151 (52\%) & 8,433 (45\%)\\
+Male & 25,825 (50\%) & 15,681 (48\%) & 10,144 (55\%)\\
 \addlinespace
 Race/Ethnicity &  &  & \\
-White & 3,280 (63\%) & 2,009 (62\%) & 1,271 (67\%)\\
-Black or African American & 884 (17\%) & 601 (18\%) & 283 (15\%)\\
-Hispanic & 334 (6.5\%) & 250 (7.7\%) & 84 (4.4\%)\\
-Asian & 83 (1.6\%) & 46 (1.4\%) & 37 (1.9\%)\\
+White & 32,177 (63\%) & 20,098 (61\%) & 12,079 (65\%)\\
+Black or African American & 8,863 (17\%) & 6,132 (19\%) & 2,731 (15\%)\\
+Hispanic & 3,369 (6.6\%) & 2,392 (7.3\%) & 977 (5.3\%)\\
+Asian & 833 (1.6\%) & 500 (1.5\%) & 333 (1.8\%)\\
 \addlinespace
-American Indian & 36 (0.7\%) & 11 (0.3\%) & 25 (1.3\%)\\
-Pacific Islander & 10 (0.2\%) & 8 (0.2\%) & 2 (0.1\%)\\
-Unknown & 548 (11\%) & 339 (10\%) & 209 (11\%)\\
+American Indian & 388 (0.8\%) & 179 (0.5\%) & 209 (1.1\%)\\
+Pacific Islander & 68 (0.1\%) & 43 (0.1\%) & 25 (0.1\%)\\
+Unknown & 5,711 (11\%) & 3,488 (11\%) & 2,223 (12\%)\\
 Location &  &  & \\
-South & 2,431 (47\%) & 1,374 (42\%) & 1,057 (55\%)\\
+South & 24,028 (47\%) & 13,763 (42\%) & 10,265 (55\%)\\
 \addlinespace
-Northeast & 1,300 (25\%) & 921 (28\%) & 379 (20\%)\\
-Midwest & 406 (7.8\%) & 246 (7.5\%) & 160 (8.4\%)\\
-West & 1,038 (20\%) & 723 (22\%) & 315 (16\%)\\
-OSA & 879 (17\%) & 576 (18\%) & 303 (16\%)\\
-Asthma & 684 (13\%) & 464 (14\%) & 220 (12\%)\\
+Northeast & 13,005 (25\%) & 9,416 (29\%) & 3,589 (19\%)\\
+Midwest & 3,847 (7.5\%) & 2,280 (6.9\%) & 1,567 (8.4\%)\\
+West & 10,529 (20\%) & 7,373 (22\%) & 3,156 (17\%)\\
+OSA & 9,031 (18\%) & 6,095 (19\%) & 2,936 (16\%)\\
+Asthma & 6,915 (13\%) & 4,819 (15\%) & 2,096 (11\%)\\
 \addlinespace
-COPD & 1,013 (20\%) & 579 (18\%) & 434 (23\%)\\
-CHF & 1,044 (20\%) & 587 (18\%) & 457 (24\%)\\
-NMD & 233 (4.5\%) & 130 (4.0\%) & 103 (5.4\%)\\
-PHTN & 434 (8.4\%) & 239 (7.3\%) & 195 (10\%)\\
-CKD & 904 (17\%) & 519 (16\%) & 385 (20\%)\\
+COPD & 9,915 (19\%) & 5,998 (18\%) & 3,917 (21\%)\\
+CHF & 10,229 (20\%) & 6,032 (18\%) & 4,197 (23\%)\\
+NMD & 2,059 (4.0\%) & 1,222 (3.7\%) & 837 (4.5\%)\\
+PHTN & 4,267 (8.3\%) & 2,477 (7.5\%) & 1,790 (9.6\%)\\
+CKD & 9,335 (18\%) & 5,601 (17\%) & 3,734 (20\%)\\
 \addlinespace
-Diabetes & 1,513 (29\%) & 954 (29\%) & 559 (29\%)\\
+Diabetes & 15,044 (29\%) & 9,498 (29\%) & 5,546 (30\%)\\
 Encounter Type &  &  & \\
-Emergency & 1,710 (33\%) & 1,427 (44\%) & 283 (15\%)\\
-Inpatient & 3,465 (67\%) & 1,837 (56\%) & 1,628 (85\%)\\*
+Emergency & 17,034 (33\%) & 14,095 (43\%) & 2,939 (16\%)\\
+Inpatient & 34,375 (67\%) & 18,737 (57\%) & 15,638 (84\%)\\*
 \end{longtable*}
 \endgroup{}
 
@@ -4868,52 +4868,52 @@ Inpatient & 3,465 (67\%) & 1,837 (56\%) & 1,628 (85\%)\\*
 
 \begin{longtable*}{>{\raggedright\arraybackslash}p{2.0in}ccc}
 \toprule
-Variable & **Overall**  N = 5,175 & **No VBG**  N = 3,730 & **VBG**  N = 1,445\\
+Variable & **Overall**  N = 51,409 & **No VBG**  N = 36,499 & **VBG**  N = 14,910\\
 \midrule
 \endfirsthead
 \multicolumn{4}{@{}l}{\textit{(continued)}}\\
 \toprule
-Variable & **Overall**  N = 5,175 & **No VBG**  N = 3,730 & **VBG**  N = 1,445\\
+Variable & **Overall**  N = 51,409 & **No VBG**  N = 36,499 & **VBG**  N = 14,910\\
 \midrule
 \endhead
 
 \endfoot
 \bottomrule
 \endlastfoot
-Age & 59.5 ± 17.6; 0.0/5,175.0 missing (0.0\%) & 59.6 ± 17.6; 0.0/3,730.0 missing (0.0\%) & 59.0 ± 17.7; 0.0/1,445.0 missing (0.0\%)\\
-BMI & 31.3 ± 8.5; 2,934.0/5,175.0 missing (56.7\%) & 31.9 ± 8.6; 1,939.0/3,730.0 missing (52.0\%) & 28.9 ± 7.5; 995.0/1,445.0 missing (68.9\%)\\
+Age & 59.3 ± 17.7; 0.0/51,409.0 missing (0.0\%) & 59.4 ± 17.8; 0.0/36,499.0 missing (0.0\%) & 58.9 ± 17.7; 0.0/14,910.0 missing (0.0\%)\\
+BMI & 31.2 ± 8.3; 29,393.0/51,409.0 missing (57.2\%) & 31.8 ± 8.5; 19,290.0/36,499.0 missing (52.9\%) & 28.8 ± 7.4; 10,103.0/14,910.0 missing (67.8\%)\\
 Sex &  &  & \\
-Female & 2,591 (50\%) & 1,921 (52\%) & 670 (46\%)\\
-Male & 2,584 (50\%) & 1,809 (48\%) & 775 (54\%)\\
+Female & 25,584 (50\%) & 18,543 (51\%) & 7,041 (47\%)\\
+Male & 25,825 (50\%) & 17,956 (49\%) & 7,869 (53\%)\\
 \addlinespace
 Race/Ethnicity &  &  & \\
-White & 3,280 (63\%) & 2,513 (67\%) & 767 (53\%)\\
-Black or African American & 884 (17\%) & 616 (17\%) & 268 (19\%)\\
-Hispanic & 334 (6.5\%) & 221 (5.9\%) & 113 (7.8\%)\\
-Asian & 83 (1.6\%) & 54 (1.4\%) & 29 (2.0\%)\\
+White & 32,177 (63\%) & 24,215 (66\%) & 7,962 (53\%)\\
+Black or African American & 8,863 (17\%) & 6,072 (17\%) & 2,791 (19\%)\\
+Hispanic & 3,369 (6.6\%) & 2,321 (6.4\%) & 1,048 (7.0\%)\\
+Asian & 833 (1.6\%) & 542 (1.5\%) & 291 (2.0\%)\\
 \addlinespace
-American Indian & 36 (0.7\%) & 13 (0.3\%) & 23 (1.6\%)\\
-Pacific Islander & 10 (0.2\%) & 8 (0.2\%) & 2 (0.1\%)\\
-Unknown & 548 (11\%) & 305 (8.2\%) & 243 (17\%)\\
+American Indian & 388 (0.8\%) & 183 (0.5\%) & 205 (1.4\%)\\
+Pacific Islander & 68 (0.1\%) & 55 (0.2\%) & 13 (<0.1\%)\\
+Unknown & 5,711 (11\%) & 3,111 (8.5\%) & 2,600 (17\%)\\
 Location &  &  & \\
-South & 2,431 (47\%) & 1,987 (53\%) & 444 (31\%)\\
+South & 24,028 (47\%) & 19,521 (53\%) & 4,507 (30\%)\\
 \addlinespace
-Northeast & 1,300 (25\%) & 703 (19\%) & 597 (41\%)\\
-Midwest & 406 (7.8\%) & 264 (7.1\%) & 142 (9.8\%)\\
-West & 1,038 (20\%) & 776 (21\%) & 262 (18\%)\\
-OSA & 879 (17\%) & 648 (17\%) & 231 (16\%)\\
-Asthma & 684 (13\%) & 513 (14\%) & 171 (12\%)\\
+Northeast & 13,005 (25\%) & 6,613 (18\%) & 6,392 (43\%)\\
+Midwest & 3,847 (7.5\%) & 2,503 (6.9\%) & 1,344 (9.0\%)\\
+West & 10,529 (20\%) & 7,862 (22\%) & 2,667 (18\%)\\
+OSA & 9,031 (18\%) & 6,662 (18\%) & 2,369 (16\%)\\
+Asthma & 6,915 (13\%) & 4,957 (14\%) & 1,958 (13\%)\\
 \addlinespace
-COPD & 1,013 (20\%) & 731 (20\%) & 282 (20\%)\\
-CHF & 1,044 (20\%) & 741 (20\%) & 303 (21\%)\\
-NMD & 233 (4.5\%) & 175 (4.7\%) & 58 (4.0\%)\\
-PHTN & 434 (8.4\%) & 295 (7.9\%) & 139 (9.6\%)\\
-CKD & 904 (17\%) & 628 (17\%) & 276 (19\%)\\
+COPD & 9,915 (19\%) & 7,011 (19\%) & 2,904 (19\%)\\
+CHF & 10,229 (20\%) & 7,026 (19\%) & 3,203 (21\%)\\
+NMD & 2,059 (4.0\%) & 1,535 (4.2\%) & 524 (3.5\%)\\
+PHTN & 4,267 (8.3\%) & 2,857 (7.8\%) & 1,410 (9.5\%)\\
+CKD & 9,335 (18\%) & 6,299 (17\%) & 3,036 (20\%)\\
 \addlinespace
-Diabetes & 1,513 (29\%) & 1,034 (28\%) & 479 (33\%)\\
+Diabetes & 15,044 (29\%) & 10,231 (28\%) & 4,813 (32\%)\\
 Encounter Type &  &  & \\
-Emergency & 1,710 (33\%) & 1,247 (33\%) & 463 (32\%)\\
-Inpatient & 3,465 (67\%) & 2,483 (67\%) & 982 (68\%)\\*
+Emergency & 17,034 (33\%) & 12,325 (34\%) & 4,709 (32\%)\\
+Inpatient & 34,375 (67\%) & 24,174 (66\%) & 10,201 (68\%)\\*
 \end{longtable*}
 \endgroup{}
 
@@ -5156,52 +5156,52 @@ Inpatient & 3,465 (67\%) & 2,483 (67\%) & 982 (68\%)\\*
 
 \begin{longtable*}{>{\raggedright\arraybackslash}p{2.0in}ccc}
 \toprule
-**Variable** & Everyone & **Did not get ABG**  N = 3,264 & **Did get ABG**  N = 1,911\\
+**Variable** & Everyone & **Did not get ABG**  N = 32,832 & **Did get ABG**  N = 18,577\\
 \midrule
 \endfirsthead
 \multicolumn{4}{@{}l}{\textit{(continued)}}\\
 \toprule
-**Variable** & Everyone & **Did not get ABG**  N = 3,264 & **Did get ABG**  N = 1,911\\
+**Variable** & Everyone & **Did not get ABG**  N = 32,832 & **Did get ABG**  N = 18,577\\
 \midrule
 \endhead
 
 \endfoot
 \bottomrule
 \endlastfoot
-\_\_Age\_\_ & 59.5 ± 17.6; 0.0/5,175.0 missing (0.0\%) & 58.4 ± 17.7; 0.0/3,264.0 missing (0.0\%) & 61.3 ± 17.2; 0.0/1,911.0 missing (0.0\%)\\
-\_\_BMI\_\_ & 31.3 ± 8.5; 2,934.0/5,175.0 missing (56.7\%) & 32.6 ± 8.9; 1,821.0/3,264.0 missing (55.8\%) & 28.8 ± 7.0; 1,113.0/1,911.0 missing (58.2\%)\\
+\_\_Age\_\_ & 59.3 ± 17.7; 0.0/51,409.0 missing (0.0\%) & 58.2 ± 18.1; 0.0/32,832.0 missing (0.0\%) & 61.2 ± 16.9; 0.0/18,577.0 missing (0.0\%)\\
+\_\_BMI\_\_ & 31.2 ± 8.3; 29,393.0/51,409.0 missing (57.2\%) & 32.3 ± 8.7; 18,533.0/32,832.0 missing (56.4\%) & 29.1 ± 7.1; 10,860.0/18,577.0 missing (58.5\%)\\
 \_\_Sex\_\_ &  &  & \\
-Female & 2,591 (50\%) & 1,737 (53\%) & 854 (45\%)\\
-Male & 2,584 (50\%) & 1,527 (47\%) & 1,057 (55\%)\\
+Female & 25,584 (50\%) & 17,151 (52\%) & 8,433 (45\%)\\
+Male & 25,825 (50\%) & 15,681 (48\%) & 10,144 (55\%)\\
 \addlinespace
 \_\_Race/Ethnicity\_\_ &  &  & \\
-White & 3,280 (63\%) & 2,009 (62\%) & 1,271 (67\%)\\
-Black or African American & 884 (17\%) & 601 (18\%) & 283 (15\%)\\
-Hispanic & 334 (6.5\%) & 250 (7.7\%) & 84 (4.4\%)\\
-Asian & 83 (1.6\%) & 46 (1.4\%) & 37 (1.9\%)\\
+White & 32,177 (63\%) & 20,098 (61\%) & 12,079 (65\%)\\
+Black or African American & 8,863 (17\%) & 6,132 (19\%) & 2,731 (15\%)\\
+Hispanic & 3,369 (6.6\%) & 2,392 (7.3\%) & 977 (5.3\%)\\
+Asian & 833 (1.6\%) & 500 (1.5\%) & 333 (1.8\%)\\
 \addlinespace
-American Indian & 36 (0.7\%) & 11 (0.3\%) & 25 (1.3\%)\\
-Pacific Islander & 10 (0.2\%) & 8 (0.2\%) & 2 (0.1\%)\\
-Unknown & 548 (11\%) & 339 (10\%) & 209 (11\%)\\
+American Indian & 388 (0.8\%) & 179 (0.5\%) & 209 (1.1\%)\\
+Pacific Islander & 68 (0.1\%) & 43 (0.1\%) & 25 (0.1\%)\\
+Unknown & 5,711 (11\%) & 3,488 (11\%) & 2,223 (12\%)\\
 \_\_Location\_\_ &  &  & \\
-South & 2,431 (47\%) & 1,374 (42\%) & 1,057 (55\%)\\
+South & 24,028 (47\%) & 13,763 (42\%) & 10,265 (55\%)\\
 \addlinespace
-Northeast & 1,300 (25\%) & 921 (28\%) & 379 (20\%)\\
-Midwest & 406 (7.8\%) & 246 (7.5\%) & 160 (8.4\%)\\
-West & 1,038 (20\%) & 723 (22\%) & 315 (16\%)\\
-\_\_OSA\_\_ & 879 (17\%) & 576 (18\%) & 303 (16\%)\\
-\_\_Asthma\_\_ & 684 (13\%) & 464 (14\%) & 220 (12\%)\\
+Northeast & 13,005 (25\%) & 9,416 (29\%) & 3,589 (19\%)\\
+Midwest & 3,847 (7.5\%) & 2,280 (6.9\%) & 1,567 (8.4\%)\\
+West & 10,529 (20\%) & 7,373 (22\%) & 3,156 (17\%)\\
+\_\_OSA\_\_ & 9,031 (18\%) & 6,095 (19\%) & 2,936 (16\%)\\
+\_\_Asthma\_\_ & 6,915 (13\%) & 4,819 (15\%) & 2,096 (11\%)\\
 \addlinespace
-\_\_COPD\_\_ & 1,013 (20\%) & 579 (18\%) & 434 (23\%)\\
-\_\_CHF\_\_ & 1,044 (20\%) & 587 (18\%) & 457 (24\%)\\
-\_\_NMD\_\_ & 233 (4.5\%) & 130 (4.0\%) & 103 (5.4\%)\\
-\_\_PHTN\_\_ & 434 (8.4\%) & 239 (7.3\%) & 195 (10\%)\\
-\_\_CKD\_\_ & 904 (17\%) & 519 (16\%) & 385 (20\%)\\
+\_\_COPD\_\_ & 9,915 (19\%) & 5,998 (18\%) & 3,917 (21\%)\\
+\_\_CHF\_\_ & 10,229 (20\%) & 6,032 (18\%) & 4,197 (23\%)\\
+\_\_NMD\_\_ & 2,059 (4.0\%) & 1,222 (3.7\%) & 837 (4.5\%)\\
+\_\_PHTN\_\_ & 4,267 (8.3\%) & 2,477 (7.5\%) & 1,790 (9.6\%)\\
+\_\_CKD\_\_ & 9,335 (18\%) & 5,601 (17\%) & 3,734 (20\%)\\
 \addlinespace
-\_\_Diabetes\_\_ & 1,513 (29\%) & 954 (29\%) & 559 (29\%)\\
+\_\_Diabetes\_\_ & 15,044 (29\%) & 9,498 (29\%) & 5,546 (30\%)\\
 \_\_Encounter Type\_\_ &  &  & \\
-Emergency & 1,710 (33\%) & 1,427 (44\%) & 283 (15\%)\\
-Inpatient & 3,465 (67\%) & 1,837 (56\%) & 1,628 (85\%)\\*
+Emergency & 17,034 (33\%) & 14,095 (43\%) & 2,939 (16\%)\\
+Inpatient & 34,375 (67\%) & 18,737 (57\%) & 15,638 (84\%)\\*
 \end{longtable*}
 \endgroup{}
 
@@ -5217,52 +5217,52 @@ Inpatient & 3,465 (67\%) & 1,837 (56\%) & 1,628 (85\%)\\*
 
 \begin{longtable*}{>{\raggedright\arraybackslash}p{2.0in}ccc}
 \toprule
-**Characteristic** & Everyone & **Did not get VBG**  N = 3,730 & **Did get VBG**  N = 1,445\\
+**Characteristic** & Everyone & **Did not get VBG**  N = 36,499 & **Did get VBG**  N = 14,910\\
 \midrule
 \endfirsthead
 \multicolumn{4}{@{}l}{\textit{(continued)}}\\
 \toprule
-**Characteristic** & Everyone & **Did not get VBG**  N = 3,730 & **Did get VBG**  N = 1,445\\
+**Characteristic** & Everyone & **Did not get VBG**  N = 36,499 & **Did get VBG**  N = 14,910\\
 \midrule
 \endhead
 
 \endfoot
 \bottomrule
 \endlastfoot
-\_\_Age\_\_ & 59.5 ± 17.6; 0.0/5,175.0 missing (0.0\%) & 59.6 ± 17.6; 0.0/3,730.0 missing (0.0\%) & 59.0 ± 17.7; 0.0/1,445.0 missing (0.0\%)\\
-\_\_BMI\_\_ & 31.3 ± 8.5; 2,934.0/5,175.0 missing (56.7\%) & 31.9 ± 8.6; 1,939.0/3,730.0 missing (52.0\%) & 28.9 ± 7.5; 995.0/1,445.0 missing (68.9\%)\\
+\_\_Age\_\_ & 59.3 ± 17.7; 0.0/51,409.0 missing (0.0\%) & 59.4 ± 17.8; 0.0/36,499.0 missing (0.0\%) & 58.9 ± 17.7; 0.0/14,910.0 missing (0.0\%)\\
+\_\_BMI\_\_ & 31.2 ± 8.3; 29,393.0/51,409.0 missing (57.2\%) & 31.8 ± 8.5; 19,290.0/36,499.0 missing (52.9\%) & 28.8 ± 7.4; 10,103.0/14,910.0 missing (67.8\%)\\
 \_\_Sex\_\_ &  &  & \\
-Female & 2,591 (50\%) & 1,921 (52\%) & 670 (46\%)\\
-Male & 2,584 (50\%) & 1,809 (48\%) & 775 (54\%)\\
+Female & 25,584 (50\%) & 18,543 (51\%) & 7,041 (47\%)\\
+Male & 25,825 (50\%) & 17,956 (49\%) & 7,869 (53\%)\\
 \addlinespace
 \_\_Race/Ethnicity\_\_ &  &  & \\
-White & 3,280 (63\%) & 2,513 (67\%) & 767 (53\%)\\
-Black or African American & 884 (17\%) & 616 (17\%) & 268 (19\%)\\
-Hispanic & 334 (6.5\%) & 221 (5.9\%) & 113 (7.8\%)\\
-Asian & 83 (1.6\%) & 54 (1.4\%) & 29 (2.0\%)\\
+White & 32,177 (63\%) & 24,215 (66\%) & 7,962 (53\%)\\
+Black or African American & 8,863 (17\%) & 6,072 (17\%) & 2,791 (19\%)\\
+Hispanic & 3,369 (6.6\%) & 2,321 (6.4\%) & 1,048 (7.0\%)\\
+Asian & 833 (1.6\%) & 542 (1.5\%) & 291 (2.0\%)\\
 \addlinespace
-American Indian & 36 (0.7\%) & 13 (0.3\%) & 23 (1.6\%)\\
-Pacific Islander & 10 (0.2\%) & 8 (0.2\%) & 2 (0.1\%)\\
-Unknown & 548 (11\%) & 305 (8.2\%) & 243 (17\%)\\
+American Indian & 388 (0.8\%) & 183 (0.5\%) & 205 (1.4\%)\\
+Pacific Islander & 68 (0.1\%) & 55 (0.2\%) & 13 (<0.1\%)\\
+Unknown & 5,711 (11\%) & 3,111 (8.5\%) & 2,600 (17\%)\\
 \_\_Location\_\_ &  &  & \\
-South & 2,431 (47\%) & 1,987 (53\%) & 444 (31\%)\\
+South & 24,028 (47\%) & 19,521 (53\%) & 4,507 (30\%)\\
 \addlinespace
-Northeast & 1,300 (25\%) & 703 (19\%) & 597 (41\%)\\
-Midwest & 406 (7.8\%) & 264 (7.1\%) & 142 (9.8\%)\\
-West & 1,038 (20\%) & 776 (21\%) & 262 (18\%)\\
-\_\_OSA\_\_ & 879 (17\%) & 648 (17\%) & 231 (16\%)\\
-\_\_Asthma\_\_ & 684 (13\%) & 513 (14\%) & 171 (12\%)\\
+Northeast & 13,005 (25\%) & 6,613 (18\%) & 6,392 (43\%)\\
+Midwest & 3,847 (7.5\%) & 2,503 (6.9\%) & 1,344 (9.0\%)\\
+West & 10,529 (20\%) & 7,862 (22\%) & 2,667 (18\%)\\
+\_\_OSA\_\_ & 9,031 (18\%) & 6,662 (18\%) & 2,369 (16\%)\\
+\_\_Asthma\_\_ & 6,915 (13\%) & 4,957 (14\%) & 1,958 (13\%)\\
 \addlinespace
-\_\_COPD\_\_ & 1,013 (20\%) & 731 (20\%) & 282 (20\%)\\
-\_\_CHF\_\_ & 1,044 (20\%) & 741 (20\%) & 303 (21\%)\\
-\_\_NMD\_\_ & 233 (4.5\%) & 175 (4.7\%) & 58 (4.0\%)\\
-\_\_PHTN\_\_ & 434 (8.4\%) & 295 (7.9\%) & 139 (9.6\%)\\
-\_\_CKD\_\_ & 904 (17\%) & 628 (17\%) & 276 (19\%)\\
+\_\_COPD\_\_ & 9,915 (19\%) & 7,011 (19\%) & 2,904 (19\%)\\
+\_\_CHF\_\_ & 10,229 (20\%) & 7,026 (19\%) & 3,203 (21\%)\\
+\_\_NMD\_\_ & 2,059 (4.0\%) & 1,535 (4.2\%) & 524 (3.5\%)\\
+\_\_PHTN\_\_ & 4,267 (8.3\%) & 2,857 (7.8\%) & 1,410 (9.5\%)\\
+\_\_CKD\_\_ & 9,335 (18\%) & 6,299 (17\%) & 3,036 (20\%)\\
 \addlinespace
-\_\_Diabetes\_\_ & 1,513 (29\%) & 1,034 (28\%) & 479 (33\%)\\
+\_\_Diabetes\_\_ & 15,044 (29\%) & 10,231 (28\%) & 4,813 (32\%)\\
 \_\_Encounter Type\_\_ &  &  & \\
-Emergency & 1,710 (33\%) & 1,247 (33\%) & 463 (32\%)\\
-Inpatient & 3,465 (67\%) & 2,483 (67\%) & 982 (68\%)\\*
+Emergency & 17,034 (33\%) & 12,325 (34\%) & 4,709 (32\%)\\
+Inpatient & 34,375 (67\%) & 24,174 (66\%) & 10,201 (68\%)\\*
 \end{longtable*}
 \endgroup{}
 
@@ -5434,53 +5434,53 @@ Inpatient & 3,465 (67\%) & 2,483 (67\%) & 982 (68\%)\\*
 
 \begin{longtable*}{>{\raggedright\arraybackslash}p{2.0in}ccc}
 \toprule
-**Variable** & **Normal**  N = 825 & **Low**  N = 521 & **High**  N = 565\\
+**Variable** & **Normal**  N = 8,335 & **Low**  N = 5,035 & **High**  N = 5,207\\
 \midrule
 \endfirsthead
 \multicolumn{4}{@{}l}{\textit{(continued)}}\\
 \toprule
-**Variable** & **Normal**  N = 825 & **Low**  N = 521 & **High**  N = 565\\
+**Variable** & **Normal**  N = 8,335 & **Low**  N = 5,035 & **High**  N = 5,207\\
 \midrule
 \endhead
 
 \endfoot
 \bottomrule
 \endlastfoot
-\_\_Age\_\_ & 61.9 ± 16.8; 0.0/825.0 missing (0.0\%) & 59.6 ± 18.4; 0.0/521.0 missing (0.0\%) & 61.9 ± 16.5; 0.0/565.0 missing (0.0\%)\\
-\_\_BMI\_\_ & 28.5 ± 6.8; 457.0/825.0 missing (55.4\%) & 28.1 ± 6.5; 318.0/521.0 missing (61.0\%) & 29.9 ± 7.7; 338.0/565.0 missing (59.8\%)\\
+\_\_Age\_\_ & 60.9 ± 17.0; 0.0/8,335.0 missing (0.0\%) & 60.6 ± 17.3; 0.0/5,035.0 missing (0.0\%) & 62.1 ± 16.3; 0.0/5,207.0 missing (0.0\%)\\
+\_\_BMI\_\_ & 29.0 ± 6.9; 4,822.0/8,335.0 missing (57.9\%) & 28.3 ± 6.7; 3,006.0/5,035.0 missing (59.7\%) & 29.8 ± 7.7; 3,032.0/5,207.0 missing (58.2\%)\\
 \_\_Sex\_\_ &  &  & \\
-Female & 372 (45\%) & 225 (43\%) & 257 (45\%)\\
-Male & 453 (55\%) & 296 (57\%) & 308 (55\%)\\
+Female & 3,690 (44\%) & 2,330 (46\%) & 2,413 (46\%)\\
+Male & 4,645 (56\%) & 2,705 (54\%) & 2,794 (54\%)\\
 \addlinespace
 \_\_Race/Ethnicity\_\_ &  &  & \\
-White & 556 (67\%) & 330 (63\%) & 385 (68\%)\\
-Black or African American & 115 (14\%) & 82 (16\%) & 86 (15\%)\\
-Hispanic & 36 (4.4\%) & 29 (5.6\%) & 19 (3.4\%)\\
-Asian & 12 (1.5\%) & 14 (2.7\%) & 11 (1.9\%)\\
+White & 5,397 (65\%) & 3,041 (60\%) & 3,641 (70\%)\\
+Black or African American & 1,175 (14\%) & 821 (16\%) & 735 (14\%)\\
+Hispanic & 455 (5.5\%) & 286 (5.7\%) & 236 (4.5\%)\\
+Asian & 152 (1.8\%) & 118 (2.3\%) & 63 (1.2\%)\\
 \addlinespace
-American Indian & 15 (1.8\%) & 8 (1.5\%) & 2 (0.4\%)\\
-Pacific Islander & 2 (0.2\%) & 0 (0\%) & 0 (0\%)\\
-Unknown & 89 (11\%) & 58 (11\%) & 62 (11\%)\\
+American Indian & 101 (1.2\%) & 82 (1.6\%) & 26 (0.5\%)\\
+Pacific Islander & 12 (0.1\%) & 10 (0.2\%) & 3 (<0.1\%)\\
+Unknown & 1,043 (13\%) & 677 (13\%) & 503 (9.7\%)\\
 \_\_Location\_\_ &  &  & \\
-South & 467 (57\%) & 284 (55\%) & 306 (54\%)\\
+South & 4,594 (55\%) & 2,811 (56\%) & 2,860 (55\%)\\
 \addlinespace
-Northeast & 148 (18\%) & 84 (16\%) & 147 (26\%)\\
-Midwest & 69 (8.4\%) & 47 (9.0\%) & 44 (7.8\%)\\
-West & 141 (17\%) & 106 (20\%) & 68 (12\%)\\
-\_\_OSA\_\_ & 116 (14\%) & 53 (10\%) & 134 (24\%)\\
-\_\_Asthma\_\_ & 84 (10\%) & 58 (11\%) & 78 (14\%)\\
+Northeast & 1,535 (18\%) & 802 (16\%) & 1,252 (24\%)\\
+Midwest & 742 (8.9\%) & 378 (7.5\%) & 447 (8.6\%)\\
+West & 1,464 (18\%) & 1,044 (21\%) & 648 (12\%)\\
+\_\_OSA\_\_ & 1,211 (15\%) & 592 (12\%) & 1,133 (22\%)\\
+\_\_Asthma\_\_ & 893 (11\%) & 481 (9.6\%) & 722 (14\%)\\
 \addlinespace
-\_\_COPD\_\_ & 154 (19\%) & 83 (16\%) & 197 (35\%)\\
-\_\_CHF\_\_ & 175 (21\%) & 115 (22\%) & 167 (30\%)\\
-\_\_NMD\_\_ & 48 (5.8\%) & 25 (4.8\%) & 30 (5.3\%)\\
-\_\_PHTN\_\_ & 82 (9.9\%) & 45 (8.6\%) & 68 (12\%)\\
-\_\_CKD\_\_ & 157 (19\%) & 112 (21\%) & 116 (21\%)\\
+\_\_COPD\_\_ & 1,441 (17\%) & 720 (14\%) & 1,756 (34\%)\\
+\_\_CHF\_\_ & 1,692 (20\%) & 988 (20\%) & 1,517 (29\%)\\
+\_\_NMD\_\_ & 408 (4.9\%) & 206 (4.1\%) & 223 (4.3\%)\\
+\_\_PHTN\_\_ & 703 (8.4\%) & 414 (8.2\%) & 673 (13\%)\\
+\_\_CKD\_\_ & 1,620 (19\%) & 1,009 (20\%) & 1,105 (21\%)\\
 \addlinespace
-\_\_Diabetes\_\_ & 243 (29\%) & 145 (28\%) & 171 (30\%)\\
+\_\_Diabetes\_\_ & 2,380 (29\%) & 1,497 (30\%) & 1,669 (32\%)\\
 \_\_Encounter Type\_\_ &  &  & \\
-Emergency & 127 (15\%) & 65 (12\%) & 91 (16\%)\\
-Inpatient & 698 (85\%) & 456 (88\%) & 474 (84\%)\\
-\_\_PaCO\\textsubscript{2} (mmHg)\_\_ & 39.8 ± 3.0; 0.0/825.0 missing (0.0\%) & 29.6 ± 4.5; 0.0/521.0 missing (0.0\%) & 59.1 ± 19.3; 0.0/565.0 missing (0.0\%)\\*
+Emergency & 1,238 (15\%) & 777 (15\%) & 924 (18\%)\\
+Inpatient & 7,097 (85\%) & 4,258 (85\%) & 4,283 (82\%)\\
+\_\_PaCO\\textsubscript{2} (mmHg)\_\_ & 39.7 ± 3.0; 0.0/8,335.0 missing (0.0\%) & 29.2 ± 4.6; 0.0/5,035.0 missing (0.0\%) & 59.1 ± 19.8; 0.0/5,207.0 missing (0.0\%)\\*
 \end{longtable*}
 \endgroup{}
 
@@ -5498,53 +5498,53 @@ Inpatient & 698 (85\%) & 456 (88\%) & 474 (84\%)\\
 
 \begin{longtable*}{>{\raggedright\arraybackslash}p{2.0in}ccc}
 \toprule
-**Variable** & **Normal**  N = 647 & **Low**  N = 402 & **High**  N = 396\\
+**Variable** & **Normal**  N = 6,895 & **Low**  N = 4,112 & **High**  N = 3,903\\
 \midrule
 \endfirsthead
 \multicolumn{4}{@{}l}{\textit{(continued)}}\\
 \toprule
-**Variable** & **Normal**  N = 647 & **Low**  N = 402 & **High**  N = 396\\
+**Variable** & **Normal**  N = 6,895 & **Low**  N = 4,112 & **High**  N = 3,903\\
 \midrule
 \endhead
 
 \endfoot
 \bottomrule
 \endlastfoot
-\_\_Age\_\_ & 57.2 ± 18.3; 0.0/647.0 missing (0.0\%) & 59.4 ± 17.7; 0.0/402.0 missing (0.0\%) & 61.6 ± 16.3; 0.0/396.0 missing (0.0\%)\\
-\_\_BMI\_\_ & 29.7 ± 7.6; 465.0/647.0 missing (71.9\%) & 27.7 ± 6.3; 249.0/402.0 missing (61.9\%) & 29.4 ± 8.6; 281.0/396.0 missing (71.0\%)\\
+\_\_Age\_\_ & 57.9 ± 18.1; 0.0/6,895.0 missing (0.0\%) & 58.2 ± 17.6; 0.0/4,112.0 missing (0.0\%) & 61.2 ± 16.6; 0.0/3,903.0 missing (0.0\%)\\
+\_\_BMI\_\_ & 28.8 ± 7.2; 4,798.0/6,895.0 missing (69.6\%) & 28.7 ± 7.1; 2,538.0/4,112.0 missing (61.7\%) & 29.1 ± 8.0; 2,767.0/3,903.0 missing (70.9\%)\\
 \_\_Sex\_\_ &  &  & \\
-Female & 323 (50\%) & 177 (44\%) & 170 (43\%)\\
-Male & 324 (50\%) & 225 (56\%) & 226 (57\%)\\
+Female & 3,305 (48\%) & 1,923 (47\%) & 1,813 (46\%)\\
+Male & 3,590 (52\%) & 2,189 (53\%) & 2,090 (54\%)\\
 \addlinespace
 \_\_Race/Ethnicity\_\_ &  &  & \\
-White & 325 (50\%) & 209 (52\%) & 233 (59\%)\\
-Black or African American & 115 (18\%) & 71 (18\%) & 82 (21\%)\\
-Hispanic & 59 (9.1\%) & 33 (8.2\%) & 21 (5.3\%)\\
-Asian & 16 (2.5\%) & 5 (1.2\%) & 8 (2.0\%)\\
+White & 3,694 (54\%) & 2,080 (51\%) & 2,188 (56\%)\\
+Black or African American & 1,266 (18\%) & 726 (18\%) & 799 (20\%)\\
+Hispanic & 496 (7.2\%) & 337 (8.2\%) & 215 (5.5\%)\\
+Asian & 143 (2.1\%) & 86 (2.1\%) & 62 (1.6\%)\\
 \addlinespace
-American Indian & 9 (1.4\%) & 11 (2.7\%) & 3 (0.8\%)\\
-Pacific Islander & 1 (0.2\%) & 1 (0.2\%) & 0 (0\%)\\
-Unknown & 122 (19\%) & 72 (18\%) & 49 (12\%)\\
+American Indian & 72 (1.0\%) & 112 (2.7\%) & 21 (0.5\%)\\
+Pacific Islander & 8 (0.1\%) & 3 (<0.1\%) & 2 (<0.1\%)\\
+Unknown & 1,216 (18\%) & 768 (19\%) & 616 (16\%)\\
 \_\_Location\_\_ &  &  & \\
-South & 205 (32\%) & 101 (25\%) & 138 (35\%)\\
+South & 2,196 (32\%) & 1,033 (25\%) & 1,278 (33\%)\\
 \addlinespace
-Northeast & 273 (42\%) & 154 (38\%) & 170 (43\%)\\
-Midwest & 61 (9.4\%) & 33 (8.2\%) & 48 (12\%)\\
-West & 108 (17\%) & 114 (28\%) & 40 (10\%)\\
-\_\_OSA\_\_ & 95 (15\%) & 53 (13\%) & 83 (21\%)\\
-\_\_Asthma\_\_ & 66 (10\%) & 50 (12\%) & 55 (14\%)\\
+Northeast & 3,088 (45\%) & 1,563 (38\%) & 1,741 (45\%)\\
+Midwest & 597 (8.7\%) & 328 (8.0\%) & 419 (11\%)\\
+West & 1,014 (15\%) & 1,188 (29\%) & 465 (12\%)\\
+\_\_OSA\_\_ & 982 (14\%) & 592 (14\%) & 795 (20\%)\\
+\_\_Asthma\_\_ & 842 (12\%) & 543 (13\%) & 573 (15\%)\\
 \addlinespace
-\_\_COPD\_\_ & 89 (14\%) & 74 (18\%) & 119 (30\%)\\
-\_\_CHF\_\_ & 110 (17\%) & 88 (22\%) & 105 (27\%)\\
-\_\_NMD\_\_ & 19 (2.9\%) & 13 (3.2\%) & 26 (6.6\%)\\
-\_\_PHTN\_\_ & 47 (7.3\%) & 37 (9.2\%) & 55 (14\%)\\
-\_\_CKD\_\_ & 103 (16\%) & 103 (26\%) & 70 (18\%)\\
+\_\_COPD\_\_ & 1,114 (16\%) & 644 (16\%) & 1,146 (29\%)\\
+\_\_CHF\_\_ & 1,270 (18\%) & 844 (21\%) & 1,089 (28\%)\\
+\_\_NMD\_\_ & 230 (3.3\%) & 145 (3.5\%) & 149 (3.8\%)\\
+\_\_PHTN\_\_ & 551 (8.0\%) & 345 (8.4\%) & 514 (13\%)\\
+\_\_CKD\_\_ & 1,290 (19\%) & 960 (23\%) & 786 (20\%)\\
 \addlinespace
-\_\_Diabetes\_\_ & 194 (30\%) & 157 (39\%) & 128 (32\%)\\
+\_\_Diabetes\_\_ & 2,109 (31\%) & 1,439 (35\%) & 1,265 (32\%)\\
 \_\_Encounter Type\_\_ &  &  & \\
-Emergency & 240 (37\%) & 112 (28\%) & 111 (28\%)\\
-Inpatient & 407 (63\%) & 290 (72\%) & 285 (72\%)\\
-\_\_PvCO\\textsubscript{2} (mmHg)\_\_ & 44.5 ± 3.0; 0.0/647.0 missing (0.0\%) & 33.1 ± 5.5; 0.0/402.0 missing (0.0\%) & 61.6 ± 13.6; 0.0/396.0 missing (0.0\%)\\*
+Emergency & 2,427 (35\%) & 1,169 (28\%) & 1,113 (29\%)\\
+Inpatient & 4,468 (65\%) & 2,943 (72\%) & 2,790 (71\%)\\
+\_\_PvCO\\textsubscript{2} (mmHg)\_\_ & 44.7 ± 3.0; 0.0/6,895.0 missing (0.0\%) & 33.3 ± 5.1; 0.0/4,112.0 missing (0.0\%) & 61.6 ± 13.1; 0.0/3,903.0 missing (0.0\%)\\*
 \end{longtable*}
 \endgroup{}
 
@@ -5646,15 +5646,15 @@ Inpatient & 407 (63\%) & 290 (72\%) & 285 (72\%)\\
 \toprule
 Cohort & Outcome & Normal & Low & High\\
 \midrule
-ABG & IMV & 174/825 (21.1\%) & 145/521 (27.8\%) & 144/565 (25.5\%)\\
-ABG & NIV & 60/825 (7.3\%) & 38/521 (7.3\%) & 85/565 (15.0\%)\\
-ABG & Death (60d) & 110/825 (13.3\%) & 103/521 (19.8\%) & 109/565 (19.3\%)\\
-ABG & Hypercapnic RF & 33/825 (4.0\%) & 28/521 (5.4\%) & 145/565 (25.7\%)\\
-VBG & IMV & 72/647 (11.1\%) & 63/402 (15.7\%) & 73/396 (18.4\%)\\
+ABG & IMV & 1924/8335 (23.1\%) & 1439/5035 (28.6\%) & 1413/5207 (27.1\%)\\
+ABG & NIV & 616/8335 (7.4\%) & 382/5035 (7.6\%) & 818/5207 (15.7\%)\\
+ABG & Death (60d) & 1175/8335 (14.1\%) & 1131/5035 (22.5\%) & 986/5207 (18.9\%)\\
+ABG & Hypercapnic RF & 411/8335 (4.9\%) & 256/5035 (5.1\%) & 1276/5207 (24.5\%)\\
+VBG & IMV & 802/6895 (11.6\%) & 754/4112 (18.3\%) & 736/3903 (18.9\%)\\
 \addlinespace
-VBG & NIV & 31/647 (4.8\%) & 23/402 (5.7\%) & 46/396 (11.6\%)\\
-VBG & Death (60d) & 69/647 (10.7\%) & 68/402 (16.9\%) & 63/396 (15.9\%)\\
-VBG & Hypercapnic RF & 26/647 (4.0\%) & 16/402 (4.0\%) & 91/396 (23.0\%)\\
+VBG & NIV & 328/6895 (4.8\%) & 232/4112 (5.6\%) & 476/3903 (12.2\%)\\
+VBG & Death (60d) & 734/6895 (10.6\%) & 720/4112 (17.5\%) & 600/3903 (15.4\%)\\
+VBG & Hypercapnic RF & 260/6895 (3.8\%) & 162/4112 (3.9\%) & 910/3903 (23.3\%)\\
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -11009,9 +11009,9 @@ outputs and will stop if they are missing.
 \end{Shaded}
 
 \begin{verbatim}
-            used   (Mb) gc trigger   (Mb) limit (Mb)  max used   (Mb)
-Ncells   7074610  377.9   12107968  646.7         NA  12107968  646.7
-Vcells 485064290 3700.8 1007682731 7688.1      16384 966338073 7372.6
+            used   (Mb) gc trigger   (Mb) limit (Mb)   max used   (Mb)
+Ncells   7118968  380.2   12115325  647.1         NA   12115325  647.1
+Vcells 606468904 4627.0 1007682753 7688.1      16384 1007682753 7688.1
 \end{verbatim}
 
 \begin{Shaded}
@@ -12281,14 +12281,14 @@ CO2)}\label{mi-pooled-ipw-associations-3-level-co2}
 \toprule
 Cohort & Outcome & Low vs normal OR (95\% CI) & High vs normal OR (95\% CI) \\ 
 \midrule\addlinespace[2.5pt]
-ABG & IMV & 1.41 (1.05, 1.90) & 1.26 (0.93, 1.71) \\ 
-ABG & NIV & 1.04 (0.63, 1.72) & 3.05 (1.99, 4.68) \\ 
-ABG & Death (60d) & 1.55 (1.07, 2.25) & 1.50 (1.06, 2.14) \\ 
-ABG & Hypercapnic RF & 1.26 (0.70, 2.26) & 9.21 (5.73, 14.81) \\ 
-VBG & IMV & 1.24 (0.77, 2.00) & 1.63 (1.02, 2.60) \\ 
-VBG & NIV & 0.76 (0.38, 1.52) & 2.69 (1.47, 4.90) \\ 
-VBG & Death (60d) & 1.10 (0.68, 1.79) & 1.10 (0.70, 1.74) \\ 
-VBG & Hypercapnic RF & 0.68 (0.30, 1.54) & 6.28 (3.50, 11.25) \\ 
+ABG & IMV & 1.35 (1.23, 1.48) & 1.26 (1.15, 1.38) \\ 
+ABG & NIV & 1.05 (0.90, 1.23) & 2.77 (2.42, 3.17) \\ 
+ABG & Death (60d) & 1.77 (1.59, 1.97) & 1.34 (1.20, 1.50) \\ 
+ABG & Hypercapnic RF & 1.07 (0.89, 1.28) & 7.00 (6.08, 8.06) \\ 
+VBG & IMV & 1.53 (1.33, 1.76) & 1.58 (1.38, 1.82) \\ 
+VBG & NIV & 1.00 (0.80, 1.25) & 2.96 (2.47, 3.54) \\ 
+VBG & Death (60d) & 1.77 (1.52, 2.05) & 1.39 (1.20, 1.61) \\ 
+VBG & Hypercapnic RF & 0.82 (0.63, 1.06) & 7.14 (5.95, 8.56) \\ 
 \bottomrule
 \end{tabular*}
 \begin{minipage}{\linewidth}
@@ -16849,15 +16849,15 @@ scope}\label{pilot-validation-and-scope}
 \toprule
 outcome & modality & analysis\_family & co2\_representation & or\_low\_vs\_normal & or\_high\_vs\_normal\\
 \midrule
-IMV & ABG & MI-logistic IPSW & cat3 & 1.413 & 1.261\\
-IMV & VBG & MI-logistic IPSW & cat3 & 1.240 & 1.631\\
-NIV & ABG & MI-logistic IPSW & cat3 & 1.042 & 3.049\\
-NIV & VBG & MI-logistic IPSW & cat3 & 0.760 & 2.689\\
-IMV & ABG & MI-logistic IPSW & spline & 1.320 & 1.000\\
+IMV & ABG & MI-logistic IPSW & cat3 & 1.348 & 1.259\\
+IMV & VBG & MI-logistic IPSW & cat3 & 1.532 & 1.584\\
+NIV & ABG & MI-logistic IPSW & cat3 & 1.050 & 2.768\\
+NIV & VBG & MI-logistic IPSW & cat3 & 1.002 & 2.958\\
+IMV & ABG & MI-logistic IPSW & spline & 1.194 & 1.034\\
 \addlinespace
-NIV & ABG & MI-logistic IPSW & spline & 1.046 & 1.371\\
-IMV & VBG & MI-logistic IPSW & spline & 1.033 & 1.089\\
-NIV & VBG & MI-logistic IPSW & spline & 0.966 & 1.475\\
+NIV & ABG & MI-logistic IPSW & spline & 1.062 & 1.354\\
+IMV & VBG & MI-logistic IPSW & spline & 1.161 & 1.101\\
+NIV & VBG & MI-logistic IPSW & spline & 1.028 & 1.431\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -16871,15 +16871,15 @@ NIV & VBG & MI-logistic IPSW & spline & 0.966 & 1.475\\
 \toprule
 prob\_normal & prob\_low & prob\_high & notes\\
 \midrule
-0.207 & 0.269 & 0.248 & Current categorical ORs and predicted probabilities.\\
-0.193 & 0.228 & 0.280 & Current categorical ORs and predicted probabilities.\\
-0.062 & 0.064 & 0.167 & Current categorical ORs and predicted probabilities.\\
-0.024 & 0.018 & 0.062 & Current categorical ORs and predicted probabilities.\\
-0.200 & 0.248 & 0.200 & Current modality-specific reference profile.\\
+0.211 & 0.265 & 0.252 & Current categorical ORs and predicted probabilities.\\
+0.166 & 0.234 & 0.240 & Current categorical ORs and predicted probabilities.\\
+0.083 & 0.086 & 0.200 & Current categorical ORs and predicted probabilities.\\
+0.019 & 0.019 & 0.055 & Current categorical ORs and predicted probabilities.\\
+0.204 & 0.234 & 0.209 & Current modality-specific reference profile.\\
 \addlinespace
-0.063 & 0.066 & 0.084 & Current modality-specific reference profile.\\
-0.203 & 0.208 & 0.217 & Current modality-specific reference profile.\\
-0.018 & 0.017 & 0.026 & Current modality-specific reference profile.\\
+0.080 & 0.084 & 0.105 & Current modality-specific reference profile.\\
+0.169 & 0.191 & 0.183 & Current modality-specific reference profile.\\
+0.017 & 0.018 & 0.025 & Current modality-specific reference profile.\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -18317,9 +18317,9 @@ prob\_normal & prob\_low & prob\_high & notes\\
 hypothesis & supported & not\_supported & inconclusive & key\_evidence\\
 \midrule
 Reference-profile / standardization effect & yes & no & no & Common or marginal standardization shrank at least one current probability gap by >=25\%.\\
-Scale / noncollapsibility effect & no & yes & no & OR-scale agreement was not consistently closer than probability-scale agreement.\\
+Scale / noncollapsibility effect & yes & no & no & At least one contrast had closer ABG-VBG agreement on OR scale than risk-difference scale.\\
 Differential missingness or procedure capture & yes & no & no & Detected missingness/capture summaries show >5 percentage-point or SMD-scale differences.\\
-Tail support / positivity & yes & no & no & At least one clinical/quantile bin had ESS <100 or weighted events <10.\\
+Tail support / positivity & no & yes & no & Tail bins did not trigger the ESS/event-count support flag.\\
 Setting or workflow heterogeneity & yes & no & no & Within-modality weighted event-rate range exceeded 10 percentage points for at least one setting variable.\\
 \addlinespace
 Dual-tested measurement structure & no & yes & no & Dual-tested subset event rates were generated for direct review.\\
@@ -18370,7 +18370,7 @@ Summary of plausible explanations for NIV/IMV probability-OR discordance
 \tightlist
 \item
   Required discordance diagnostics completed in run mode \texttt{pilot}
-  with \texttt{pilot\_frac\ =\ 0.01}.
+  with \texttt{pilot\_frac\ =\ 0.1}.
 \item
   Optional timing, first-encounter, dual-tested, and site-specific
   diagnostics may be marked skipped when required fields or rows are
@@ -18623,7 +18623,7 @@ external\_manual\_assets & PASS & 0 declared external/manual rows.\\
 glyph\_audit & PASS & 0 unsafe manuscript glyph rows.\\
 duplicate\_audit & PASS & 0 conflicting duplicate/numbering rows.\\
 \addlinespace
-diagnostics\_audit & FAIL & 2 high / 0 medium / 0 low diagnostics issues.\\
+diagnostics\_audit & FAIL & 1 high / 0 medium / 0 low diagnostics issues.\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -18709,40 +18709,40 @@ supplement & table & generated & notebook\_generated & TRUE & 5\\
 \toprule
 Characteristic & Everyone & Did not get ABG & Did get ABG & Did not get VBG & Did get VBG\\
 \midrule
-Age & 59.5 ± 17.6; 0.0/5,175.0 missing (0.0\%) & 58.4 ± 17.7; 0.0/3,264.0 missing (0.0\%) & 61.3 ± 17.2; 0.0/1,911.0 missing (0.0\%) & 59.6 ± 17.6; 0.0/3,730.0 missing (0.0\%) & 59.0 ± 17.7; 0.0/1,445.0 missing (0.0\%)\\
-BMI & 31.3 ± 8.5; 2,934.0/5,175.0 missing (56.7\%) & 32.6 ± 8.9; 1,821.0/3,264.0 missing (55.8\%) & 28.8 ± 7.0; 1,113.0/1,911.0 missing (58.2\%) & 31.9 ± 8.6; 1,939.0/3,730.0 missing (52.0\%) & 28.9 ± 7.5; 995.0/1,445.0 missing (68.9\%)\\
+Age & 59.3 ± 17.7; 0.0/51,409.0 missing (0.0\%) & 58.2 ± 18.1; 0.0/32,832.0 missing (0.0\%) & 61.2 ± 16.9; 0.0/18,577.0 missing (0.0\%) & 59.4 ± 17.8; 0.0/36,499.0 missing (0.0\%) & 58.9 ± 17.7; 0.0/14,910.0 missing (0.0\%)\\
+BMI & 31.2 ± 8.3; 29,393.0/51,409.0 missing (57.2\%) & 32.3 ± 8.7; 18,533.0/32,832.0 missing (56.4\%) & 29.1 ± 7.1; 10,860.0/18,577.0 missing (58.5\%) & 31.8 ± 8.5; 19,290.0/36,499.0 missing (52.9\%) & 28.8 ± 7.4; 10,103.0/14,910.0 missing (67.8\%)\\
 Sex &  &  &  &  & \\
-Female & 2,591 (50\%) & 1,737 (53\%) & 854 (45\%) & 1,921 (52\%) & 670 (46\%)\\
-Male & 2,584 (50\%) & 1,527 (47\%) & 1,057 (55\%) & 1,809 (48\%) & 775 (54\%)\\
+Female & 25,584 (50\%) & 17,151 (52\%) & 8,433 (45\%) & 18,543 (51\%) & 7,041 (47\%)\\
+Male & 25,825 (50\%) & 15,681 (48\%) & 10,144 (55\%) & 17,956 (49\%) & 7,869 (53\%)\\
 \addlinespace
 Race/Ethnicity &  &  &  &  & \\
-White & 3,280 (63\%) & 2,009 (62\%) & 1,271 (67\%) & 2,513 (67\%) & 767 (53\%)\\
-Black or African American & 884 (17\%) & 601 (18\%) & 283 (15\%) & 616 (17\%) & 268 (19\%)\\
-Hispanic & 334 (6.5\%) & 250 (7.7\%) & 84 (4.4\%) & 221 (5.9\%) & 113 (7.8\%)\\
-Asian & 83 (1.6\%) & 46 (1.4\%) & 37 (1.9\%) & 54 (1.4\%) & 29 (2.0\%)\\
+White & 32,177 (63\%) & 20,098 (61\%) & 12,079 (65\%) & 24,215 (66\%) & 7,962 (53\%)\\
+Black or African American & 8,863 (17\%) & 6,132 (19\%) & 2,731 (15\%) & 6,072 (17\%) & 2,791 (19\%)\\
+Hispanic & 3,369 (6.6\%) & 2,392 (7.3\%) & 977 (5.3\%) & 2,321 (6.4\%) & 1,048 (7.0\%)\\
+Asian & 833 (1.6\%) & 500 (1.5\%) & 333 (1.8\%) & 542 (1.5\%) & 291 (2.0\%)\\
 \addlinespace
-American Indian & 36 (0.7\%) & 11 (0.3\%) & 25 (1.3\%) & 13 (0.3\%) & 23 (1.6\%)\\
-Pacific Islander & 10 (0.2\%) & 8 (0.2\%) & 2 (0.1\%) & 8 (0.2\%) & 2 (0.1\%)\\
-Unknown & 548 (11\%) & 339 (10\%) & 209 (11\%) & 305 (8.2\%) & 243 (17\%)\\
+American Indian & 388 (0.8\%) & 179 (0.5\%) & 209 (1.1\%) & 183 (0.5\%) & 205 (1.4\%)\\
+Pacific Islander & 68 (0.1\%) & 43 (0.1\%) & 25 (0.1\%) & 55 (0.2\%) & 13 (<0.1\%)\\
+Unknown & 5,711 (11\%) & 3,488 (11\%) & 2,223 (12\%) & 3,111 (8.5\%) & 2,600 (17\%)\\
 Location &  &  &  &  & \\
-South & 2,431 (47\%) & 1,374 (42\%) & 1,057 (55\%) & 1,987 (53\%) & 444 (31\%)\\
+South & 24,028 (47\%) & 13,763 (42\%) & 10,265 (55\%) & 19,521 (53\%) & 4,507 (30\%)\\
 \addlinespace
-Northeast & 1,300 (25\%) & 921 (28\%) & 379 (20\%) & 703 (19\%) & 597 (41\%)\\
-Midwest & 406 (7.8\%) & 246 (7.5\%) & 160 (8.4\%) & 264 (7.1\%) & 142 (9.8\%)\\
-West & 1,038 (20\%) & 723 (22\%) & 315 (16\%) & 776 (21\%) & 262 (18\%)\\
-OSA & 879 (17\%) & 576 (18\%) & 303 (16\%) & 648 (17\%) & 231 (16\%)\\
-Asthma & 684 (13\%) & 464 (14\%) & 220 (12\%) & 513 (14\%) & 171 (12\%)\\
+Northeast & 13,005 (25\%) & 9,416 (29\%) & 3,589 (19\%) & 6,613 (18\%) & 6,392 (43\%)\\
+Midwest & 3,847 (7.5\%) & 2,280 (6.9\%) & 1,567 (8.4\%) & 2,503 (6.9\%) & 1,344 (9.0\%)\\
+West & 10,529 (20\%) & 7,373 (22\%) & 3,156 (17\%) & 7,862 (22\%) & 2,667 (18\%)\\
+OSA & 9,031 (18\%) & 6,095 (19\%) & 2,936 (16\%) & 6,662 (18\%) & 2,369 (16\%)\\
+Asthma & 6,915 (13\%) & 4,819 (15\%) & 2,096 (11\%) & 4,957 (14\%) & 1,958 (13\%)\\
 \addlinespace
-COPD & 1,013 (20\%) & 579 (18\%) & 434 (23\%) & 731 (20\%) & 282 (20\%)\\
-CHF & 1,044 (20\%) & 587 (18\%) & 457 (24\%) & 741 (20\%) & 303 (21\%)\\
-NMD & 233 (4.5\%) & 130 (4.0\%) & 103 (5.4\%) & 175 (4.7\%) & 58 (4.0\%)\\
-PHTN & 434 (8.4\%) & 239 (7.3\%) & 195 (10\%) & 295 (7.9\%) & 139 (9.6\%)\\
-CKD & 904 (17\%) & 519 (16\%) & 385 (20\%) & 628 (17\%) & 276 (19\%)\\
+COPD & 9,915 (19\%) & 5,998 (18\%) & 3,917 (21\%) & 7,011 (19\%) & 2,904 (19\%)\\
+CHF & 10,229 (20\%) & 6,032 (18\%) & 4,197 (23\%) & 7,026 (19\%) & 3,203 (21\%)\\
+NMD & 2,059 (4.0\%) & 1,222 (3.7\%) & 837 (4.5\%) & 1,535 (4.2\%) & 524 (3.5\%)\\
+PHTN & 4,267 (8.3\%) & 2,477 (7.5\%) & 1,790 (9.6\%) & 2,857 (7.8\%) & 1,410 (9.5\%)\\
+CKD & 9,335 (18\%) & 5,601 (17\%) & 3,734 (20\%) & 6,299 (17\%) & 3,036 (20\%)\\
 \addlinespace
-Diabetes & 1,513 (29\%) & 954 (29\%) & 559 (29\%) & 1,034 (28\%) & 479 (33\%)\\
+Diabetes & 15,044 (29\%) & 9,498 (29\%) & 5,546 (30\%) & 10,231 (28\%) & 4,813 (32\%)\\
 Encounter Type &  &  &  &  & \\
-Emergency & 1,710 (33\%) & 1,427 (44\%) & 283 (15\%) & 1,247 (33\%) & 463 (32\%)\\
-Inpatient & 3,465 (67\%) & 1,837 (56\%) & 1,628 (85\%) & 2,483 (67\%) & 982 (68\%)\\
+Emergency & 17,034 (33\%) & 14,095 (43\%) & 2,939 (16\%) & 12,325 (34\%) & 4,709 (32\%)\\
+Inpatient & 34,375 (67\%) & 18,737 (57\%) & 15,638 (84\%) & 24,174 (66\%) & 10,201 (68\%)\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -18766,15 +18766,15 @@ Inpatient & 3,465 (67\%) & 1,837 (56\%) & 1,628 (85\%) & 2,483 (67\%) & 982 (68\
 \toprule
 group & outcome & n\_model & events & Low vs normal OR (95\% CI) & High vs normal OR (95\% CI)\\
 \midrule
-ABG & IMV & 1911 & 463 & 1.41 (1.05, 1.90) & 1.26 (0.93, 1.71)\\
-ABG & NIV & 1911 & 183 & 1.04 (0.63, 1.72) & 3.05 (1.99, 4.68)\\
-ABG & Death (60d) & 1911 & 322 & 1.55 (1.07, 2.25) & 1.50 (1.06, 2.14)\\
-ABG & Hypercapnic RF & 1911 & 206 & 1.26 (0.70, 2.26) & 9.21 (5.73, 14.81)\\
-VBG & IMV & 1445 & 208 & 1.24 (0.77, 2.00) & 1.63 (1.02, 2.60)\\
+ABG & IMV & 18577 & 4776 & 1.35 (1.23, 1.48) & 1.26 (1.15, 1.38)\\
+ABG & NIV & 18577 & 1816 & 1.05 (0.90, 1.23) & 2.77 (2.42, 3.17)\\
+ABG & Death (60d) & 18577 & 3292 & 1.77 (1.59, 1.97) & 1.34 (1.20, 1.50)\\
+ABG & Hypercapnic RF & 18577 & 1943 & 1.07 (0.89, 1.28) & 7.00 (6.08, 8.06)\\
+VBG & IMV & 14910 & 2292 & 1.53 (1.33, 1.76) & 1.58 (1.38, 1.82)\\
 \addlinespace
-VBG & NIV & 1445 & 100 & 0.76 (0.38, 1.52) & 2.69 (1.47, 4.90)\\
-VBG & Death (60d) & 1445 & 200 & 1.10 (0.68, 1.79) & 1.10 (0.70, 1.74)\\
-VBG & Hypercapnic RF & 1445 & 133 & 0.68 (0.30, 1.54) & 6.28 (3.50, 11.25)\\
+VBG & NIV & 14910 & 1036 & 1.00 (0.80, 1.25) & 2.96 (2.47, 3.54)\\
+VBG & Death (60d) & 14910 & 2054 & 1.77 (1.52, 2.05) & 1.39 (1.20, 1.61)\\
+VBG & Hypercapnic RF & 14910 & 1332 & 0.82 (0.63, 1.06) & 7.14 (5.95, 8.56)\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -18790,15 +18790,15 @@ VBG & Hypercapnic RF & 1445 & 133 & 0.68 (0.30, 1.54) & 6.28 (3.50, 11.25)\\
 \toprule
 group & outcome & Normal probability (95\% CI) & Low probability (95\% CI) & High probability (95\% CI)\\
 \midrule
-ABG & IMV & 0.21 (0.17, 0.25) & 0.27 (0.22, 0.33) & 0.25 (0.20, 0.31)\\
-ABG & NIV & 0.06 (0.04, 0.09) & 0.06 (0.04, 0.10) & 0.17 (0.12, 0.22)\\
-ABG & Death (60d) & 0.10 (0.08, 0.14) & 0.15 (0.11, 0.21) & 0.15 (0.11, 0.20)\\
-ABG & Hypercapnic RF & 0.03 (0.02, 0.05) & 0.04 (0.02, 0.07) & 0.23 (0.17, 0.30)\\
-VBG & IMV & 0.19 (0.13, 0.27) & 0.23 (0.16, 0.32) & 0.28 (0.20, 0.38)\\
+ABG & IMV & 0.21 (0.20, 0.23) & 0.27 (0.25, 0.28) & 0.25 (0.23, 0.27)\\
+ABG & NIV & 0.08 (0.07, 0.09) & 0.09 (0.08, 0.10) & 0.20 (0.18, 0.22)\\
+ABG & Death (60d) & 0.11 (0.10, 0.12) & 0.18 (0.17, 0.20) & 0.14 (0.13, 0.16)\\
+ABG & Hypercapnic RF & 0.04 (0.03, 0.04) & 0.04 (0.03, 0.05) & 0.22 (0.20, 0.24)\\
+VBG & IMV & 0.17 (0.15, 0.18) & 0.23 (0.21, 0.26) & 0.24 (0.22, 0.27)\\
 \addlinespace
-VBG & NIV & 0.02 (0.01, 0.05) & 0.02 (0.01, 0.04) & 0.06 (0.03, 0.12)\\
-VBG & Death (60d) & 0.13 (0.09, 0.19) & 0.14 (0.09, 0.21) & 0.14 (0.09, 0.21)\\
-VBG & Hypercapnic RF & 0.04 (0.02, 0.08) & 0.03 (0.01, 0.07) & 0.22 (0.15, 0.32)\\
+VBG & NIV & 0.02 (0.02, 0.02) & 0.02 (0.01, 0.03) & 0.06 (0.04, 0.07)\\
+VBG & Death (60d) & 0.12 (0.11, 0.14) & 0.20 (0.18, 0.22) & 0.16 (0.14, 0.18)\\
+VBG & Hypercapnic RF & 0.04 (0.03, 0.05) & 0.03 (0.03, 0.04) & 0.23 (0.20, 0.26)\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -18901,25 +18901,25 @@ step & criterion & Source field / rule & Excluded, n & Retained, n & notes\\
 \toprule
 group & outcome & contrast & OR (95\% CI)\\
 \midrule
-ABG & IMV & Low vs normal & 1.44 (1.12, 1.86)\\
-ABG & IMV & High vs normal & 1.28 (0.99, 1.65)\\
-ABG & NIV & Low vs normal & 1.00 (0.65, 1.52)\\
-ABG & NIV & High vs normal & 2.26 (1.60, 3.21)\\
-ABG & Death (60d) & Low vs normal & 1.60 (1.19, 2.15)\\
+ABG & IMV & Low vs normal & 1.33 (1.23, 1.44)\\
+ABG & IMV & High vs normal & 1.24 (1.15, 1.34)\\
+ABG & NIV & Low vs normal & 1.03 (0.90, 1.17)\\
+ABG & NIV & High vs normal & 2.34 (2.09, 2.61)\\
+ABG & Death (60d) & Low vs normal & 1.77 (1.61, 1.93)\\
 \addlinespace
-ABG & Death (60d) & High vs normal & 1.55 (1.16, 2.08)\\
-ABG & Hypercapnic RF & Low vs normal & 1.36 (0.81, 2.28)\\
-ABG & Hypercapnic RF & High vs normal & 8.29 (5.65, 12.50)\\
-VBG & IMV & Low vs normal & 1.48 (1.03, 2.13)\\
-VBG & IMV & High vs normal & 1.80 (1.27, 2.57)\\
+ABG & Death (60d) & High vs normal & 1.42 (1.30, 1.56)\\
+ABG & Hypercapnic RF & Low vs normal & 1.03 (0.88, 1.21)\\
+ABG & Hypercapnic RF & High vs normal & 6.26 (5.57, 7.05)\\
+VBG & IMV & Low vs normal & 1.71 (1.53, 1.90)\\
+VBG & IMV & High vs normal & 1.77 (1.58, 1.97)\\
 \addlinespace
-VBG & NIV & Low vs normal & 1.21 (0.69, 2.09)\\
-VBG & NIV & High vs normal & 2.61 (1.63, 4.23)\\
-VBG & Death (60d) & Low vs normal & 1.71 (1.19, 2.45)\\
-VBG & Death (60d) & High vs normal & 1.58 (1.10, 2.29)\\
-VBG & Hypercapnic RF & Low vs normal & 0.99 (0.51, 1.85)\\
+VBG & NIV & Low vs normal & 1.20 (1.01, 1.42)\\
+VBG & NIV & High vs normal & 2.78 (2.40, 3.22)\\
+VBG & Death (60d) & Low vs normal & 1.78 (1.59, 1.99)\\
+VBG & Death (60d) & High vs normal & 1.52 (1.36, 1.71)\\
+VBG & Hypercapnic RF & Low vs normal & 1.05 (0.86, 1.28)\\
 \addlinespace
-VBG & Hypercapnic RF & High vs normal & 7.13 (4.58, 11.46)\\
+VBG & Hypercapnic RF & High vs normal & 7.76 (6.73, 8.98)\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -18941,25 +18941,25 @@ VBG & Hypercapnic RF & High vs normal & 7.13 (4.58, 11.46)\\
 \toprule
 group & outcome & contrast & OR (95\% CI)\\
 \midrule
-ABG & IMV & Low vs normal & 1.40 (1.06, 1.86)\\
-ABG & IMV & High vs normal & 1.14 (0.85, 1.52)\\
-ABG & NIV & Low vs normal & 1.04 (0.65, 1.69)\\
-ABG & NIV & High vs normal & 2.82 (1.90, 4.17)\\
-ABG & Death (60d) & Low vs normal & 1.52 (1.08, 2.16)\\
+ABG & IMV & Low vs normal & 1.35 (1.23, 1.47)\\
+ABG & IMV & High vs normal & 1.23 (1.12, 1.35)\\
+ABG & NIV & Low vs normal & 1.08 (0.93, 1.26)\\
+ABG & NIV & High vs normal & 2.81 (2.47, 3.19)\\
+ABG & Death (60d) & Low vs normal & 1.78 (1.60, 1.97)\\
 \addlinespace
-ABG & Death (60d) & High vs normal & 1.46 (1.05, 2.02)\\
-ABG & Hypercapnic RF & Low vs normal & 1.54 (0.84, 2.82)\\
-ABG & Hypercapnic RF & High vs normal & 9.39 (5.99, 14.73)\\
-VBG & IMV & Low vs normal & 1.34 (0.89, 2.03)\\
-VBG & IMV & High vs normal & 1.58 (1.06, 2.37)\\
+ABG & Death (60d) & High vs normal & 1.40 (1.26, 1.56)\\
+ABG & Hypercapnic RF & Low vs normal & 1.14 (0.96, 1.37)\\
+ABG & Hypercapnic RF & High vs normal & 7.33 (6.42, 8.36)\\
+VBG & IMV & Low vs normal & 1.51 (1.33, 1.71)\\
+VBG & IMV & High vs normal & 1.56 (1.38, 1.77)\\
 \addlinespace
-VBG & NIV & Low vs normal & 0.88 (0.47, 1.67)\\
-VBG & NIV & High vs normal & 2.77 (1.62, 4.75)\\
-VBG & Death (60d) & Low vs normal & 1.38 (0.91, 2.10)\\
-VBG & Death (60d) & High vs normal & 1.31 (0.87, 1.98)\\
-VBG & Hypercapnic RF & Low vs normal & 0.76 (0.37, 1.56)\\
+VBG & NIV & Low vs normal & 1.00 (0.82, 1.23)\\
+VBG & NIV & High vs normal & 2.94 (2.49, 3.48)\\
+VBG & Death (60d) & Low vs normal & 1.76 (1.55, 2.00)\\
+VBG & Death (60d) & High vs normal & 1.44 (1.26, 1.64)\\
+VBG & Hypercapnic RF & Low vs normal & 0.89 (0.71, 1.12)\\
 \addlinespace
-VBG & Hypercapnic RF & High vs normal & 7.58 (4.54, 12.67)\\
+VBG & Hypercapnic RF & High vs normal & 8.40 (7.13, 9.89)\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -19015,7 +19015,7 @@ variable & Analysis role & \% missing & Imputed in primary MI\\
 Age & direct adjustment; PS model & 0.0\% & Yes\\
 Sex & direct adjustment; PS model & 0.0\% & Yes\\
 Race/ethnicity & direct adjustment; PS model & 0.0\% & Yes\\
-BMI & PS model & 56.7\% & Yes\\
+BMI & PS model & 57.2\% & Yes\\
 COPD & PS model & 0.0\% & Yes\\
 \addlinespace
 Asthma & PS model & 0.0\% & Yes\\
@@ -19028,23 +19028,23 @@ Chronic kidney disease & PS model & 0.0\% & Yes\\
 Diabetes & PS model & 0.0\% & Yes\\
 Location & direct adjustment; PS model & 0.0\% & Yes\\
 Encounter type & direct adjustment; PS model & 0.0\% & Yes\\
-Temperature & PS model & 48.3\% & Yes\\
+Temperature & PS model & 48.1\% & Yes\\
 \addlinespace
 Systolic blood pressure & PS model & 29.8\% & Yes\\
-Diastolic blood pressure & PS model & 30.1\% & Yes\\
-Heart rate & PS model & 36.5\% & Yes\\
-Sodium & PS model & 5.0\% & Yes\\
+Diastolic blood pressure & PS model & 30.0\% & Yes\\
+Heart rate & PS model & 36.4\% & Yes\\
+Sodium & PS model & 5.1\% & Yes\\
 Serum creatinine & PS model & 9.3\% & Yes\\
 \addlinespace
-Serum bicarbonate & PS model & 5.4\% & Yes\\
-Serum chloride & PS model & 5.8\% & Yes\\
-Serum lactate & PS model & 60.4\% & Yes\\
+Serum bicarbonate & PS model & 5.7\% & Yes\\
+Serum chloride & PS model & 5.9\% & Yes\\
+Serum lactate & PS model & 60.0\% & Yes\\
 Serum potassium & PS model & 7.8\% & Yes\\
-White blood cell count & PS model & 17.3\% & Yes\\
+White blood cell count & PS model & 17.7\% & Yes\\
 \addlinespace
-Platelet count & PS model & 7.7\% & Yes\\
-Serum phosphate & PS model & 52.8\% & Yes\\
-Serum calcium & PS model & 10.0\% & Yes\\
+Platelet count & PS model & 7.9\% & Yes\\
+Serum phosphate & PS model & 52.9\% & Yes\\
+Serum calcium & PS model & 10.2\% & Yes\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -19067,16 +19067,16 @@ domain & metric & value & interpretation\\
 Imputation run & Completed imputations & 20 & Primary analysis imputation count used in this render.\\
 Imputation run & Iterations per imputation & 5 & Configured MICE iteration count for this render.\\
 Imputation run & Variables imputed & 16 & Variables with non-empty MICE imputation methods and observed missingness.\\
-Monte Carlo error & Maximum MC error / SE in diagnostic model & 0.177 & Diagnostic model ratio; lower values indicate less simulation noise relative to model SE.\\
+Monte Carlo error & Maximum MC error / SE in diagnostic model & 0.159 & Diagnostic model ratio; lower values indicate less simulation noise relative to model SE.\\
 Chain diagnostics & Variables with available chain diagnostics & 16 & Imputed variables with traceable chain-mean diagnostics.\\
 \addlinespace
-Chain diagnostics & Variables flagged for drift & 14 & Variables exceeding drift/slope screening thresholds.\\
-MICE logged events & Total logged events & 110 & Rows reported by mice::loggedEvents across batches.\\
+Chain diagnostics & Variables flagged for drift & 7 & Variables exceeding drift/slope screening thresholds.\\
+MICE logged events & Total logged events & 0 & Rows reported by mice::loggedEvents across batches.\\
 Captured warnings & Captured warning rows & 0 & Warnings captured by notebook-level diagnostics wrappers.\\
 Outcome fit diagnostics & MI model fits audited & 692 & Outcome-model diagnostic rows captured for MI analyses.\\
 Outcome fit diagnostics & Fits with nonconvergence flags & 0 & Potential convergence problems requiring review if nonzero.\\
 \addlinespace
-Outcome fit diagnostics & Fits with separation/extreme-probability flags & 540 & Known separation/extreme-probability screen; interpret affected estimates cautiously.\\
+Outcome fit diagnostics & Fits with separation/extreme-probability flags & 425 & Known separation/extreme-probability screen; interpret affected estimates cautiously.\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -19142,13 +19142,13 @@ suppressed\_draft\_only & none & TRUE & 1\\
 component & metric & status & severity & value & note\\
 \midrule
 Audit & overall\_status & fail & high & FAIL & Overall diagnostics audit status derived from the highest-severity unresolved issue.\\
-Balance & abg\_max\_abs\_smd & fail & high & 0.108 & ABG target balance threshold is 0.10.\\
-Outcome & separation\_flags\_total & fail & high & 540 & Separation or near-separation can bias ORs and confidence intervals.\\
+Outcome & separation\_flags\_total & fail & high & 425 & Separation or near-separation can bias ORs and confidence intervals.\\
 Inventory & expected\_artifacts\_missing & pass & none & 0 & Count of expected diagnostics artifacts missing from Results/.\\
 MI & smoke\_test\_failed & pass & none & FALSE & Smoke test failure indicates the MI execution path is unstable.\\
-\addlinespace
 MI & chain\_diagnostics\_issue & pass & none & FALSE & numeric\_names=FALSE; drift\_tail\_na\_frac=0.000\\
-Balance & vbg\_max\_abs\_smd & pass & none & 0.079 & VBG target balance threshold is 0.10.\\
+\addlinespace
+Balance & abg\_max\_abs\_smd & pass & none & 0.098 & ABG target balance threshold is 0.10.\\
+Balance & vbg\_max\_abs\_smd & pass & none & 0.045 & VBG target balance threshold is 0.10.\\
 Plotting & plot\_drop\_log\_present & pass & none & TRUE & Plot drop logging should exist even if no rows are present.\\
 \bottomrule
 \end{tabular}}
@@ -19185,8 +19185,7 @@ Plotting & plot\_drop\_log\_present & pass & none & TRUE & Plot drop logging sho
 \toprule
 severity & component & evidence\_file & evidence\_snippet & why\_it\_matters & recommended\_fix\\
 \midrule
-high & Balance & Results/balance\_target\_imp\_summary.csv & ABG max|SMD|=0.108 & ABG target balance exceeds 0.10 threshold across imputations. & Revisit GBM tuning, covariate set, or truncation to improve ABG balance.\\
-high & Outcome & Results/model\_fit\_diagnostics.csv & sep\_flag TRUE for 540 / 692 fits & High rate of separation/near-separation can bias ORs and CIs. & Inspect flagged outcomes; consider penalized fits or check data sparsity.\\
+high & Outcome & Results/model\_fit\_diagnostics.csv & sep\_flag TRUE for 425 / 692 fits & High rate of separation/near-separation can bias ORs and CIs. & Inspect flagged outcomes; consider penalized fits or check data sparsity.\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -19200,8 +19199,7 @@ high & Outcome & Results/model\_fit\_diagnostics.csv & sep\_flag TRUE for 540 / 
 \toprule
 run\_id & run\_ts\\
 \midrule
-20260421\_092434 & 2026-04-21 09:24:34.367118\\
-20260421\_092434 & 2026-04-21 09:24:34.367118\\
+20260421\_094018 & 2026-04-21 09:40:18.841212\\
 \bottomrule
 \end{tabular}}
 \endgroup{}

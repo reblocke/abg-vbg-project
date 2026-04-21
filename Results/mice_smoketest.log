@@ -1,13 +1,13 @@
-run_id: 20260421_092434 run_ts: 2026-04-21 09:24:34.367118
-MI smoke test log: 2026-04-21 09:26:22.357291
+run_id: 20260421_094018 run_ts: 2026-04-21 09:40:18.841212
+MI smoke test log: 2026-04-21 09:44:52.694197
 mem.maxVSize: 16384
 R_MAX_VSIZE env: NA
-mi_df size: 1.2 Mb
-mi_df_run size: 1.2 Mb
+mi_df size: 11.6 Mb
+mi_df_run size: 11.6 Mb
 gc() pre:
-            used   (Mb) gc trigger   (Mb) limit (Mb)  max used   (Mb)
-Ncells   6837998  365.2   12107968  646.7         NA  12107968  646.7
-Vcells 474874208 3623.1 1007682731 7688.1      16384 966338073 7372.6
+            used   (Mb) gc trigger   (Mb) limit (Mb)   max used   (Mb)
+Ncells   6857553  366.3   12115325  647.1         NA   12115325  647.1
+Vcells 517721405 3950.0 1007682753 7688.1      16384 1007681461 7688.0
 
  iter imp variable
   1   1  curr_bmi  temp_new  sbp  dbp  hr  sodium  serum_cr  serum_hco3  serum_cl  serum_lac  serum_k  wbc  plt  serum_phos  serum_ca  vbg_o2sat
