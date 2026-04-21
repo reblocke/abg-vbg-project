@@ -914,3 +914,57 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
   - Free disk space before any rerun, especially old archives/checkpoints or unrelated large files after user review.
   - If resuming is desired, inspect whether `Results/mi_batch_checkpoints/imp_acc_after_batch_34.rds` and any batch 35 partial artifacts are usable; the current notebook does not automatically resume from checkpoints.
   - Do not auto-retry this full run without user approval.
+
+## 2026-04-19 11:26 MDT
+- Task: Restart the full all-preview render after freeing disk space.
+- Files changed:
+  - `WORKLOG.md`
+  - `Results/archive/pre_run_20260419_112628/*`
+  - `Results/render_logs/render_20260419_112628.log`
+- Commands run:
+  - `rm -rf Results/mi_batch_checkpoints`
+  - `bash -n scripts/render_pdf.sh`
+  - `./scripts/render_pdf.sh -P run_mode:full -P pilot_frac:1`
+- Outcomes:
+  - Removed stale failed-run MICE checkpoints because the notebook does not automatically resume from them and retaining them would have cost about `6.0G` of disk headroom.
+  - Free space before relaunch was about `25Gi`.
+  - Full render restarted successfully:
+    - wrapper log: `Results/render_logs/render_20260419_112628.log`
+    - wrapper PID: `6712`
+    - command arguments: `-P run_mode:full -P pilot_frac:1`
+  - Recreated heartbeat automation `monitor-full-render` to check the render every ~30 minutes, including elapsed time, estimated time remaining, RSS/memory trend, disk free space, MICE progress, PDF postflight status, final artifact commit on success, and self-deletion on success or failure.
+- Next steps:
+  - Let the heartbeat monitor follow `render_20260419_112628.log`, the RSS trace, and MICE logs.
+  - Watch disk pressure explicitly because the previous full render failed from disk exhaustion rather than MICE memory pressure.
+
+## 2026-04-20 15:56 MDT
+- Task: Complete and validate the restarted full all-preview render.
+- Files changed:
+  - `Code Drafts/ABG-VBG-analysis-2026-2-28.pdf`
+  - `Results/render_logs/render_20260419_112628.log`
+  - `Results/render_logs/rss_trace_20260419_112628.csv`
+  - `Results/render_logs/postmortem_20260419_112628.md`
+  - `Results/mi_run_status_20260419_112628.json`
+  - `Results/pdf_asset_presence_scan.csv`
+  - `WORKLOG.md`
+- Commands run:
+  - Heartbeat checks of the render log, RSS trace, MI batch/combine logs, postmortem, MI status JSON, PDF artifact state, and disk usage.
+  - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-2-28.pdf"`
+  - `pdfimages -list "Code Drafts/ABG-VBG-analysis-2026-2-28.pdf"`
+  - Inspection of `Results/pdf_asset_presence_scan.csv`.
+- Outcomes:
+  - Full render `20260419_112628` completed successfully with wrapper status `0`.
+  - Runtime was about `27h 50m` from `[render:start] 2026-04-19 11:26:28 -0600` to `[render:end] 2026-04-20 15:16:42 -0600`.
+  - MICE completed all `40` batches to `m = 80`; final batch checkpoint was saved and `mi-single-pass` completed all `80` imputations.
+  - Peak memory remained below the configured danger point:
+    - wrapper `/usr/bin/time -l` max resident set size: `8427618304` bytes
+    - RSS sampler peak: `7809872` KB
+  - Disk pressure did not recur; free space after completion was about `15Gi`.
+  - Rendered PDF validation passed:
+    - PDF pages: `126`
+    - embedded images: `76`
+    - required Figure 1, Figure 2, Figure S1-S8, Table 1, Table 2, Table S2, and Table S3 text all found.
+  - `Results/mi_run_status_20260419_112628.json` reports `status: completed`, `postflight_passed: true`, and `wrapper_status: 0`.
+- Next steps:
+  - Commit the successful full-run artifact bundle.
+  - Delete the `monitor-full-render` heartbeat after the commit.
