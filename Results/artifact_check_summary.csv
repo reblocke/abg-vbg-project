@@ -1,4 +1,4 @@
 "check_status","severity","allowed_missing","n_rows","run_id","run_ts"
-"present","none",FALSE,56,"20260418_181006","2026-04-18 18:10:06.674532"
-"external_manual_declared","info",TRUE,1,"20260418_181006","2026-04-18 18:10:06.674532"
-"suppressed_draft_only","none",TRUE,1,"20260418_181006","2026-04-18 18:10:06.674532"
+"present","none",FALSE,56,"20260419_112645","2026-04-19 11:26:45.267227"
+"external_manual_declared","info",TRUE,1,"20260419_112645","2026-04-19 11:26:45.267227"
+"suppressed_draft_only","none",TRUE,1,"20260419_112645","2026-04-19 11:26:45.267227"

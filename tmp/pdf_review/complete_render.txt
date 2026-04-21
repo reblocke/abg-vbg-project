@@ -1,0 +1,2666 @@
+                                                       ABG‑VBG Analysis
+                                                           Brian Locke, Anila Mehta
+
+
+
+Table of contents
+
+1 Data Pre-Processing and Unweighted Analyses                                                                                                          3
+      1.0.1 Package Set Up . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .       3
+  1.1 Helper functions for model diagnostics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .       3
+      1.1.1 Configuration for the IPW models . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .           3
+      1.1.2 Outcome Variable Creation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .         17
+  1.2 Baseline tables . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .   17
+  1.3 Three-level PCO2 categories (unweighted) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .        22
+  1.4 Observed outcome rates by CO2 bin (unweighted) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .            24
+  1.5 Restricted cubic spline regressions (unweighted) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .      25
+      1.5.1 Unweighted, Restricted Cubic Spline Regression - ABG by PaCO2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .                 26
+      1.5.2 Unweighted, Restricted Cubic Spline - VBG . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .           26
+
+2 Inverse Propensity Weighting (GBM)                                                                                                                  29
+       2.0.1 ABG IPW weighting and diagnostics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .          30
+       2.0.2 ABG IPW spline models . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .        30
+       2.0.3 ABG IPW spline models (2–98th percentile) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .            31
+       2.0.4 VBG IPW weighting and spline models . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .            33
+       2.0.5 Three-level PCO2 categories (weighted; ABG, VBG) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .             38
+       2.0.6 Observed outcome rates by CO2 bin (GBM IPSW, non-MI) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .                 40
+  2.1 Propensity score diagnostics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .    41
+
+3 Multiple Imputation (and logistic IPSW)                                                                                                             45
+      3.0.1 Missingness structure and drivers . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .       45
+
+
+
+
+                                                                           1
+        3.0.2 Monte Carlo error check after MI . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 46
+   3.1  Pre‑imputation data prep (consistent types & predictors) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 46
+   3.2  Imputation model specification (MICE) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 46
+        3.2.1 Predictor matrix & methods. Run MICE (moderate settings for scale) . . . . . . . . . . . . . . . . . . . . . . . . . . . . 46
+   3.3 Refit propensity models within each imputation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 82
+        3.3.1 FAIL-FAST CHECKS . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 82
+        3.3.2 ABG propensity (has_abg) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 82
+        3.3.3 Balance diagnostics across imputations . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 82
+        3.3.4 VBG propensity (has_vbg) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 82
+        3.3.5 VBG balance . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 82
+   3.4 Weighted outcome models within each imputation + pooling . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 82
+        3.4.1 Helper: fit + extract log‑OR and SE from svyglm . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 83
+        3.4.2 VBG: MI pooled spline models (treated cohort only) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 83
+   3.5 Explainability . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 83
+   3.6 MI three‑level PCO2 helpers and checks . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 83
+   3.7 MI + IPW three-level PCO2 (ABG & VBG) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 83
+        3.7.1 ABG: MI + IPW, three-level PCO2 outcomes . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 83
+        3.7.2 VBG: MI + IPW, three-level PCO2 outcomes . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 83
+        3.7.3 MI-pooled IPW associations (3-level CO2) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 83
+        3.7.4 Summary: adjusted CO2-category associations across analysis tracks . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 83
+   3.8 Canonical Categorical Key-Results Figures Across Analysis Tracks . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 88
+   3.9 Observed outcome rates by CO2 bin (MI-logistic IPSW) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 93
+   3.10 Manuscript outputs summary . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 94
+        3.10.1 Visualization: pooled three-level ORs . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 95
+        3.10.2 Visualization: pooled three-level predicted probabilities . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 96
+        3.10.3 Visualization . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 100
+   3.11 Canonical Key-Results Figures Across Analysis Tracks . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 101
+
+4 Diagnostics and Exports                                                                                                                           107
+      4.0.1 MI convergence and mixing . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .       107
+      4.0.2 MI stability across m . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .   108
+      4.0.3 MI maxit sensitivity (sampled) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .      108
+      4.0.4 Balance diagnostics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .   108
+      4.0.5 Outcome diagnostics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .     108
+      4.0.6 Diagnostics summary and audit . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .       108
+      4.0.7 Performance / runtime log . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .     108
+      4.0.8 Performance / runtime log . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .     108
+
+
+
+                                                                           2
+   4.1   Save, export, and session info . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 108
+
+
+1 Data Pre-Processing and Unweighted Analyses
+
+This code pulls in the master database (a STATA file) and does some initial cleaning - this will only need to be run once, and then the data
+can be accessed in the usual way.
+Package dependencies are managed via renv for reproducibility. Use renv::restore() before rendering.
+
+
+1.0.1 Package Set Up
+
+1.1 Helper functions for model diagnostics
+
+                                                          Seed escrow for MI and GBM runs
+
+
+                                             component                                    seed
+
+                                             Multiple imputation (mice)                   20251206
+                                             ABG propensity GBM (non-MI)                  42
+                                             VBG propensity GBM (non-MI)                  42
+                                             MI PS (glm RCS) seeds (ABG per imputation)   20251206 + imputation index
+                                             MI PS (glm RCS) seeds (VBG per imputation)   30251206 + imputation index
+
+
+
+Converts the data from a STATA format to rdata if the rdata file does not exist. If it does already exist, it just loads that.
+
+
+1.1.1 Configuration for the IPW models
+
+                                                      Factor level diagnostics (all variables)
+
+
+                                       variable                          class            nlevels   n_missing   pct_missing
+
+                                       encounter_id                      character           NA             0           0.0
+                                       rfs                               character           NA             0           0.0
+                                       sex                               factor               2             0           0.0
+                                       race                              haven_labelled      NA             0           0.0
+                                       ethnicity                         haven_labelled      NA             0           0.0
+
+                                       location                          factor               4             0           0.0
+                                       age_at_encounter                  numeric             NA             0           0.0
+
+
+
+
+                                                                                 3
+(continued)
+ variable               class       nlevels   n_missing   pct_missing
+
+ los                    numeric        NA             0           0.0
+ curr_bmi               numeric        NA        293545          57.0
+ hr                     numeric        NA        186698          36.2
+
+ curr_height            numeric        NA        140373          27.2
+ vbg_temp               numeric        NA        515286         100.0
+ abg_temp               numeric        NA        515286         100.0
+ vbg_o2sat              numeric        NA        444799          86.3
+ abg_o2sat              numeric        NA        406803          78.9
+
+ sao2_blood             numeric        NA        490160          95.1
+ value_prev_weight      numeric        NA        467651          90.8
+ value_prev_height      numeric        NA        444630          86.3
+ value_prev_bmi         numeric        NA        481440          93.4
+ value_highest_20198    numeric        NA        391313          75.9
+
+ value_highest_115576   numeric        NA        464901          90.2
+ value_highest_327718   numeric        NA        492184          95.5
+ vbg_co2                numeric        NA        365623          71.0
+ highest_vbg_co2        numeric        NA        365405          70.9
+ pco2_nos               numeric        NA        456722          88.6
+
+ highest_pco2_nos       numeric        NA        456715          88.6
+ abg_ph                 numeric        NA        326172          63.3
+ vbg_ph                 numeric        NA        355345          69.0
+ abg_hco3               numeric        NA        399175          77.5
+ vbg_hco3               numeric        NA        379467          73.6
+
+ sodium                 numeric        NA         27486           5.3
+ serum_cr               numeric        NA         48785           9.5
+ hgb                    numeric        NA         55497          10.8
+ serum_hco3             numeric        NA         29886           5.8
+ serum_cl               numeric        NA         30694           6.0
+
+ serum_lac              numeric        NA        308187          59.8
+ serum_k                numeric        NA         41266           8.0
+ temp_cor_oxygen        numeric        NA        506177          98.2
+ vbg_ph_temp_cor        numeric        NA        505942          98.2
+ vbg_po2                numeric        NA        381699          74.1
+
+ vbg_lactate            numeric        NA        496678          96.4
+ vbg_hco3_calc          numeric        NA        499784          97.0
+ abg_po2                numeric        NA        396985          77.0
+ abg_po2_temp_cor       numeric        NA        490739          95.2
+ abg_ph_temp_cor        numeric        NA        492476          95.6
+
+ abg_lactate            numeric        NA        497122          96.5
+ ph_blood               numeric        NA        462127          89.7
+ po2_blood              numeric        NA        466142          90.5
+ wbc                    numeric        NA         91444          17.7
+ plt                    numeric        NA         41393           8.0
+
+ bnp_date               character      NA             0           0.0
+ serum_phos_date        character      NA             0           0.0
+ serum_phos             numeric        NA        273168          53.0
+ serum_ca_date          character      NA             0           0.0
+
+
+
+
+                                4
+(continued)
+ variable                        class            nlevels   n_missing   pct_missing
+
+ serum_ca                        numeric             NA         53331          10.3
+
+ serum_albumin_date              character           NA             0           0.0
+ serum_albumin                   numeric             NA        183585          35.6
+ serum_tprot_date                character           NA             0           0.0
+ serum_tprot                     numeric             NA        194189          37.7
+ has_j9612                       numeric             NA             0           0.0
+
+ has_j9622                       numeric             NA             0           0.0
+ has_j9602                       numeric             NA             0           0.0
+ has_j9692                       numeric             NA             0           0.0
+ ohs_code                        numeric             NA             0           0.0
+ has_j9600                       numeric             NA             0           0.0
+
+ principal_diagnosis_indicator   character           NA             0           0.0
+ admitting_diagnosis             character           NA             0           0.0
+ reason_for_visit                character           NA             0           0.0
+ has_j9601                       numeric             NA             0           0.0
+ has_j961                        numeric             NA             0           0.0
+
+ has_j9610                       numeric             NA             0           0.0
+ has_j9611                       numeric             NA             0           0.0
+ has_j962                        numeric             NA             0           0.0
+ has_j9620                       numeric             NA             0           0.0
+ has_j9621                       numeric             NA             0           0.0
+
+ has_j9690                       numeric             NA             0           0.0
+ has_j9691                       numeric             NA             0           0.0
+ other_abn_of_br                 haven_labelled      NA             0           0.0
+ cfdo                            haven_labelled      NA             0           0.0
+ has_i50_acute                   numeric             NA             0           0.0
+
+ acute_nmd                       haven_labelled      NA             0           0.0
+ sepsis_dx                       haven_labelled      NA             0           0.0
+ stupor_dx                       haven_labelled      NA             0           0.0
+ cog_signs_dx                    haven_labelled      NA             0           0.0
+ mal_fat_dx                      haven_labelled      NA             0           0.0
+
+ resp_acid_dx                    haven_labelled      NA             0           0.0
+ sleep_hypovent_dx               haven_labelled      NA             0           0.0
+ cchs_dx                         haven_labelled      NA             0           0.0
+ other_sleep_hypovent_dx         haven_labelled      NA             0           0.0
+ acidosis_unspec                 haven_labelled      NA             0           0.0
+
+ headache_dx                     haven_labelled      NA             0           0.0
+ cpap                            haven_labelled      NA             0           0.0
+ tte_proc                        haven_labelled      NA             0           0.0
+ aero                            haven_labelled      NA             0           0.0
+ inh_teaching                    haven_labelled      NA             0           0.0
+
+ cxr1v                           haven_labelled      NA             0           0.0
+ cxr2v                           haven_labelled      NA             0           0.0
+ ctcnoncon                       haven_labelled      NA             0           0.0
+ ctccon                          haven_labelled      NA             0           0.0
+ cc_time                         haven_labelled      NA             0           0.0
+
+
+
+
+                                         5
+(continued)
+ variable                 class            nlevels   n_missing   pct_missing
+
+ meas_venous_o2_proc      haven_labelled      NA             0           0.0
+ meas_arterial_gas_proc   haven_labelled      NA             0           0.0
+ blood_cx_proc            haven_labelled      NA             0           0.0
+ art_punct_proc           haven_labelled      NA             0           0.0
+ ctabdpelv                haven_labelled      NA             0           0.0
+
+ osa                      haven_labelled      NA             0           0.0
+ asthma                   haven_labelled      NA             0           0.0
+ copd                     haven_labelled      NA             0           0.0
+ chf                      haven_labelled      NA             0           0.0
+ stroke                   haven_labelled      NA             0           0.0
+
+ ckd                      haven_labelled      NA             0           0.0
+ pvd                      haven_labelled      NA             0           0.0
+ oud                      haven_labelled      NA             0           0.0
+ sedatives                haven_labelled      NA             0           0.0
+ phtn                     haven_labelled      NA             0           0.0
+
+ polycy                   haven_labelled      NA             0           0.0
+ po_steroid               haven_labelled      NA             0           0.0
+ narcan                   haven_labelled      NA             0           0.0
+ inpt_inh                 haven_labelled      NA             0           0.0
+ vasodilators             haven_labelled      NA             0           0.0
+
+ ip_diuretics             haven_labelled      NA             0           0.0
+ ip_abx                   haven_labelled      NA             0           0.0
+ paralytic                haven_labelled      NA             0           0.0
+ op_diuretics             haven_labelled      NA             0           0.0
+ op_opiate                haven_labelled      NA             0           0.0
+
+ op_mat                   haven_labelled      NA             0           0.0
+ op_nrt                   haven_labelled      NA             0           0.0
+ copd_med                 haven_labelled      NA             0           0.0
+ muscle_relax             haven_labelled      NA             0           0.0
+ pat_enc_hash             character           NA             0           0.0
+
+ ABG_rfs                  numeric             NA             0           0.0
+ is_amb                   numeric             NA             0           0.0
+ encounter_date           Date                NA             0           0.0
+ age_by_ten               numeric             NA             0           0.0
+ age_decade               haven_labelled      NA             0           0.0
+
+ death_date               numeric             NA        442670          85.9
+ died                     numeric             NA             0           0.0
+ months_death_or_cens     numeric             NA             0           0.0
+ curr_weight              numeric             NA        165371          32.1
+ curr_weight_date         numeric             NA        165371          32.1
+
+ prev_weight_date         numeric             NA        467651          90.8
+ curr_height_date         numeric             NA        140373          27.2
+ prev_height_date         numeric             NA        444630          86.3
+ curr_bmi_date            numeric             NA        293543          57.0
+ prev_bmi_date            numeric             NA        481435          93.4
+
+ height                   numeric             NA        139896          27.1
+
+
+
+
+                                  6
+(continued)
+ variable                class            nlevels   n_missing   pct_missing
+
+ height_date             numeric             NA        139896          27.1
+ weight                  numeric             NA        164749          32.0
+ weight_date             numeric             NA        164749          32.0
+ calc_bmi                numeric             NA        217086          42.1
+
+ calc_bmi_date           numeric             NA        217086          42.1
+ working_bmi             numeric             NA        293077          56.9
+ working_bmi_date        numeric             NA        293077          56.9
+ bmi                     numeric             NA        178408          34.6
+ bmi_date                numeric             NA        178408          34.6
+
+ bmi_int                 numeric             NA        178408          34.6
+ bmi_by_five             numeric             NA        178408          34.6
+ rr                      numeric             NA        280882          54.5
+ rr_date                 numeric             NA        280178          54.4
+ temp_new                numeric             NA        247068          47.9
+
+ new_temp_date           numeric             NA        247068          47.9
+ sbp                     numeric             NA        153161          29.7
+ sbp_date                numeric             NA        153109          29.7
+ dbp                     numeric             NA        154565          30.0
+ dbp_date                numeric             NA        153947          29.9
+
+ spo2_date               numeric             NA        362232          70.3
+ hr_date                 numeric             NA        186689          36.2
+ abg_ph_date             numeric             NA        403295          78.3
+ vbg_ph_date             numeric             NA        368298          71.5
+ abg_hco3_date           numeric             NA        397287          77.1
+
+ abg_hco3_int            numeric             NA        399175          77.5
+ vbg_hco3_date           numeric             NA        377176          73.2
+ sodium_date             numeric             NA         27364           5.3
+ serum_k_date            numeric             NA         41266           8.0
+ hgb_date                numeric             NA         41958           8.1
+
+ wbc_date                numeric             NA         78201          15.2
+ plt_date                numeric             NA         34562           6.7
+ serum_hco3_date         numeric             NA         29211           5.7
+ any_bicarb              numeric             NA         24229           4.7
+ int_bicarb              numeric             NA         24229           4.7
+
+ hco3_cat                haven_labelled      NA         29886           5.8
+ serum_cl_date           numeric             NA         30426           5.9
+ serum_cr_date           numeric             NA         44553           8.6
+ serum_lac_date          numeric             NA        303601          58.9
+ vbg_co2_date            numeric             NA        365290          70.9
+
+ pco2_nos_date           numeric             NA        456701          88.6
+ highest_vbg_co2_date    numeric             NA        365290          70.9
+ highest_pco2_nos_date   numeric             NA        456701          88.6
+ paco2                   numeric             NA        328044          63.7
+ paco2_date_1            numeric             NA        391237          75.9
+
+ paco2_date_2            numeric             NA        464888          90.2
+ paco2_date_3            numeric             NA        492167          95.5
+ paco2_date              numeric             NA        327769          63.6
+
+
+
+
+                                 7
+(continued)
+ variable                    class            nlevels   n_missing   pct_missing
+
+ paco2_int                   numeric             NA        328044          63.7
+ highest_paco2               numeric             NA        327874          63.6
+
+ paco2_date_highest_1        numeric             NA        391237          75.9
+ paco2_date_highest_2        numeric             NA        464888          90.2
+ paco2_date_highest_3        numeric             NA        492167          95.5
+ paco2_date_highest          numeric             NA        327769          63.6
+ temp_cor_oxygen_date        numeric             NA        503283          97.7
+
+ temp_cor_vbg_ph_date        numeric             NA        505919          98.2
+ vbg_po2_date                numeric             NA        379278          73.6
+ vbg_lactate_date            numeric             NA        496471          96.3
+ vbg_hco3_calc_date          numeric             NA        499587          97.0
+ abg_po2_date                numeric             NA        396580          77.0
+
+ abg_po2_temp_cor_date       numeric             NA        490728          95.2
+ abg_ph_temp_cor_date        numeric             NA        492455          95.6
+ abg_lactate_date            numeric             NA        497087          96.5
+ ph_blood_date               numeric             NA        462049          89.7
+ po2_blood_date              numeric             NA        465726          90.4
+
+ vbg_temp_date               numeric             NA        515286         100.0
+ abg_temp_date               numeric             NA        514024          99.8
+ vbg_o2sat_date              numeric             NA        444126          86.2
+ abg_o2sat_date              numeric             NA        392675          76.2
+ sao2_blood_date             numeric             NA        486011          94.3
+
+ paco2_flag                  haven_labelled      NA        328044          63.7
+ highest_paco2_flag          haven_labelled      NA        327874          63.6
+ paco2_52_flag               haven_labelled      NA        328044          63.7
+ vbg_co2_flag                haven_labelled      NA        365623          71.0
+ highest_vbg_co2_flag        haven_labelled      NA        365405          70.9
+
+ miss_paco2_flag             numeric             NA             0           0.0
+ miss_vbg_co2_flag           numeric             NA             0           0.0
+ miss_vbg_or_abg_co2_flag    numeric             NA             0           0.0
+ hco3_flag                   haven_labelled      NA         29886           5.8
+ not_paco2_flag              numeric             NA        328044          63.7
+
+ not_hco3_flag               numeric             NA         29886           5.8
+ k_cat                       haven_labelled      NA         41266           8.0
+ acidemia                    haven_labelled      NA        226898          44.0
+ abg_sbe                     numeric             NA        403849          78.4
+ vbg_sbe                     numeric             NA        380593          73.9
+
+ cw_simple_acute_resp_acid   haven_labelled      NA        430833          83.6
+ paco2_52_comp_flag          haven_labelled      NA        328182          63.7
+ po_steroid_date             numeric             NA        287672          55.8
+ narcan_date                 numeric             NA        415588          80.7
+ inpt_inh_date               numeric             NA        300387          58.3
+
+ vasodilators_date           numeric             NA        513133          99.6
+ ip_diuretics_date           numeric             NA        508163          98.6
+ ip_abx_date                 numeric             NA        503504          97.7
+ paralytic_date              numeric             NA        510313          99.0
+ inpt_inh_0                  numeric             NA             0           0.0
+
+
+
+
+                                     8
+(continued)
+ variable                  class            nlevels   n_missing   pct_missing
+
+ ip_abx_0                  numeric             NA             0           0.0
+ ip_diuretics_0            numeric             NA             0           0.0
+ narcan_0                  numeric             NA             0           0.0
+ paralytic_0               numeric             NA             0           0.0
+ po_steroid_0              numeric             NA             0           0.0
+
+ vasodilators_0            numeric             NA             0           0.0
+ op_diuretics_first_date   numeric             NA        323611          62.8
+ op_diuretics_last_date    numeric             NA        324112          62.9
+ op_diuretics_365d         haven_labelled      NA             0           0.0
+ op_opiate_first_date      numeric             NA        193204          37.5
+
+ op_opiate_last_date       numeric             NA        194463          37.7
+ op_opiate_365d            haven_labelled      NA             0           0.0
+ op_mat_first_date         numeric             NA        495217          96.1
+ op_mat_last_date          numeric             NA        495254          96.1
+ op_mat_365d               haven_labelled      NA             0           0.0
+
+ op_nrt_first_date         numeric             NA        454913          88.3
+ op_nrt_last_date          numeric             NA        455043          88.3
+ op_nrt_365d               haven_labelled      NA             0           0.0
+ copd_med_first_date       numeric             NA        266730          51.8
+ copd_med_last_date        numeric             NA        267166          51.8
+
+ copd_med_365d             haven_labelled      NA             0           0.0
+ muscle_relax_first_date   numeric             NA        395722          76.8
+ muscle_relax_last_date    numeric             NA        396039          76.9
+ muscle_relax_365d         haven_labelled      NA             0           0.0
+ tte_proc_first_date       numeric             NA        452581          87.8
+
+ tte_proc_last_date        numeric             NA        452581          87.8
+ vent_proc                 haven_labelled      NA             0           0.0
+ niv_proc                  haven_labelled      NA             0           0.0
+ imv_proc                  haven_labelled      NA             0           0.0
+ cpap_first_date           numeric             NA        482902          93.7
+
+ cpap_last_date            numeric             NA        482902          93.7
+ niv_proc_first_date       numeric             NA        481270          93.4
+ niv_proc_last_date        numeric             NA        481270          93.4
+ imv_proc_first_date       numeric             NA        457288          88.7
+ imv_proc_last_date        numeric             NA        457288          88.7
+
+ vent_proc_first_date      numeric             NA        429912          83.4
+ vent_proc_last_date       numeric             NA        429912          83.4
+ aero_first_date           numeric             NA        451209          87.6
+ aero_last_date            numeric             NA        451209          87.6
+ inh_teaching_first_date   numeric             NA        501058          97.2
+
+ inh_teaching_last_date    numeric             NA        501058          97.2
+ cxr1v_first_date          numeric             NA        372024          72.2
+ cxr1v_last_date           numeric             NA        372024          72.2
+ cxr2v_first_date          numeric             NA        499270          96.9
+ cxr2v_last_date           numeric             NA        499270          96.9
+
+ ctcnoncon_first_date      numeric             NA        499270          96.9
+
+
+
+
+                                   9
+(continued)
+ variable                         class            nlevels   n_missing   pct_missing
+
+ ctcnoncon_last_date              numeric             NA        499270          96.9
+ ctccon_first_date                numeric             NA        492965          95.7
+ ctccon_last_date                 numeric             NA        492965          95.7
+ ctabdpelv_first_date             numeric             NA        486766          94.5
+
+ ctabdpelv_last_date              numeric             NA        486766          94.5
+ meas_venous_o2_proc_first_date   numeric             NA        508205          98.6
+ meas_venous_o2_proc_last_date    numeric             NA        508205          98.6
+ meas_art_gas_proc_first_date     numeric             NA        510877          99.1
+ meas_art_gas_proc_last_date      numeric             NA        510877          99.1
+
+ blood_cx_proc_first_date         numeric             NA        446710          86.7
+ blood_cx_proc_last_date          numeric             NA        446710          86.7
+ art_punct_proc_first_date        numeric             NA        485498          94.2
+ art_punct_proc_last_date         numeric             NA        485498          94.2
+ cc_time_first_date               numeric             NA        397143          77.1
+
+ cc_time_last_date                numeric             NA        397143          77.1
+ aero_0                           numeric             NA             0           0.0
+ blood_cx_proc_0                  numeric             NA             0           0.0
+ cc_time_0                        numeric             NA             0           0.0
+ cpap_0                           numeric             NA             0           0.0
+
+ ctabdpelv_0                      numeric             NA             0           0.0
+ ctccon_0                         numeric             NA             0           0.0
+ ctcnoncon_0                      numeric             NA             0           0.0
+ cxr1v_0                          numeric             NA             0           0.0
+ cxr2v_0                          numeric             NA             0           0.0
+
+ imv_proc_0                       numeric             NA             0           0.0
+ inh_teaching_0                   numeric             NA             0           0.0
+ niv_proc_0                       numeric             NA             0           0.0
+ tte_proc_0                       numeric             NA             0           0.0
+ vent_proc_0                      numeric             NA             0           0.0
+
+ aero_dur                         numeric             NA        451209          87.6
+ blood_cx_proc_dur                numeric             NA        446710          86.7
+ cpap_dur                         numeric             NA        482902          93.7
+ ctabdpelv_dur                    numeric             NA        486766          94.5
+ ctccon_dur                       numeric             NA        492965          95.7
+
+ ctcnoncon_dur                    numeric             NA        499270          96.9
+ cxr1v_dur                        numeric             NA        372024          72.2
+ cxr2v_dur                        numeric             NA        499270          96.9
+ imv_proc_dur                     numeric             NA        457288          88.7
+ inh_teaching_dur                 numeric             NA        501058          97.2
+
+ niv_proc_dur                     numeric             NA        481270          93.4
+ tte_proc_dur                     numeric             NA        452581          87.8
+ hypercap_resp_failure            haven_labelled      NA             0           0.0
+ j9612_date                       numeric             NA        512682          99.5
+ j9612_pcpl                       haven_labelled      NA        512714          99.5
+
+ j9612_adm                        haven_labelled      NA        512682          99.5
+ j9612_vr                         haven_labelled      NA        512682          99.5
+ j9622_date                       numeric             NA        504203          97.8
+
+
+
+
+                                          10
+(continued)
+ variable                       class            nlevels   n_missing   pct_missing
+
+ j9622_pcpl                     haven_labelled      NA        504423          97.9
+ j9622_adm                      haven_labelled      NA        504203          97.8
+
+ j9622_vr                       haven_labelled      NA        504203          97.8
+ j9602_date                     numeric             NA        499008          96.8
+ j9602_pcpl                     haven_labelled      NA        499256          96.9
+ j9602_adm                      haven_labelled      NA        499008          96.8
+ j9602_vr                       haven_labelled      NA        499008          96.8
+
+ j9692_date                     numeric             NA        512967          99.5
+ j9692_pcpl                     haven_labelled      NA        513002          99.6
+ j9692_adm                      haven_labelled      NA        512967          99.5
+ j9692_vr                       haven_labelled      NA        512967          99.5
+ ohs_code_date                  numeric             NA        510437          99.1
+
+ e662_pcpl                      haven_labelled      NA        510465          99.1
+ e662_adm                       haven_labelled      NA        510437          99.1
+ e662_vr                        haven_labelled      NA        510437          99.1
+ hypercap_resp_failure_date     numeric             NA        486277          94.4
+ other_resp_failure             haven_labelled      NA             0           0.0
+
+ j9600_date                     numeric             NA        498237          96.7
+ j9601_date                     numeric             NA        419016          81.3
+ j961_date                      numeric             NA        515286         100.0
+ j9610_date                     numeric             NA        512187          99.4
+ j9611_date                     numeric             NA        503398          97.7
+
+ j962_date                      numeric             NA        515285         100.0
+ j9620_date                     numeric             NA        512378          99.4
+ j9621_date                     numeric             NA        490196          95.1
+ j9690_date                     numeric             NA        503098          97.6
+ j9691_date                     numeric             NA        508298          98.6
+
+ other_resp_failure_date        numeric             NA        379905          73.7
+ sepsis_dx_date                 numeric             NA        455531          88.4
+ stupor_dx_date                 numeric             NA        503022          97.6
+ cog_signs_dx_date              numeric             NA        465006          90.2
+ mal_fat_dx_date                numeric             NA        459829          89.2
+
+ resp_acid_dx_date              numeric             NA        511646          99.3
+ sleep_hypovent_dx_date         numeric             NA        514621          99.9
+ cchs_dx_date                   numeric             NA        515261         100.0
+ other_sleep_hypovent_dx_date   numeric             NA        515095         100.0
+ acidosis_unspec_date           numeric             NA        499014          96.8
+
+ headache_dx_date               numeric             NA        499348          96.9
+ dysp_dx                        haven_labelled      NA             0           0.0
+ dysp_dx_date                   numeric             NA        444349          86.2
+ symp_obs                       haven_labelled      NA             0           0.0
+ symp_obs_date                  numeric             NA        511296          99.2
+
+ abn_br_dx                      haven_labelled      NA             0           0.0
+ abn_br_dx_date                 numeric             NA        514773          99.9
+ resp_abnormality               haven_labelled      NA             0           0.0
+ r0689_date                     numeric             NA        506638          98.3
+ resp_abnormality_date          numeric             NA        505787          98.2
+
+
+
+
+                                        11
+(continued)
+ variable               class            nlevels   n_missing   pct_missing
+
+ other_abn_of_br_date   numeric             NA        506638          98.3
+ fast_br                haven_labelled      NA             0           0.0
+ fast_br_date           numeric             NA        512323          99.4
+ pulm_edema_dx          haven_labelled      NA             0           0.0
+ pulm_edema_dx_date     numeric             NA        497140          96.5
+
+ pna_dx                 haven_labelled      NA             0           0.0
+ pna_dx_date            numeric             NA        442180          85.8
+ acute_chf              numeric             NA             0           0.0
+ acute_old              haven_labelled      NA             0           0.0
+ acute_old_date         numeric             NA             0           0.0
+
+ resp_dep_compl         haven_labelled      NA             0           0.0
+ resp_dep_compl_date    numeric             NA        497438          96.5
+ acute_nmd_date         numeric             NA        514526          99.9
+ osa_first_date         numeric             NA        424714          82.4
+ osa_last_date          numeric             NA        424825          82.4
+
+ asthma_first_date      numeric             NA        445430          86.4
+ asthma_last_date       numeric             NA        445526          86.5
+ copd_first_date        numeric             NA        414685          80.5
+ copd_last_date         numeric             NA        414815          80.5
+ chf_first_date         numeric             NA        413100          80.2
+
+ chf_last_date          numeric             NA        413381          80.2
+ stroke_first_date      numeric             NA        476873          92.5
+ stroke_last_date       numeric             NA        476965          92.6
+ ckd_first_date         numeric             NA        423881          82.3
+ ckd_last_date          numeric             NA        424048          82.3
+
+ ctd                    haven_labelled      NA             0           0.0
+ ctd_first_date         numeric             NA        490156          95.1
+ ctd_last_date          numeric             NA        490181          95.1
+ dem                    haven_labelled      NA             0           0.0
+ dem_first_date         numeric             NA        483539          93.8
+
+ dem_last_date          numeric             NA        483581          93.8
+ dm                     haven_labelled      NA             0           0.0
+ dm_first_date          numeric             NA        366008          71.0
+ dm_last_date           numeric             NA        366317          71.1
+ pvd_first_date         numeric             NA        468607          90.9
+
+ pvd_last_date          numeric             NA        468630          90.9
+ oud_first_date         numeric             NA        485988          94.3
+ oud_last_date          numeric             NA        486058          94.3
+ sedatives_first_date   numeric             NA        509487          98.9
+ sedatives_last_date    numeric             NA        509498          98.9
+
+ cfdo_first_date        numeric             NA        514381          99.8
+ cfdo_last_date         numeric             NA        514382          99.8
+ phtn_first_date        numeric             NA        473288          91.8
+ phtn_last_date         numeric             NA        473346          91.9
+ polycy_first_date      numeric             NA        509795          98.9
+
+ polycy_last_date       numeric             NA        509802          98.9
+
+
+
+
+                                12
+(continued)
+ variable                       class            nlevels   n_missing   pct_missing
+
+ nmd                            haven_labelled      NA             0           0.0
+ nmd_first_date                 numeric             NA        494958          96.1
+ nmd_last_date                  numeric             NA        494979          96.1
+ nic                            haven_labelled      NA             0           0.0
+
+ nic_first_date                 numeric             NA        390996          75.9
+ nic_last_date                  numeric             NA        391105          75.9
+ ovs                            haven_labelled      NA             0           0.0
+ ats_ohs_flag                   numeric             NA        454694          88.2
+ pos_ohs_flag                   numeric             NA             0           0.0
+
+ ats_copd_flag                  numeric             NA        457473          88.8
+ guidelines                     haven_labelled      NA        457473          88.8
+ OBESITY_rfs                    numeric             NA             0           0.0
+ _merge_amb_obes                haven_labelled      NA        515286         100.0
+ PREDISPOSITION_rfs             numeric             NA             0           0.0
+
+ _merge_amb_predisp             haven_labelled      NA        515286         100.0
+ RESPFAIL_rfs                   numeric             NA             0           0.0
+ _merge_amb_respfail            haven_labelled      NA        515286         100.0
+ VBG_rfs                        numeric             NA             0           0.0
+ _merge_amb_vbg                 haven_labelled      NA        515285         100.0
+
+ VENTSUPPORT_rfs                numeric             NA             0           0.0
+ _merge_amb_ventsupp            haven_labelled      NA        515285         100.0
+ is_emer                        numeric             NA             0           0.0
+ _merge_emer_obes               haven_labelled      NA        468722          91.0
+ _merge_emer_predisp            haven_labelled      NA        387835          75.3
+
+ _merge_emer_respfail           haven_labelled      NA        382209          74.2
+ _merge_emer_vbg                haven_labelled      NA        345973          67.1
+ _merge_emer_ventsupp           haven_labelled      NA        343472          66.7
+ _merge_emer                    haven_labelled      NA        343472          66.7
+ is_inp                         haven_labelled      NA        171727          33.3
+
+ _merge_inpat_obes              haven_labelled      NA        370902          72.0
+ _merge_inpat_predisp           haven_labelled      NA        257863          50.0
+ _merge_inpat_respfail          haven_labelled      NA        227715          44.2
+ _merge_inpat_vbg               haven_labelled      NA        184352          35.8
+ _merge_inpat_ventsupp          haven_labelled      NA        171727          33.3
+
+ _merge_inpat                   haven_labelled      NA             0           0.0
+ patient_id                     numeric             NA             0           0.0
+ rfsgroup                       haven_labelled      NA             0           0.0
+ encounter_type                 factor               2             0           0.0
+ first_encounter                haven_labelled      NA             0           0.0
+
+ has_abg                        integer             NA             0           0.0
+ has_vbg                        integer             NA             0           0.0
+ max_hco3_or_its_met_alk        numeric             NA        328044          63.7
+ prim_met_alk                   numeric             NA        457473          88.8
+ max_hco3_or_its_comb_met_alk   numeric             NA        328044          63.7
+
+ combo_met_alk                  numeric             NA        457473          88.8
+ alkalemia                      numeric             NA        226898          44.0
+ paco2_flag_and_alk             numeric             NA        457473          88.8
+
+
+
+
+                                        13
+(continued)
+ variable                  class            nlevels   n_missing   pct_missing
+
+ paco2_50_flag             haven_labelled      NA        328044          63.7
+ hypercap_dx_adm_flag      numeric             NA        486277          94.4
+
+ hypercap_dx_pcpl_flag     numeric             NA        486595          94.4
+ hypercap_dx_vr_flag       numeric             NA        486277          94.4
+ hypercap_on_abg           numeric             NA             0           0.0
+ hypercap_on_vbg           numeric             NA             0           0.0
+ has_both_abg_vbg          haven_labelled      NA             0           0.0
+
+ has_neither_abg_vbg       haven_labelled      NA             0           0.0
+ vbg_or_abg_co2_flag       haven_labelled      NA             0           0.0
+ dx_hypercap_on_abg        numeric             NA        486277          94.4
+ sugg_hypercap_dx_on_vbg   numeric             NA        486277          94.4
+ dx_hypercap_on_vbg        numeric             NA        486277          94.4
+
+ vbg_o2sat_calc            numeric             NA             0           0.0
+ abg_o2sat_calc            numeric             NA             0           0.0
+ corr_vbg_co2              numeric             NA        365623          71.0
+ corr_vbg_co2_flag         haven_labelled      NA        365623          71.0
+ corr_hypercap_on_vbg      numeric             NA             0           0.0
+
+ race_ethnicity            factor               7             0           0.0
+ has_vbg_and_cat           haven_labelled      NA             0           0.0
+ has_bmi_and_cat           haven_labelled      NA             0           0.0
+ has_weight_and_cat        haven_labelled      NA             0           0.0
+ has_height_and_cat        haven_labelled      NA             0           0.0
+
+ has_hr_and_cat            haven_labelled      NA             0           0.0
+ has_sbp_and_cat           haven_labelled      NA             0           0.0
+ has_rr_and_cat            haven_labelled      NA             0           0.0
+ has_temp_and_cat          haven_labelled      NA             0           0.0
+ has_spo2_and_cat          haven_labelled      NA             0           0.0
+
+ has_cl_and_cat            haven_labelled      NA             0           0.0
+ has_k_and_cat             haven_labelled      NA             0           0.0
+ has_hco3_and_cat          haven_labelled      NA             0           0.0
+ has_lactate_and_cat       haven_labelled      NA             0           0.0
+ has_na_and_cat            haven_labelled      NA             0           0.0
+
+ has_cr_and_cat            haven_labelled      NA             0           0.0
+ has_hgb_and_cat           haven_labelled      NA             0           0.0
+ has_wbc_and_cat           haven_labelled      NA             0           0.0
+ has_plt_and_cat           haven_labelled      NA             0           0.0
+ has_bnp_and_cat           haven_labelled      NA             0           0.0
+
+ has_phos_and_cat          haven_labelled      NA             0           0.0
+ has_ca_and_cat            haven_labelled      NA             0           0.0
+ has_alb_and_cat           haven_labelled      NA             0           0.0
+ has_tprot_and_cat         haven_labelled      NA             0           0.0
+ encounter_type_dummy1     numeric             NA             0           0.0
+
+ encounter_type_dummy2     numeric             NA             0           0.0
+ encounter_type_dummy3     numeric             NA             0           0.0
+ female                    haven_labelled      NA             0           0.0
+ male                      numeric             NA             0           0.0
+ white_race                numeric             NA             0           0.0
+
+
+
+
+                                   14
+(continued)
+ variable                 class        nlevels   n_missing   pct_missing
+
+ black_race               numeric         NA             0           0.0
+ unknown_race             numeric         NA             0           0.0
+ asian_race               numeric         NA             0           0.0
+ nat_am_race              numeric         NA             0           0.0
+ nhpi_race                numeric         NA             0           0.0
+
+ not_hisp_eth             numeric         NA             0           0.0
+ hisp_eth                 numeric         NA             0           0.0
+ unknown_eth              numeric         NA             0           0.0
+ location_dummy1          numeric         NA             0           0.0
+ location_dummy2          numeric         NA             0           0.0
+
+ location_dummy3          numeric         NA             0           0.0
+ location_dummy4          numeric         NA             0           0.0
+ ps                       numeric         NA             0           0.0
+ tx_pr_decile             numeric         NA             0           0.0
+ ps_trunc                 numeric         NA             0           0.0
+
+ sumofweights             numeric         NA             0           0.0
+ ipw                      numeric         NA             0           0.0
+ stabilized_weight        numeric         NA             0           0.0
+ approx_ipw_fweight       numeric         NA             0           0.0
+ vbg_ps                   numeric         NA             0           0.0
+
+ vbg_tx_pr_decile         numeric         NA             0           0.0
+ vbg_ps_trunc             numeric         NA             0           0.0
+ vbg_sumofweights         numeric         NA             0           0.0
+ vbg_ipw                  numeric         NA             0           0.0
+ vbg_stabilized_weight    numeric         NA             0           0.0
+
+ vbg_approx_ipw_fweight   numeric         NA             0           0.0
+
+
+
+
+                                  15
+                                  Run metadata (pilot vs full)
+
+
+     run_id            run_mode    pilot_frac   mi_ram_gb        mi_ram_gb_source    mi_batch_threshold
+
+     20260419_112645   full                1              16     auto:Darwin                     2e+05
+
+
+
+                mi_batch_start    mi_batch_start_source        full_n   sampled_n   subset_n
+
+                              2   auto:auto:Darwin             833476      833476     515286
+
+
+
+
+16
+Codebook artifact path: Results/codebookr.docx. Generation is skipped in pilot mode to keep notebook validation renders fast.
+
+
+1.1.2 Outcome Variable Creation
+
+
+     0           1
+461485       53801
+
+
+
+      0       1
+0.89559 0.10441
+
+   Min. 1st Qu.          Median     Mean 3rd Qu.           Max.
+ 0.0000 0.0000           0.0000   0.1044 0.0000          1.0000
+
+
+1.2 Baseline tables
+
+                                                                            ABG cohorts
+
+
+ Variable                                       **Overall** N = 515,286                           **No ABG** N = 328,044                              **ABG** N = 187,242
+
+ Age                                    59.2 ± 17.7; 0.0/515,286.0 missing (0.0%)          58.1 ± 18.1; 0.0/328,044.0 missing (0.0%)         61.2 ± 16.9; 0.0/187,242.0 missing (0.0%)
+ BMI                                 31.1 ± 8.4; 293,545.0/515,286.0 missing (57.0%)    32.3 ± 8.7; 184,223.0/328,044.0 missing (56.2%)   29.0 ± 7.2; 109,322.0/187,242.0 missing (58.4%)
+ Sex
+ Female                                              253,906 (49%)                                      169,023 (52%)                                     84,883 (45%)
+ Male                                                261,380 (51%)                                      159,021 (48%)                                     102,359 (55%)
+
+ Race/Ethnicity
+ White                                               321,174 (62%)                                      200,033 (61%)                                     121,141 (65%)
+ Black or African American                            89,697 (17%)                                      62,418 (19%)                                      27,279 (15%)
+ Hispanic                                            33,769 (6.6%)                                      23,548 (7.2%)                                     10,221 (5.5%)
+ Asian                                                8,408 (1.6%)                                       4,880 (1.5%)                                      3,528 (1.9%)
+
+ American Indian                                      4,055 (0.8%)                                       1,971 (0.6%)                                      2,084 (1.1%)
+ Pacific Islander                                      678 (0.1%)                                         460 (0.1%)                                        218 (0.1%)
+ Unknown                                              57,505 (11%)                                       34,734 (11%)                                      22,771 (12%)
+ Location
+ South                                               242,266 (47%)                                      138,843 (42%)                                     103,423 (55%)
+
+ Northeast                                           129,446 (25%)                                      93,209 (28%)                                      36,237 (19%)
+ Midwest                                             38,471 (7.5%)                                      22,924 (7.0%)                                     15,547 (8.3%)
+ West                                                105,103 (20%)                                      73,068 (22%)                                      32,035 (17%)
+ OSA                                                  90,327 (18%)                                      60,653 (18%)                                      29,674 (16%)
+
+
+
+
+                                                                                       17
+(continued)
+ Variable                               **Overall** N = 515,286                           **No ABG** N = 328,044                              **ABG** N = 187,242
+
+ Asthma                                       69,773 (14%)                                       48,456 (15%)                                      21,317 (11%)
+
+ COPD                                        100,255 (19%)                                      60,214 (18%)                                      40,041 (21%)
+ CHF                                         101,458 (20%)                                      59,770 (18%)                                      41,688 (22%)
+ NMD                                         20,239 (3.9%)                                      11,891 (3.6%)                                     8,348 (4.5%)
+ PHTN                                        41,714 (8.1%)                                      23,854 (7.3%)                                     17,860 (9.5%)
+ CKD                                          91,146 (18%)                                      54,528 (17%)                                      36,618 (20%)
+
+ Diabetes                                    148,954 (29%)                                       93,007 (28%)                                      55,947 (30%)
+ Encounter Type
+ Emergency                                   171,727 (33%)                                      142,713 (44%)                                     29,014 (15%)
+ Inpatient                                   343,559 (67%)                                      185,331 (56%)                                     158,228 (85%)
+
+
+
+
+                                                                    VBG cohorts
+
+
+ Variable                               **Overall** N = 515,286                           **No VBG** N = 365,623                              **VBG** N = 149,663
+
+ Age                            59.2 ± 17.7; 0.0/515,286.0 missing (0.0%)          59.4 ± 17.8; 0.0/365,623.0 missing (0.0%)         58.9 ± 17.5; 0.0/149,663.0 missing (0.0%)
+ BMI                         31.1 ± 8.4; 293,545.0/515,286.0 missing (57.0%)    31.8 ± 8.5; 192,892.0/365,623.0 missing (52.8%)   28.8 ± 7.4; 100,653.0/149,663.0 missing (67.3%)
+ Sex
+ Female                                      253,906 (49%)                                      184,619 (50%)                                      69,287 (46%)
+ Male                                        261,380 (51%)                                      181,004 (50%)                                      80,376 (54%)
+
+ Race/Ethnicity
+ White                                       321,174 (62%)                                      241,114 (66%)                                     80,060 (53%)
+ Black or African American                    89,697 (17%)                                      61,814 (17%)                                      27,883 (19%)
+ Hispanic                                    33,769 (6.6%)                                      22,951 (6.3%)                                     10,818 (7.2%)
+ Asian                                        8,408 (1.6%)                                       5,439 (1.5%)                                     2,969 (2.0%)
+
+ American Indian                              4,055 (0.8%)                                      2,128 (0.6%)                                       1,927 (1.3%)
+ Pacific Islander                              678 (0.1%)                                        543 (0.1%)                                        135 (<0.1%)
+ Unknown                                      57,505 (11%)                                      31,634 (8.7%)                                      25,871 (17%)
+ Location
+ South                                       242,266 (47%)                                      196,774 (54%)                                      45,492 (30%)
+
+ Northeast                                   129,446 (25%)                                      65,537 (18%)                                      63,909 (43%)
+ Midwest                                     38,471 (7.5%)                                      24,891 (6.8%)                                     13,580 (9.1%)
+ West                                        105,103 (20%)                                      78,421 (21%)                                      26,682 (18%)
+ OSA                                          90,327 (18%)                                      65,748 (18%)                                      24,579 (16%)
+ Asthma                                       69,773 (14%)                                      49,810 (14%)                                      19,963 (13%)
+
+ COPD                                        100,255 (19%)                                      70,950 (19%)                                      29,305 (20%)
+ CHF                                         101,458 (20%)                                      68,964 (19%)                                      32,494 (22%)
+ NMD                                         20,239 (3.9%)                                      14,796 (4.0%)                                     5,443 (3.6%)
+ PHTN                                        41,714 (8.1%)                                      27,731 (7.6%)                                     13,983 (9.3%)
+ CKD                                          91,146 (18%)                                      61,091 (17%)                                      30,055 (20%)
+
+ Diabetes                                    148,954 (29%)                                      101,173 (28%)                                      47,781 (32%)
+ Encounter Type
+ Emergency                                   171,727 (33%)                                      124,405 (34%)                                     47,322 (32%)
+ Inpatient                                   343,559 (67%)                                      241,218 (66%)                                     102,341 (68%)
+
+
+
+
+                                                                               18
+                                         Baseline summary: Everyone and ABG status
+
+
+**Variable**                                   Everyone                              **Did not get ABG** N = 328,044                     **Did get ABG** N = 187,242
+
+__Age__                        59.2 ± 17.7; 0.0/515,286.0 missing (0.0%)          58.1 ± 18.1; 0.0/328,044.0 missing (0.0%)         61.2 ± 16.9; 0.0/187,242.0 missing (0.0%)
+__BMI__                     31.1 ± 8.4; 293,545.0/515,286.0 missing (57.0%)    32.3 ± 8.7; 184,223.0/328,044.0 missing (56.2%)   29.0 ± 7.2; 109,322.0/187,242.0 missing (58.4%)
+__Sex__
+Female                                      253,906 (49%)                                      169,023 (52%)                                     84,883 (45%)
+Male                                        261,380 (51%)                                      159,021 (48%)                                     102,359 (55%)
+
+__Race/Ethnicity__
+White                                       321,174 (62%)                                      200,033 (61%)                                     121,141 (65%)
+Black or African American                    89,697 (17%)                                      62,418 (19%)                                      27,279 (15%)
+Hispanic                                    33,769 (6.6%)                                      23,548 (7.2%)                                     10,221 (5.5%)
+Asian                                        8,408 (1.6%)                                       4,880 (1.5%)                                      3,528 (1.9%)
+
+American Indian                              4,055 (0.8%)                                       1,971 (0.6%)                                      2,084 (1.1%)
+Pacific Islander                              678 (0.1%)                                         460 (0.1%)                                        218 (0.1%)
+Unknown                                      57,505 (11%)                                       34,734 (11%)                                      22,771 (12%)
+__Location__
+South                                       242,266 (47%)                                      138,843 (42%)                                     103,423 (55%)
+
+Northeast                                   129,446 (25%)                                      93,209 (28%)                                      36,237 (19%)
+Midwest                                     38,471 (7.5%)                                      22,924 (7.0%)                                     15,547 (8.3%)
+West                                        105,103 (20%)                                      73,068 (22%)                                      32,035 (17%)
+__OSA__                                      90,327 (18%)                                      60,653 (18%)                                      29,674 (16%)
+__Asthma__                                   69,773 (14%)                                      48,456 (15%)                                      21,317 (11%)
+
+__COPD__                                    100,255 (19%)                                      60,214 (18%)                                      40,041 (21%)
+__CHF__                                     101,458 (20%)                                      59,770 (18%)                                      41,688 (22%)
+__NMD__                                     20,239 (3.9%)                                      11,891 (3.6%)                                     8,348 (4.5%)
+__PHTN__                                    41,714 (8.1%)                                      23,854 (7.3%)                                     17,860 (9.5%)
+__CKD__                                      91,146 (18%)                                      54,528 (17%)                                      36,618 (20%)
+
+__Diabetes__                                148,954 (29%)                                       93,007 (28%)                                      55,947 (30%)
+__Encounter Type__
+Emergency                                   171,727 (33%)                                      142,713 (44%)                                     29,014 (15%)
+Inpatient                                   343,559 (67%)                                      185,331 (56%)                                     158,228 (85%)
+
+
+
+
+                                         Baseline summary: Everyone and VBG status
+
+
+**Characteristic**                             Everyone                              **Did not get VBG** N = 365,623                     **Did get VBG** N = 149,663
+
+__Age__                        59.2 ± 17.7; 0.0/515,286.0 missing (0.0%)          59.4 ± 17.8; 0.0/365,623.0 missing (0.0%)         58.9 ± 17.5; 0.0/149,663.0 missing (0.0%)
+__BMI__                     31.1 ± 8.4; 293,545.0/515,286.0 missing (57.0%)    31.8 ± 8.5; 192,892.0/365,623.0 missing (52.8%)   28.8 ± 7.4; 100,653.0/149,663.0 missing (67.3%)
+__Sex__
+Female                                      253,906 (49%)                                      184,619 (50%)                                      69,287 (46%)
+Male                                        261,380 (51%)                                      181,004 (50%)                                      80,376 (54%)
+
+__Race/Ethnicity__
+White                                       321,174 (62%)                                      241,114 (66%)                                      80,060 (53%)
+
+
+
+
+                                                                              19
+(continued)
+ **Characteristic**                             Everyone                             **Did not get VBG** N = 365,623                     **Did get VBG** N = 149,663
+
+ Black or African American                   89,697 (17%)                                       61,814 (17%)                                      27,883 (19%)
+ Hispanic                                    33,769 (6.6%)                                      22,951 (6.3%)                                     10,818 (7.2%)
+ Asian                                        8,408 (1.6%)                                      5,439 (1.5%)                                      2,969 (2.0%)
+
+ American Indian                              4,055 (0.8%)                                      2,128 (0.6%)                                      1,927 (1.3%)
+ Pacific Islander                              678 (0.1%)                                        543 (0.1%)                                       135 (<0.1%)
+ Unknown                                      57,505 (11%)                                      31,634 (8.7%)                                     25,871 (17%)
+ __Location__
+ South                                       242,266 (47%)                                     196,774 (54%)                                      45,492 (30%)
+
+ Northeast                                   129,446 (25%)                                      65,537 (18%)                                      63,909 (43%)
+ Midwest                                     38,471 (7.5%)                                      24,891 (6.8%)                                     13,580 (9.1%)
+ West                                        105,103 (20%)                                      78,421 (21%)                                      26,682 (18%)
+ __OSA__                                      90,327 (18%)                                      65,748 (18%)                                      24,579 (16%)
+ __Asthma__                                   69,773 (14%)                                      49,810 (14%)                                      19,963 (13%)
+
+ __COPD__                                    100,255 (19%)                                      70,950 (19%)                                      29,305 (20%)
+ __CHF__                                     101,458 (20%)                                      68,964 (19%)                                      32,494 (22%)
+ __NMD__                                     20,239 (3.9%)                                      14,796 (4.0%)                                     5,443 (3.6%)
+ __PHTN__                                    41,714 (8.1%)                                      27,731 (7.6%)                                     13,983 (9.3%)
+ __CKD__                                      91,146 (18%)                                      61,091 (17%)                                      30,055 (20%)
+
+ __Diabetes__                                148,954 (29%)                                     101,173 (28%)                                      47,781 (32%)
+ __Encounter Type__
+ Emergency                                   171,727 (33%)                                     124,405 (34%)                                      47,322 (32%)
+ Inpatient                                   343,559 (67%)                                     241,218 (66%)                                      102,341 (68%)
+
+
+
+
+                                   Baseline summary by CO2 category within ABG cohort
+
+
+  **Variable**                          **Normal** N = 83,882                             **Low** N = 50,114                             **High** N = 53,246
+
+  __Age__                        60.8 ± 16.9; 0.0/83,882.0 missing (0.0%)       60.6 ± 17.5; 0.0/50,114.0 missing (0.0%)         62.3 ± 16.3; 0.0/53,246.0 missing (0.0%)
+  __BMI__                     29.0 ± 6.9; 48,349.0/83,882.0 missing (57.6%)   28.1 ± 6.8; 29,752.0/50,114.0 missing (59.4%)   29.8 ± 7.9; 31,221.0/53,246.0 missing (58.6%)
+  __Sex__
+  Female                                      36,696 (44%)                                    23,100 (46%)                                    25,087 (47%)
+  Male                                        47,186 (56%)                                    27,014 (54%)                                    28,159 (53%)
+
+  __Race/Ethnicity__
+  White                                       54,280 (65%)                                    30,194 (60%)                                    36,667 (69%)
+  Black or African American                   11,815 (14%)                                     7,938 (16%)                                    7,526 (14%)
+  Hispanic                                    4,661 (5.6%)                                    2,965 (5.9%)                                    2,595 (4.9%)
+  Asian                                       1,622 (1.9%)                                    1,180 (2.4%)                                     726 (1.4%)
+
+  American Indian                              925 (1.1%)                                     890 (1.8%)                                       269 (0.5%)
+  Pacific Islander                             91 (0.1%)                                       75 (0.1%)                                      52 (<0.1%)
+  Unknown                                     10,488 (13%)                                    6,872 (14%)                                     5,411 (10%)
+  __Location__
+  South                                       45,740 (55%)                                    27,885 (56%)                                    29,798 (56%)
+
+
+
+
+                                                                              20
+(continued)
+ **Variable**                          **Normal** N = 83,882                               **Low** N = 50,114                           **High** N = 53,246
+
+ Northeast                                   15,645 (19%)                                       8,380 (17%)                                  12,212 (23%)
+ Midwest                                     7,608 (9.1%)                                      3,464 (6.9%)                                  4,475 (8.4%)
+ West                                        14,889 (18%)                                      10,385 (21%)                                  6,761 (13%)
+ __OSA__                                     12,555 (15%)                                       5,926 (12%)                                  11,193 (21%)
+ __Asthma__                                  9,013 (11%)                                       4,613 (9.2%)                                  7,691 (14%)
+
+ __COPD__                                    15,008 (18%)                                       7,244 (14%)                                  17,789 (33%)
+ __CHF__                                     16,686 (20%)                                       9,743 (19%)                                  15,259 (29%)
+ __NMD__                                     4,089 (4.9%)                                      1,987 (4.0%)                                  2,272 (4.3%)
+ __PHTN__                                    6,988 (8.3%)                                      3,942 (7.9%)                                  6,930 (13%)
+ __CKD__                                     15,668 (19%)                                      10,050 (20%)                                  10,900 (20%)
+
+ __Diabetes__                                24,051 (29%)                                      14,713 (29%)                                  17,183 (32%)
+ __Encounter Type__
+ Emergency                                   12,293 (15%)                                       7,709 (15%)                                  9,012 (17%)
+ Inpatient                                   71,589 (85%)                                      42,405 (85%)                                  44,234 (83%)
+ __PaCO
+ textsubscript2 (mmHg)__        39.7 ± 3.0; 0.0/83,882.0 missing (0.0%)           29.2 ± 4.6; 0.0/50,114.0 missing (0.0%)      59.7 ± 20.8; 0.0/53,246.0 missing (0.0%)
+
+
+
+
+                                  Baseline summary by CO2 category within VBG cohort
+
+
+ **Variable**                          **Normal** N = 69,293                               **Low** N = 40,737                           **High** N = 39,633
+
+ __Age__                        58.0 ± 17.9; 0.0/69,293.0 missing (0.0%)       58.2 ± 17.6; 0.0/40,737.0 missing (0.0%)         61.3 ± 16.6; 0.0/39,633.0 missing (0.0%)
+ __BMI__                     28.8 ± 7.1; 47,573.0/69,293.0 missing (68.7%)   28.5 ± 7.2; 25,182.0/40,737.0 missing (61.8%)   29.3 ± 8.0; 27,898.0/39,633.0 missing (70.4%)
+ __Sex__
+ Female                                      32,085 (46%)                                      18,831 (46%)                                  18,371 (46%)
+ Male                                        37,208 (54%)                                      21,906 (54%)                                  21,262 (54%)
+
+ __Race/Ethnicity__
+ White                                       36,918 (53%)                                      20,482 (50%)                                  22,660 (57%)
+ Black or African American                   12,878 (19%)                                       7,125 (17%)                                  7,880 (20%)
+ Hispanic                                    4,970 (7.2%)                                      3,637 (8.9%)                                  2,211 (5.6%)
+ Asian                                       1,490 (2.2%)                                       873 (2.1%)                                    606 (1.5%)
+
+ American Indian                              683 (1.0%)                                       1,033 (2.5%)                                   211 (0.5%)
+ Pacific Islander                             68 (<0.1%)                                         45 (0.1%)                                   22 (<0.1%)
+ Unknown                                     12,286 (18%)                                      7,542 (19%)                                   6,043 (15%)
+ __Location__
+ South                                       21,558 (31%)                                      10,384 (25%)                                  13,550 (34%)
+
+ Northeast                                   31,121 (45%)                                      15,352 (38%)                                  17,436 (44%)
+ Midwest                                     6,251 (9.0%)                                      3,302 (8.1%)                                  4,027 (10%)
+ West                                        10,363 (15%)                                      11,699 (29%)                                  4,620 (12%)
+ __OSA__                                     10,226 (15%)                                       6,140 (15%)                                  8,213 (21%)
+ __Asthma__                                  8,670 (13%)                                        5,320 (13%)                                  5,973 (15%)
+
+ __COPD__                                    10,964 (16%)                                      6,276 (15%)                                   12,065 (30%)
+ __CHF__                                     13,107 (19%)                                      8,364 (21%)                                   11,023 (28%)
+ __NMD__                                     2,280 (3.3%)                                      1,632 (4.0%)                                  1,531 (3.9%)
+
+
+
+
+                                                                             21
+(continued)
+ **Variable**                              **Normal** N = 69,293                            **Low** N = 40,737                           **High** N = 39,633
+
+ __PHTN__                                        5,467 (7.9%)                                   3,445 (8.5%)                                  5,071 (13%)
+ __CKD__                                         12,858 (19%)                                   9,264 (23%)                                   7,933 (20%)
+
+ __Diabetes__                                    21,156 (31%)                                   13,845 (34%)                                 12,780 (32%)
+ __Encounter Type__
+ Emergency                                       24,449 (35%)                                   11,786 (29%)                                 11,087 (28%)
+ Inpatient                                       44,844 (65%)                                   28,951 (71%)                                 28,546 (72%)
+ __PvCO
+ textsubscript2 (mmHg)__            44.7 ± 3.0; 0.0/69,293.0 missing (0.0%)        33.4 ± 5.0; 0.0/40,737.0 missing (0.0%)      61.3 ± 12.7; 0.0/39,633.0 missing (0.0%)
+
+
+
+
+                                              Table 8: Table 2a. Crude outcomes by CO2 category
+
+                              Cohort    Outcome              Normal                  Low                       High
+                              ABG       IMV                  19347/83882 (23.1%)     14385/50114 (28.7%)       14441/53246 (27.1%)
+                              ABG       NIV                  6370/83882 (7.6%)       3836/50114 (7.7%)         8834/53246 (16.6%)
+                              ABG       Death (60d)          11331/83882 (13.5%)     11466/50114 (22.9%)       9921/53246 (18.6%)
+                              ABG       Hypercapnic RF       4522/83882 (5.4%)       2494/50114 (5.0%)         13260/53246 (24.9%)
+                              VBG       IMV                  8585/69293 (12.4%)      7068/40737 (17.4%)        7564/39633 (19.1%)
+                              VBG       NIV                  3340/69293 (4.8%)       2298/40737 (5.6%)         5061/39633 (12.8%)
+                              VBG       Death (60d)          7237/69293 (10.4%)      6990/40737 (17.2%)        6256/39633 (15.8%)
+                              VBG       Hypercapnic RF       2602/69293 (3.8%)       1497/40737 (3.7%)         9129/39633 (23.0%)
+
+
+
+
+1.3 Three-level PCO2 categories (unweighted)
+
+Three groups using low/normal/high CO2 categories
+
+
+
+
+                                                                              22
+23
+1.4 Observed outcome rates by CO2 bin (unweighted)
+
+
+
+
+                                                     24
+1.5 Restricted cubic spline regressions (unweighted)
+
+Spline curves are shown as odds ratios relative to CO2_ref (midpoint of the normal range), holding covariates at the reference profile.
+
+
+
+
+                                                                      25
+1.5.1 Unweighted, Restricted Cubic Spline Regression - ABG by PaCO2
+
+1.5.2 Unweighted, Restricted Cubic Spline - VBG
+
+
+
+
+                                                             26
+27
+28
+2 Inverse Propensity Weighting (GBM)
+
+IPW done using Gradient Boosting Methods (GBM) - a type of decision-tree based machine learning. “Random forests and GBM are
+designed to automatically include relevant interactions for variables included in the model. As such, using a GBM to estimate the
+PS model, can reduce model misspecification, since the analyst is not required to identify relevant interactions or nonlinearities.”
+from this citation: PMID: 39947224. PMCID: PMC11825193.
+
+
+
+
+                                                                29
+Current propensity score uses covars_gbm (demographics, comorbidities, encounter type, vitals, labs) as defined above; in this block only
+encounter_type is explicitly factored before weighting.
+Note: for all these, I suggested new GBM adjustments that accomplish the following:
+
+  1. Smaller GBM & balance‑based stopping (stop.method = “smd.max”) → faster fit, avoids over‑fitting, lighter tails (which lead to extreme
+     weights that are problematic).
+  2. Target balance compares weighted treated cohort to the full sample; aim for |SMD| < 0.1.
+  3. Weight stabilization (divide by mean) mitigates a few huge weights. We use one‑sided truncation at very small propensities (caps large
+     weights only).
+  4. Uses robust variance estimation (e.g. allows the variances to change by PaCO2) for IP‑weighted GLM; works with splines via rcs(). This
+     is a bit nuanced but I think good to change even though it adds complexity
+  5. Deterministic seed ensures result replication.
+
+
+2.0.1 ABG IPW weighting and diagnostics
+
+GBM tuning is shared across ABG and VBG via gbm_params to keep symmetry; update there if needed.
+Inverse Propensity-Weighted Logistic Regressions with CO2 predictor represented as a restricted cubic spline.
+These are covariate-adjusted outcome models (outcome ~ spline(CO2) + X), fit separately for ABG and VBG cohorts using survey::svyglm
+with robust (design-based) SEs. Spline curves are shown as odds ratios relative to CO2_ref (midpoint of the normal range).
+
+
+2.0.2 ABG IPW spline models
+
+Restricting plots bewtween 0.02 and 0.98
+
+
+
+
+                                                                   30
+2.0.3 ABG IPW spline models (2–98th percentile)
+
+
+
+
+                                                  31
+VBG uses the same GBM tuning as ABG (shared gbm_params).
+
+
+
+
+                                                           32
+2.0.4 VBG IPW weighting and spline models
+
+
+
+
+                                            33
+34
+35
+36
+37
+2.0.5 Three-level PCO2 categories (weighted; ABG, VBG)
+
+Three groups with weights and covariate adjustment
+
+
+
+
+                                                         38
+39
+2.0.6 Observed outcome rates by CO2 bin (GBM IPSW, non-MI)
+
+
+
+
+                                                             40
+2.1 Propensity score diagnostics
+
+Plotting propensity scores
+
+
+
+
+                                   41
+42
+43
+44
+3 Multiple Imputation (and logistic IPSW)
+
+added 12/6/2025
+
+
+3.0.1 Missingness structure and drivers
+
+
+
+
+                                            45
+                                  Monte Carlo error vs SE (diagnostic only)
+Term                             Estimate           SE        MC error         MC error / SE                  2.5%               97.5%
+(Intercept)                         -3.523       0.040            0.003                  0.071        -3.601523402         -3.444523052
+has_abg                              2.166       0.012            0.000                  0.013         2.142966990          2.189596865
+age_at_encounter                    -0.007       0.000            0.000                  0.015        -0.007546445         -0.006429697
+curr_bmi                            -0.015       0.001            0.000                  0.085        -0.016798841         -0.013049691
+sexMale                              0.285       0.010            0.000                  0.013         0.265653428          0.303842195
+encounter_typeInpatient              1.125       0.015            0.000                  0.004         1.094833080          1.155174813
+
+
+3.0.2 Monte Carlo error check after MI
+
+3.1 Pre‑imputation data prep (consistent types & predictors)
+
+Why: MI models need coherent types; using exactly the same covariates as the propensity score models avoids model drift.
+
+
+3.2 Imputation model specification (MICE)
+
+3.2.1 Predictor matrix & methods. Run MICE (moderate settings for scale)
+
+MC error diagnostic model: Diagnostic model: imv_proc ~ has_abg + age_at_encounter + curr_bmi + sex + encounter_type (un-
+weighted).
+
+
+
+
+                                                                   46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+3.3 Refit propensity models within each imputation
+
+MI propensity scores use logistic regression with restricted cubic splines (rms::rcs, 4 knots by default) for continuous covariates; the same
+covariate set used in non‑MI models is reused here (covars_ps). IPSW truncation rules are unchanged.
+Note: the MI computations below run in a single pass per imputation (weights, balance, cat3, spline). Subsequent MI sections reuse those
+outputs and will stop if they are missing.
+
+
+3.3.1 FAIL-FAST CHECKS
+
+             used    (Mb) gc trigger    (Mb) limit (Mb)   max used    (Mb)
+Ncells    7584270   405.1   13521818   722.2         NA   13521818   722.2
+Vcells 1539815247 11747.9 2147380309 16383.3      16384 2147378644 16383.2
+
+
+3.3.2 ABG propensity (has_abg)
+
+3.3.3 Balance diagnostics across imputations
+
+3.3.4 VBG propensity (has_vbg)
+
+3.3.5 VBG balance
+
+3.4 Weighted outcome models within each imputation + pooling
+
+Within each imputation, fit covariate‑adjusted CO2 spline outcome models only in the measured cohort (has_abg==1 for PaCO2;
+has_vbg==1 for VBG CO2), using IPSW weights to address nonrandom testing. Curves are pooled pointwise across imputations (Rubin’s
+rules on the log‑OR scale) and displayed as odds ratios relative to CO2_ref at a reference covariate profile.
+
+
+
+
+                                                                     82
+MI-pooled MI-logistic IPSW associations between CO2 category and outcomes (ad-
+justed)
+Cohort                 Outcome                          Low vs normal OR (95% CI)        High vs normal OR (95% CI)
+ABG                    IMV                                     1.34 (1.30, 1.38)                    1.33 (1.29, 1.37)
+ABG                    NIV                                     0.99 (0.95, 1.05)                    2.64 (2.53, 2.75)
+ABG                    Death (60d)                             1.89 (1.83, 1.96)                    1.40 (1.35, 1.45)
+ABG                    Hypercapnic RF                          0.92 (0.87, 0.98)                    6.23 (5.97, 6.50)
+VBG                    IMV                                     1.31 (1.25, 1.36)                    1.54 (1.48, 1.61)
+VBG                    NIV                                     1.01 (0.94, 1.08)                    2.93 (2.77, 3.10)
+VBG                    Death (60d)                             1.79 (1.71, 1.87)                    1.42 (1.35, 1.48)
+VBG                    Hypercapnic RF                          0.84 (0.77, 0.91)                    8.00 (7.55, 8.47)
+Weighted survey GLMs adjusted for baseline covariates; weights = MI-specific GLM (RCS) IPW; m = 80 imputations (seed
+20251206); reference = Normal.
+
+
+3.4.1 Helper: fit + extract log‑OR and SE from svyglm
+
+3.4.2 VBG: MI pooled spline models (treated cohort only)
+
+3.5 Explainability
+
+3.6 MI three‑level PCO2 helpers and checks
+
+3.7 MI + IPW three-level PCO2 (ABG & VBG)
+
+3.7.1 ABG: MI + IPW, three-level PCO2 outcomes
+
+3.7.2 VBG: MI + IPW, three-level PCO2 outcomes
+
+3.7.3 MI-pooled IPW associations (3-level CO2)
+
+3.7.4 Summary: adjusted CO2-category associations across analysis tracks
+
+
+
+
+                                                                83
+     Categorical key results for the ABG cohort across crude, unweighted adjusted, imputed
+         non-weighted, MI-logistic IPSW-weighted, and GBM IPSW-weighted analyses;
+                probabilities are conditional on X_ref except in the crude track.
+
+
+                    n_model      events   method                  group    outcome             Low vs normal OR (95% CI)
+
+                      187242     48173    Crude                   ABG      IMV                 1.34 (1.31, 1.38)
+                      187242     19040    Crude                   ABG      NIV                 1.01 (0.97, 1.05)
+                      187242     32718    Crude                   ABG      Death (60d)         1.90 (1.85, 1.95)
+                      187242     20276    Crude                   ABG      Hypercapnic RF      0.92 (0.87, 0.97)
+                      187242     48173    Adjusted                ABG      IMV                 1.36 (1.33, 1.39)
+
+                      187242     19040    Adjusted                ABG      NIV                 1.00 (0.96, 1.04)
+                      187242     32718    Adjusted                ABG      Death (60d)         1.98 (1.92, 2.04)
+                      187242     20276    Adjusted                ABG      Hypercapnic RF      0.91 (0.87, 0.96)
+                      187242     48173    Imputed                 ABG      IMV                 1.36 (1.33, 1.39)
+                      187242     19040    Imputed                 ABG      NIV                 1.00 (0.96, 1.04)
+
+                      187242     32718    Imputed                 ABG      Death (60d)         1.98 (1.92, 2.04)
+                      187242     20276    Imputed                 ABG      Hypercapnic RF      0.91 (0.87, 0.96)
+                      187242     48173    Weighted and adjusted   ABG      IMV                 1.34 (1.30, 1.38)
+                      187242     19040    Weighted and adjusted   ABG      NIV                 0.99 (0.95, 1.05)
+                      187242     32718    Weighted and adjusted   ABG      Death (60d)         1.89 (1.83, 1.96)
+
+                      187242     20276    Weighted and adjusted   ABG      Hypercapnic RF      0.92 (0.87, 0.98)
+                      187242     48173    GBM-weighted            ABG      IMV                 1.36 (1.32, 1.40)
+                      187242     19040    GBM-weighted            ABG      NIV                 0.99 (0.95, 1.04)
+                      187242     32718    GBM-weighted            ABG      Death (60d)         1.93 (1.87, 2.00)
+                      187242     20276    GBM-weighted            ABG      Hypercapnic RF      0.94 (0.89, 0.99)
+
+
+
+
+             High vs normal OR (95% CI)      Normal probability (95% CI)   Low probability (95% CI)      High probability (95% CI)
+
+             1.24 (1.21, 1.27)               0.23 (0.23, 0.23)             0.29 (0.28, 0.29)             0.27 (0.27, 0.28)
+             2.42 (2.34, 2.50)               0.08 (0.07, 0.08)             0.08 (0.07, 0.08)             0.17 (0.16, 0.17)
+             1.47 (1.42, 1.51)               0.14 (0.13, 0.14)             0.23 (0.23, 0.23)             0.19 (0.18, 0.19)
+             5.82 (5.62, 6.03)               0.05 (0.05, 0.06)             0.05 (0.05, 0.05)             0.25 (0.25, 0.25)
+             1.31 (1.28, 1.34)               0.23 (0.22, 0.23)             0.29 (0.28, 0.29)             0.28 (0.27, 0.28)
+84           2.65 (2.56, 2.74)               0.10 (0.09, 0.10)             0.10 (0.09, 0.10)             0.22 (0.21, 0.23)
+             1.43 (1.38, 1.47)               0.13 (0.13, 0.13)             0.23 (0.22, 0.23)             0.17 (0.17, 0.18)
+             6.04 (5.83, 6.26)               0.05 (0.05, 0.05)             0.05 (0.05, 0.05)             0.25 (0.25, 0.26)
+             1.31 (1.28, 1.34)               0.23 (0.22, 0.23)             0.29 (0.28, 0.29)             0.28 (0.27, 0.28)
+             2.65 (2.56, 2.74)               0.10 (0.09, 0.10)             0.10 (0.09, 0.10)             0.22 (0.22, 0.23)
+
+             1.43 (1.38, 1.47)               0.13 (0.13, 0.13)             0.23 (0.22, 0.23)             0.17 (0.17, 0.18)
+             6.04 (5.82, 6.26)               0.05 (0.05, 0.05)             0.05 (0.05, 0.05)             0.25 (0.25, 0.26)
+             1.33 (1.29, 1.37)               0.21 (0.20, 0.21)             0.26 (0.25, 0.26)             0.26 (0.25, 0.26)
+             2.64 (2.53, 2.75)               0.09 (0.09, 0.09)             0.09 (0.08, 0.09)             0.21 (0.20, 0.21)
+             1.40 (1.35, 1.45)               0.11 (0.11, 0.11)             0.19 (0.19, 0.20)             0.15 (0.14, 0.15)
+
+             6.23 (5.97, 6.50)               0.04 (0.04, 0.05)             0.04 (0.04, 0.04)             0.22 (0.22, 0.23)
+             1.30 (1.26, 1.33)               0.22 (0.22, 0.22)             0.28 (0.27, 0.28)             0.27 (0.26, 0.27)
+             2.68 (2.57, 2.79)               0.09 (0.09, 0.10)             0.09 (0.09, 0.10)             0.21 (0.21, 0.22)
+             1.45 (1.40, 1.50)               0.11 (0.11, 0.11)             0.20 (0.19, 0.20)             0.15 (0.15, 0.16)
+             6.59 (6.33, 6.86)               0.05 (0.04, 0.05)             0.04 (0.04, 0.04)             0.24 (0.23, 0.24)
+     Categorical key results for the VBG cohort across crude, unweighted adjusted, imputed
+         non-weighted, MI-logistic IPSW-weighted, and GBM IPSW-weighted analyses;
+                probabilities are conditional on X_ref except in the crude track.
+
+
+                    n_model      events   method                  group    outcome             Low vs normal OR (95% CI)
+
+                      149663     23217    Crude                   VBG      IMV                 1.48 (1.43, 1.54)
+                      149663     10699    Crude                   VBG      NIV                 1.18 (1.12, 1.25)
+                      149663     20483    Crude                   VBG      Death (60d)         1.78 (1.71, 1.84)
+                      149663     13228    Crude                   VBG      Hypercapnic RF      0.98 (0.92, 1.04)
+                      149663     23217    Adjusted                VBG      IMV                 1.28 (1.24, 1.33)
+
+                      149663     10699    Adjusted                VBG      NIV                 1.00 (0.94, 1.06)
+                      149663     20483    Adjusted                VBG      Death (60d)         1.78 (1.72, 1.85)
+                      149663     13228    Adjusted                VBG      Hypercapnic RF      0.82 (0.77, 0.88)
+                      149663     23217    Imputed                 VBG      IMV                 1.28 (1.24, 1.33)
+                      149663     10699    Imputed                 VBG      NIV                 1.00 (0.94, 1.06)
+
+                      149663     20483    Imputed                 VBG      Death (60d)         1.78 (1.72, 1.85)
+                      149663     13228    Imputed                 VBG      Hypercapnic RF      0.82 (0.77, 0.88)
+                      149663     23217    Weighted and adjusted   VBG      IMV                 1.31 (1.25, 1.36)
+                      149663     10699    Weighted and adjusted   VBG      NIV                 1.01 (0.94, 1.08)
+                      149663     20483    Weighted and adjusted   VBG      Death (60d)         1.79 (1.71, 1.87)
+
+                      149663     13228    Weighted and adjusted   VBG      Hypercapnic RF      0.84 (0.77, 0.91)
+                      149663     23217    GBM-weighted            VBG      IMV                 1.31 (1.25, 1.36)
+                      149663     10699    GBM-weighted            VBG      NIV                 1.01 (0.95, 1.08)
+                      149663     20483    GBM-weighted            VBG      Death (60d)         1.77 (1.70, 1.85)
+                      149663     13228    GBM-weighted            VBG      Hypercapnic RF      0.86 (0.80, 0.93)
+
+
+
+
+             High vs normal OR (95% CI)      Normal probability (95% CI)   Low probability (95% CI)      High probability (95% CI)
+
+             1.67 (1.61, 1.73)               0.12 (0.12, 0.13)             0.17 (0.17, 0.18)             0.19 (0.19, 0.19)
+             2.89 (2.76, 3.03)               0.05 (0.05, 0.05)             0.06 (0.05, 0.06)             0.13 (0.12, 0.13)
+             1.61 (1.55, 1.67)               0.10 (0.10, 0.11)             0.17 (0.17, 0.18)             0.16 (0.15, 0.16)
+             7.67 (7.33, 8.03)               0.04 (0.04, 0.04)             0.04 (0.03, 0.04)             0.23 (0.23, 0.23)
+             1.60 (1.55, 1.66)               0.17 (0.16, 0.17)             0.21 (0.20, 0.21)             0.25 (0.24, 0.25)
+85           2.80 (2.67, 2.94)               0.02 (0.02, 0.02)             0.02 (0.02, 0.02)             0.06 (0.06, 0.07)
+             1.44 (1.39, 1.49)               0.15 (0.14, 0.15)             0.24 (0.23, 0.24)             0.20 (0.19, 0.21)
+             7.70 (7.35, 8.07)               0.04 (0.04, 0.04)             0.03 (0.03, 0.04)             0.25 (0.24, 0.25)
+             1.60 (1.55, 1.66)               0.17 (0.16, 0.17)             0.21 (0.20, 0.21)             0.25 (0.24, 0.25)
+             2.80 (2.67, 2.94)               0.02 (0.02, 0.02)             0.02 (0.02, 0.03)             0.06 (0.06, 0.07)
+
+             1.44 (1.39, 1.49)               0.15 (0.14, 0.15)             0.24 (0.23, 0.24)             0.20 (0.19, 0.21)
+             7.70 (7.35, 8.07)               0.04 (0.04, 0.04)             0.03 (0.03, 0.04)             0.25 (0.24, 0.25)
+             1.54 (1.48, 1.61)               0.17 (0.16, 0.17)             0.21 (0.20, 0.21)             0.23 (0.23, 0.24)
+             2.93 (2.77, 3.10)               0.02 (0.02, 0.02)             0.02 (0.02, 0.02)             0.06 (0.06, 0.07)
+             1.42 (1.35, 1.48)               0.13 (0.12, 0.13)             0.21 (0.20, 0.21)             0.17 (0.16, 0.18)
+
+             8.00 (7.55, 8.47)               0.04 (0.03, 0.04)             0.03 (0.03, 0.03)             0.23 (0.22, 0.24)
+             1.55 (1.49, 1.61)               0.15 (0.15, 0.16)             0.19 (0.18, 0.19)             0.21 (0.21, 0.22)
+             2.91 (2.76, 3.06)               0.02 (0.02, 0.03)             0.02 (0.02, 0.03)             0.07 (0.06, 0.07)
+             1.46 (1.40, 1.52)               0.13 (0.13, 0.14)             0.22 (0.21, 0.22)             0.18 (0.18, 0.19)
+             8.21 (7.79, 8.65)               0.04 (0.03, 0.04)             0.03 (0.03, 0.03)             0.24 (0.23, 0.24)
+        Adjusted odds ratios (low/high vs normal) across unweighted adjusted, GBM
+     IPSW-weighted, and MI-logistic IPSW-weighted analysis tracks for the ABG cohort;
+     n/events reflect model sample size (median across imputations for MI-based tracks).
+
+
+                  method                group   outcome             n_model     events   Low vs normal
+
+                  Unweighted adjusted   ABG     IMV                    187242   48173    1.36 (1.33, 1.39)
+                  Unweighted adjusted   ABG     NIV                    187242   19040    1.00 (0.96, 1.04)
+                  Unweighted adjusted   ABG     Death (60d)            187242   32718    1.98 (1.92, 2.04)
+                  Unweighted adjusted   ABG     Hypercapnic RF         187242   20276    0.91 (0.87, 0.96)
+                  IPW adjusted          ABG     IMV                    187242   48173    1.36 (1.32, 1.40)
+
+                  IPW adjusted          ABG     NIV                    187242   19040    0.99 (0.95, 1.04)
+                  IPW adjusted          ABG     Death (60d)            187242   32718    1.93 (1.87, 2.00)
+                  IPW adjusted          ABG     Hypercapnic RF         187242   20276    0.94 (0.89, 0.99)
+                  IPW + MI adjusted     ABG     IMV                    187242   48173    1.34 (1.30, 1.38)
+                  IPW + MI adjusted     ABG     NIV                    187242   19040    0.99 (0.95, 1.05)
+
+                  IPW + MI adjusted     ABG     Death (60d)            187242   32718    1.89 (1.83, 1.96)
+                  IPW + MI adjusted     ABG     Hypercapnic RF         187242   20276    0.92 (0.87, 0.98)
+
+
+
+                                                   High vs normal
+
+                                                   1.31 (1.28, 1.34)
+                                                   2.65 (2.56, 2.74)
+                                                   1.43 (1.38, 1.47)
+                                                   6.04 (5.83, 6.26)
+                                                   1.30 (1.26, 1.33)
+
+                                                   2.68 (2.57, 2.79)
+                                                   1.45 (1.40, 1.50)
+                                                   6.59 (6.33, 6.86)
+                                                   1.33 (1.29, 1.37)
+                                                   2.64 (2.53, 2.75)
+86                                                 1.40 (1.35, 1.45)
+                                                   6.23 (5.97, 6.50)
+        Adjusted odds ratios (low/high vs normal) across unweighted adjusted, GBM
+     IPSW-weighted, and MI-logistic IPSW-weighted analysis tracks for the VBG cohort;
+     n/events reflect model sample size (median across imputations for MI-based tracks).
+
+
+                  method                group   outcome             n_model     events   Low vs normal
+
+                  Unweighted adjusted   VBG     IMV                    149663   23217    1.28 (1.24, 1.33)
+                  Unweighted adjusted   VBG     NIV                    149663   10699    1.00 (0.94, 1.06)
+                  Unweighted adjusted   VBG     Death (60d)            149663   20483    1.78 (1.72, 1.85)
+                  Unweighted adjusted   VBG     Hypercapnic RF         149663   13228    0.82 (0.77, 0.88)
+                  IPW adjusted          VBG     IMV                    149663   23217    1.31 (1.25, 1.36)
+
+                  IPW adjusted          VBG     NIV                    149663   10699    1.01 (0.95, 1.08)
+                  IPW adjusted          VBG     Death (60d)            149663   20483    1.77 (1.70, 1.85)
+                  IPW adjusted          VBG     Hypercapnic RF         149663   13228    0.86 (0.80, 0.93)
+                  IPW + MI adjusted     VBG     IMV                    149663   23217    1.31 (1.25, 1.36)
+                  IPW + MI adjusted     VBG     NIV                    149663   10699    1.01 (0.94, 1.08)
+
+                  IPW + MI adjusted     VBG     Death (60d)            149663   20483    1.79 (1.71, 1.87)
+                  IPW + MI adjusted     VBG     Hypercapnic RF         149663   13228    0.84 (0.77, 0.91)
+
+
+
+                                                   High vs normal
+
+                                                   1.60 (1.55, 1.66)
+                                                   2.80 (2.67, 2.94)
+                                                   1.44 (1.39, 1.49)
+                                                   7.70 (7.35, 8.07)
+                                                   1.55 (1.49, 1.61)
+
+                                                   2.91 (2.76, 3.06)
+                                                   1.46 (1.40, 1.52)
+                                                   8.21 (7.79, 8.65)
+                                                   1.54 (1.48, 1.61)
+                                                   2.93 (2.77, 3.10)
+87                                                 1.42 (1.35, 1.48)
+                                                   8.00 (7.55, 8.47)
+3.8 Canonical Categorical Key-Results Figures Across Analysis Tracks
+
+
+
+
+                                                           88
+89
+90
+91
+92
+3.9 Observed outcome rates by CO2 bin (MI-logistic IPSW)
+
+
+
+
+                                                           93
+3.10 Manuscript outputs summary
+
+
+TRUE
+  80
+
+
+
+
+                                  94
+3.10.1 Visualization: pooled three-level ORs
+
+
+
+
+                                               95
+3.10.2 Visualization: pooled three-level predicted probabilities
+
+
+
+
+                                                                   96
+97
+98
+99
+3.10.3 Visualization
+
+
+
+
+                       100
+3.11 Canonical Key-Results Figures Across Analysis Tracks
+
+The following 4×2 figures are the canonical manuscript-facing spline displays across crude, adjusted, imputed, and weighted analyses.
+
+
+
+
+                                                                    101
+102
+103
+104
+105
+                    arti-
+family   track      fact_type   artifact_name                      artifact_path                                   exists
+Spline   Crude      figure      key-results-spline-crude-abg-      Results/figs/key-results-spline-crude-abg-      TRUE
+                                vbg.png                            vbg.png
+Spline   Adjusted   figure      key-results-spline-adjusted-abg-   Results/figs/key-results-spline-adjusted-abg-   TRUE
+                                vbg.png                            vbg.png
+
+
+
+
+                                                     106
+                                arti-
+family      track               fact_type   artifact_name                        artifact_path                                  exists
+Spline      Imputed             figure      key-results-spline-imputed-abg-      Results/figs/key-results-spline-imputed-abg-   TRUE
+                                            vbg.png                              vbg.png
+Categori-   Crude               figure      key-results-cat3-crude-abg-vbg.png   Results/figs/key-results-cat3-crude-abg-       TRUE
+cal                                                                              vbg.png
+Categori-   Adjusted            figure      key-results-cat3-adjusted-abg-       Results/figs/key-results-cat3-adjusted-abg-    TRUE
+cal                                         vbg.png                              vbg.png
+Categori-   Imputed             figure      key-results-cat3-imputed-abg-        Results/figs/key-results-cat3-imputed-abg-     TRUE
+cal                                         vbg.png                              vbg.png
+Categori-   Weighted and        figure      key-results-cat3-main-mi-ipw-abg-    Results/figs/key-results-cat3-main-mi-ipw-     TRUE
+cal         adjusted                        vbg.png                              abg-vbg.png
+Categori-   GBM-weighted        figure      key-results-cat3-gbm-weighted-abg-   Results/figs/key-results-cat3-gbm-weighted-    TRUE
+cal                                         vbg.png                              abg-vbg.png
+Categori-   Master table        table_csv   table_summary_key_re-                Results/table_summary_key_re-                  TRUE
+cal                                         sults_cat3.csv                       sults_cat3.csv
+Categori-   ABG table           table_csv   table_summary_key_re-                Results/table_summary_key_re-                  TRUE
+cal                                         sults_cat3_abg.csv                   sults_cat3_abg.csv
+Categori-   VBG table           table_csv   table_summary_key_re-                Results/table_summary_key_re-                  TRUE
+cal                                         sults_cat3_vbg.csv                   sults_cat3_vbg.csv
+Categori-   Long-form extract   table_csv   cat3_key_results_long.csv            Results/cat3_key_results_long.csv              TRUE
+cal
+
+
+
+4 Diagnostics and Exports
+
+4.0.1 MI convergence and mixing
+
+png
+  2
+
+
+
+
+                                                                107
+4.0.2 MI stability across m
+
+4.0.3 MI maxit sensitivity (sampled)
+
+4.0.4 Balance diagnostics
+
+4.0.5 Outcome diagnostics
+
+4.0.6 Diagnostics summary and audit
+
+4.0.7 Performance / runtime log
+
+4.0.8 Performance / runtime log
+
+4.1 Save, export, and session info
+
+                                                               Validation build status
+
+
+               component                status               detail
+
+               overall_build            FAIL                 Final validation status derived from artifact checks, glyph audit, duplicate audit, and diagnostics audit.
+               artifact_registry        PASS                 0 missing required generated artifact rows.
+               external_manual_assets   PASS_WITH_WARNINGS   1 declared external/manual rows.
+               glyph_audit              PASS                 0 unsafe manuscript glyph rows.
+               duplicate_audit          PASS                 0 conflicting duplicate/numbering rows.
+
+               diagnostics_audit        FAIL                 1 high / 0 medium / 0 low diagnostics issues.
+
+
+
+
+                                                                                 108
+                            Artifact provenance summary
+
+
+      section      kind      status            source_type             pdf_display   n_assets
+
+      draft_only   figure    draft_only        suppressed/deprecated   FALSE               1
+      main         figure    generated         notebook_generated      TRUE                2
+      main         table     generated         notebook_generated      TRUE                2
+      supplement   figure    generated         notebook_generated      TRUE                8
+      supplement   table     external/manual   external/manual         FALSE               1
+
+      supplement   table     generated         notebook_generated      TRUE                2
+
+
+
+
+109
+   Figure 1. Cohort assembly and target population for inverse probability-of-sampling weighting
+
+
+                            Extracted 2022 encounter cohort
+                                     (n = 833,476)
+
+
+
+                                                               Ambulatory encounters excluded
+                                                               (n = 318,190)
+
+
+
+
+                            Analytic cohort: ED and Inpatient
+                                       Encounters
+                                      (n = 515,286)
+
+
+
+
+ABG-tested encounters                                                    VBG-tested encounters
+   (n = 187,242)                                                            (n = 149,663)
+
+
+
+
+ ABG-weighted sample                                                     VBG-weighted sample
+standardized to analytic                                                standardized to analytic
+        cohort                                                                  cohort
+                          Conditionally comparable after propensity weighting
+
+
+
+
+                                                 110
+Figure 2. Primary MI-logistic IPSW-weighted spline associations of pCO2 with clinical outcomes by ABG and VBG
+                                           Primary MI-logistic IPSW-weighted spline associations of pCO2 with clinical outcomes by ABG and VBG
+                                                                         Odds ratio                                                                            Predicted probability
+
+                                                                                                                     ABG                            VBG
+
+
+                                                       64.00
+                                                                                                                                              60%
+                                                       32.00
+
+                                                       16.00
+
+                                                                                                                                              40%
+                                                        8.00
+                                           IMV
+                                                        4.00
+
+                                                        2.00                                                                                  20%
+
+                                                        1.00
+
+                                                        0.50                                                                                  0%
+
+                                                       64.00
+                                                                                                                                              60%
+                                                       32.00
+
+                                                       16.00
+
+                                                                                                                                              40%
+                                                        8.00
+                                           NIV
+                                                        4.00
+
+                                                        2.00                                                                                  20%
+
+
+
+
+             Odds ratio (log scale)                                                                                   Predicted probability
+                                                        1.00
+
+                                                        0.50                                                                                  0%
+
+                                                       64.00
+                                                                                                                                              60%
+                                                       32.00
+
+                                                       16.00
+
+                                                                                                                                              40%
+                                                        8.00
+                                       Death (60d)
+                                                        4.00
+
+                                                        2.00                                                                                  20%
+
+                                                        1.00
+
+                                                        0.50                                                                                  0%
+
+                                                       64.00
+                                                                                                                                              60%
+                                                       32.00
+
+                                                       16.00
+
+                                                                                                                                              40%
+                                                        8.00
+                                      Hypercapnic RF
+                                                        4.00
+
+                                                        2.00                                                                                  20%
+
+                                                        1.00
+
+                                                        0.50                                                                                  0%
+
+                                                               20   40             60                   80                                          20    40                 60                80
+                                                                         CO2 (mmHg)                                                                                CO2 (mmHg)
+
+             These curves come from the primary MI-logistic IPSW analysis. Odds ratio curves are relative to the test-specific reference CO2 values (ABG 40 mmHg; VBG 45 mmHg). Predicted probability curves are conditional on the r
+
+
+
+
+                                                                                                        111
+      Table 1. Baseline characteristics of the analytic cohort overall and by receipt of arterial
+                                    and venous blood gas testing
+
+      panel        variable               var_type      row_type   var_label        label                       Everyone                                          Did not get ABG N = 328,044
+
+      ABG status   age_at_encounter       continuous    label      Age              Age                         59.2 ± 17.7; 0.0/515,286.0 missing (0.0%)         58.1 ± 18.1; 0.0/328,044.0 missing (0.0%)
+      ABG status   curr_bmi               continuous    label      BMI              BMI                         31.1 ± 8.4; 293,545.0/515,286.0 missing (57.0%)   32.3 ± 8.7; 184,223.0/328,044.0 missing (56.2%)
+      ABG status   sex_label              categorical   label      Sex              Sex                         NA                                                NA
+      ABG status   sex_label              categorical   level      Sex              Female                      253,906 (49%)                                     169,023 (52%)
+      ABG status   sex_label              categorical   level      Sex              Male                        261,380 (51%)                                     159,021 (48%)
+
+      ABG status   race_ethnicity_label   categorical   label      Race/Ethnicity   Race/Ethnicity              NA                                                NA
+      ABG status   race_ethnicity_label   categorical   level      Race/Ethnicity   White                       321,174 (62%)                                     200,033 (61%)
+      ABG status   race_ethnicity_label   categorical   level      Race/Ethnicity   Black or African American   89,697 (17%)                                      62,418 (19%)
+      ABG status   race_ethnicity_label   categorical   level      Race/Ethnicity   Hispanic                    33,769 (6.6%)                                     23,548 (7.2%)
+      ABG status   race_ethnicity_label   categorical   level      Race/Ethnicity   Asian                       8,408 (1.6%)                                      4,880 (1.5%)
+
+      ABG status   race_ethnicity_label   categorical   level      Race/Ethnicity   American Indian             4,055 (0.8%)                                      1,971 (0.6%)
+      ABG status   race_ethnicity_label   categorical   level      Race/Ethnicity   Pacific Islander            678 (0.1%)                                        460 (0.1%)
+      ABG status   race_ethnicity_label   categorical   level      Race/Ethnicity   Unknown                     57,505 (11%)                                      34,734 (11%)
+      ABG status   location_label         categorical   label      Location         Location                    NA                                                NA
+      ABG status   location_label         categorical   level      Location         South                       242,266 (47%)                                     138,843 (42%)
+
+      ABG status   location_label         categorical   level      Location         Northeast                   129,446 (25%)                                     93,209 (28%)
+      ABG status   location_label         categorical   level      Location         Midwest                     38,471 (7.5%)                                     22,924 (7.0%)
+      ABG status   location_label         categorical   level      Location         West                        105,103 (20%)                                     73,068 (22%)
+      ABG status   osa_label              dichotomous   label      OSA              OSA                         90,327 (18%)                                      60,653 (18%)
+      ABG status   asthma_label           dichotomous   label      Asthma           Asthma                      69,773 (14%)                                      48,456 (15%)
+
+      ABG status   copd_label             dichotomous   label      COPD             COPD                        100,255 (19%)                                     60,214 (18%)
+      ABG status   chf_label              dichotomous   label      CHF              CHF                         101,458 (20%)                                     59,770 (18%)
+      ABG status   nmd_label              dichotomous   label      NMD              NMD                         20,239 (3.9%)                                     11,891 (3.6%)
+      ABG status   phtn_label             dichotomous   label      PHTN             PHTN                        41,714 (8.1%)                                     23,854 (7.3%)
+      ABG status   ckd_label              dichotomous   label      CKD              CKD                         91,146 (18%)                                      54,528 (17%)
+
+      ABG status   diabetes_label         dichotomous   label      Diabetes         Diabetes                    148,954 (29%)                                     93,007 (28%)
+      ABG status   encounter_type_label   categorical   label      Encounter Type   Encounter Type              NA                                                NA
+      ABG status   encounter_type_label   categorical   level      Encounter Type   Emergency                   171,727 (33%)                                     142,713 (44%)
+      ABG status   encounter_type_label   categorical   level      Encounter Type   Inpatient                   343,559 (67%)                                     185,331 (56%)
+
+
+
+
+       Did get ABG N = 187,242                                           Did not get VBG N = 365,623                                        Did get VBG N = 149,663
+
+       61.2 ± 16.9; 0.0/187,242.0 missing (0.0%)                         59.4 ± 17.8; 0.0/365,623.0 missing (0.0%)                          58.9 ± 17.5; 0.0/149,663.0 missing (0.0%)
+       29.0 ± 7.2; 109,322.0/187,242.0 missing (58.4%)                   31.8 ± 8.5; 192,892.0/365,623.0 missing (52.8%)                    28.8 ± 7.4; 100,653.0/149,663.0 missing (67.3%)
+       NA                                                                NA                                                                 NA
+       84,883 (45%)                                                      184,619 (50%)                                                      69,287 (46%)
+       102,359 (55%)                                                     181,004 (50%)                                                      80,376 (54%)
+
+       NA                                                                NA                                                                 NA
+       121,141 (65%)                                                     241,114 (66%)                                                      80,060 (53%)
+112    27,279 (15%)                                                      61,814 (17%)                                                       27,883 (19%)
+       10,221 (5.5%)                                                     22,951 (6.3%)                                                      10,818 (7.2%)
+       3,528 (1.9%)                                                      5,439 (1.5%)                                                       2,969 (2.0%)
+
+       2,084 (1.1%)                                                      2,128 (0.6%)                                                       1,927 (1.3%)
+       218 (0.1%)                                                        543 (0.1%)                                                         135 (<0.1%)
+       22,771 (12%)                                                      31,634 (8.7%)                                                      25,871 (17%)
+       NA                                                                NA                                                                 NA
+       103,423 (55%)                                                     196,774 (54%)                                                      45,492 (30%)
+
+       36,237 (19%)                                                      65,537 (18%)                                                       63,909 (43%)
+       15,547 (8.3%)                                                     24,891 (6.8%)                                                      13,580 (9.1%)
+       32,035 (17%)                                                      78,421 (21%)                                                       26,682 (18%)
+       29,674 (16%)                                                      65,748 (18%)                                                       24,579 (16%)
+       21,317 (11%)                                                      49,810 (14%)                                                       19,963 (13%)
+
+       40,041 (21%)                                                      70,950 (19%)                                                       29,305 (20%)
+       41,688 (22%)                                                      68,964 (19%)                                                       32,494 (22%)
+       8,348 (4.5%)                                                      14,796 (4.0%)                                                      5,443 (3.6%)
+       17,860 (9.5%)                                                     27,731 (7.6%)                                                      13,983 (9.3%)
+       36,618 (20%)                                                      61,091 (17%)                                                       30,055 (20%)
+
+       55,947 (30%)                                                      101,173 (28%)                                                      47,781 (32%)
+       NA                                                                NA                                                                 NA
+       29,014 (15%)                                                      124,405 (34%)                                                      47,322 (32%)
+       158,228 (85%)                                                     241,218 (66%)                                                      102,341 (68%)
+      Table 2. MI-pooled, MI-logistic IPSW-weighted 3-level categorical results for ABG and
+                                             VBG
+
+      group   outcome          n_model   events   Low vs normal OR (95% CI)     High vs normal OR (95% CI)   Normal probability (95% CI)   Low probability (95% CI)
+
+      ABG     IMV               187242   48173    1.34 (1.30, 1.38)             1.33 (1.29, 1.37)            0.21 (0.20, 0.21)             0.26 (0.25, 0.26)
+      ABG     NIV               187242   19040    0.99 (0.95, 1.05)             2.64 (2.53, 2.75)            0.09 (0.09, 0.09)             0.09 (0.08, 0.09)
+      ABG     Death (60d)       187242   32718    1.89 (1.83, 1.96)             1.40 (1.35, 1.45)            0.11 (0.11, 0.11)             0.19 (0.19, 0.20)
+      ABG     Hypercapnic RF    187242   20276    0.92 (0.87, 0.98)             6.23 (5.97, 6.50)            0.04 (0.04, 0.05)             0.04 (0.04, 0.04)
+      VBG     IMV               149663   23217    1.31 (1.25, 1.36)             1.54 (1.48, 1.61)            0.17 (0.16, 0.17)             0.21 (0.20, 0.21)
+
+      VBG     NIV               149663   10699    1.01 (0.94, 1.08)             2.93 (2.77, 3.10)            0.02 (0.02, 0.02)             0.02 (0.02, 0.02)
+      VBG     Death (60d)       149663   20483    1.79 (1.71, 1.87)             1.42 (1.35, 1.48)            0.13 (0.12, 0.13)             0.21 (0.20, 0.21)
+      VBG     Hypercapnic RF    149663   13228    0.84 (0.77, 0.91)             8.00 (7.55, 8.47)            0.04 (0.03, 0.04)             0.03 (0.03, 0.03)
+
+
+
+
+                                                                      High probability (95% CI)
+
+                                                                      0.26 (0.25, 0.26)
+                                                                      0.21 (0.20, 0.21)
+                                                                      0.15 (0.14, 0.15)
+                                                                      0.22 (0.22, 0.23)
+                                                                      0.23 (0.23, 0.24)
+
+                                                                      0.06 (0.06, 0.07)
+                                                                      0.17 (0.16, 0.18)
+                                                                      0.23 (0.22, 0.24)
+
+
+
+
+113
+             Figure S1. Covariate balance after MI logistic inverse-probability weighting for ABG and VBG test-ordering models
+                                Covariate balance after MI logistic inverse-probability weighting for ABG and VBG test-ordering models
+
+                                                                           Sample         Raw    IPW
+
+
+                                                         ABG                                                   VBG
+    Overall (mean |SMD|)
+                  location:1
+                  location:0
+                  curr_bmi
+encounter_type:Emergency
+   encounter_type:Inpatient
+                 serum_ca
+                        sbp
+                serum_lac
+                        dbp
+           race_ethnicity:0
+           race_ethnicity:6
+                          hr
+              serum_hco3
+                  serum_cl
+                  location:3
+                          plt
+              serum_phos
+               sex:Female
+                  sex:Male
+                        wbc
+                 serum_cr
+         age_at_encounter
+                    sodium
+                       chf:0
+                       chf:1
+                      ckd:0
+                      ckd:1
+           race_ethnicity:1
+                      phtn:1
+                      phtn:0
+                temp_new
+           race_ethnicity:4
+                  location:2
+                       dm:0
+                       dm:1
+                      osa:0
+                      osa:1
+           race_ethnicity:2
+                  asthma:0
+                  asthma:1
+                   serum_k
+                     copd:1
+                     copd:0
+           race_ethnicity:3
+           race_ethnicity:5
+              acute_nmd:0
+              acute_nmd:1
+                                 0.0         0.1         0.2         0.3            0.4    0.0         0.1      0.2         0.3          0.4
+                                                                   Absolute Standardized Mean Differences
+
+
+
+
+                                                                           114
+                         Figure S2. Propensity-score overlap for MI logistic ABG and VBG test-ordering models
+
+              Propensity-score overlap for MI logistic ABG and VBG test-ordering models
+              Averaged across 80 imputations
+
+                                                         Group          No Test    Test
+
+
+                                    ABG                                                            VBG
+
+
+
+
+                                                                        3
+          2
+
+
+
+
+Density
+                                                                        2
+
+          1
+
+                                                                        1
+
+
+
+
+          0                                                             0
+
+              0.00      0.25        0.50          0.75           1.00       0.00          0.25     0.50         0.75   1.00
+                                                            Propensity score
+
+
+
+
+                                                                  115
+                      Figure S3. SHAP-style contribution summaries for MI logistic ABG and VBG test-ordering models
+                 SHAP-style contribution summaries for MI logistic ABG and VBG test-ordering models
+                                        ABG                                                             VBG
+
+
+    serum_lac                                                            serum_lac
+
+
+    serum_cr                                                              serum_cr
+
+
+          wbc                                                                   hr
+
+
+  serum_phos                                                               location
+
+
+          sbp                                                                 wbc
+
+
+    serum_ca                                                            serum_hco3
+
+
+  serum_hco3                                                              curr_bmi
+
+
+encounter_type                                                            serum_k
+
+
+      location                                                       race_ethnicity
+
+
+     curr_bmi                                                                  sbp
+
+
+                  0            2              4          6                            0       2               4       6
+                                                                 Mean |SHAP value|
+
+
+
+
+                                                                  116
+Figure S4. MI-logistic IPSW-weighted categorical associations of pCO2 category with clinical outcomes by ABG and VBG
+                       MI-logistic IPSW-weighted categorical associations of pCO2 category with clinical outcomes by ABG and VBG
+                                                                                 Odds ratio                                                                      Predicted probability
+
+                                                                                                                                ABG          VBG
+
+
+
+
+                                                                                                                                      High
+                                   High vs normal
+
+
+
+                        IMV                                                                                                      Normal
+
+
+
+                                    Low vs normal
+                                                                                                                                      Low
+
+
+
+
+                                                                                                                                      High
+                                   High vs normal
+
+
+
+                        NIV                                                                                                      Normal
+
+
+
+                                    Low vs normal
+                                                                                                                                      Low
+
+
+
+
+                                                                                                                                      High
+                                   High vs normal
+
+
+
+                    Death (60d)                                                                                                  Normal
+
+
+
+                                    Low vs normal
+                                                                                                                                      Low
+
+
+
+
+                                                                                                                                      High
+                                   High vs normal
+
+
+
+                  Hypercapnic RF                                                                                                 Normal
+
+
+
+                                    Low vs normal
+                                                                                                                                      Low
+
+
+
+
+                                                    0.50          1.00         2.00          4.00         8.00          16.00                0%                    10%                     20%
+                                                                           Odds ratio (log scale)                                                                 Predicted probability
+
+                 MI-pooled, MI-logistic IPSW-adjusted categorical odds ratios use the normal CO2 category as the reference. Predicted probabilities are pooled on the link scale and are conditional on X_ref within each test-specific cohort.
+
+
+
+
+                                                                                                              117
+Figure S5. Unweighted covariate-adjusted spline associations of pCO2 with clinical outcomes by ABG and VBG
+                                                Unweighted covariate-adjusted spline associations of pCO2 with clinical outcomes by ABG and VBG
+                                                                          Odds ratio                                                                            Predicted probability
+
+                                                                                                                      ABG                            VBG
+
+
+                                                      64.00
+                                                                                                                                               60%
+                                                      32.00
+
+                                                      16.00
+                                                                                                                                               40%
+                                                       8.00
+                                          IMV
+                                                       4.00
+
+                                                       2.00                                                                                    20%
+
+                                                       1.00
+
+                                                       0.50                                                                                    0%
+
+                                                      64.00
+                                                                                                                                               60%
+                                                      32.00
+
+                                                      16.00
+                                                                                                                                               40%
+                                                       8.00
+                                          NIV
+                                                       4.00
+
+                                                       2.00                                                                                    20%
+
+
+
+
+            Odds ratio (log scale)                                                                                     Predicted probability
+                                                       1.00
+
+                                                       0.50                                                                                    0%
+
+                                                      64.00
+                                                                                                                                               60%
+                                                      32.00
+
+                                                      16.00
+                                                                                                                                               40%
+                                                       8.00
+                                      Death (60d)
+                                                       4.00
+
+                                                       2.00                                                                                    20%
+
+                                                       1.00
+
+                                                       0.50                                                                                    0%
+
+                                                      64.00
+                                                                                                                                               60%
+                                                      32.00
+
+                                                      16.00
+                                                                                                                                               40%
+                                                       8.00
+                                     Hypercapnic RF
+                                                       4.00
+
+                                                       2.00                                                                                    20%
+
+                                                       1.00
+
+                                                       0.50                                                                                    0%
+
+                                                              20    40             60                   80                                           20    40                 60                 80
+                                                                         CO2 (mmHg)                                                                                 CO2 (mmHg)
+
+            Odds ratio curves are relative to the test-specific reference CO2 values (ABG 40 mmHg; VBG 45 mmHg). Predicted probability curves are conditional on the reference covariate profile X_ref within each test-specific cohort.
+
+
+
+
+                                                                                                        118
+      Table S2. Crude associations of pCO2 category with clinical outcomes by ABG and VBG
+
+
+                            group   outcome             contrast         OR     LCL    UCL
+
+                            ABG     IMV                 Low vs normal    1.34   1.31   1.38
+                            ABG     IMV                 High vs normal   1.24   1.21   1.27
+                            ABG     NIV                 Low vs normal    1.01   0.97   1.05
+                            ABG     NIV                 High vs normal   2.42   2.34   2.50
+                            ABG     Death (60d)         Low vs normal    1.90   1.85   1.95
+
+                            ABG     Death (60d)         High vs normal   1.47   1.42   1.51
+                            ABG     Hypercapnic RF      Low vs normal    0.92   0.87   0.97
+                            ABG     Hypercapnic RF      High vs normal   5.82   5.62   6.03
+                            VBG     IMV                 Low vs normal    1.48   1.43   1.54
+                            VBG     IMV                 High vs normal   1.67   1.61   1.73
+
+                            VBG     NIV                 Low vs normal    1.18   1.12   1.25
+                            VBG     NIV                 High vs normal   2.89   2.76   3.03
+                            VBG     Death (60d)         Low vs normal    1.78   1.71   1.84
+                            VBG     Death (60d)         High vs normal   1.61   1.55   1.67
+                            VBG     Hypercapnic RF      Low vs normal    0.98   0.92   1.04
+
+                            VBG     Hypercapnic RF      High vs normal   7.67   7.33   8.03
+
+
+
+
+                                                     OR (95% CI)
+
+                                                     1.34 (1.31, 1.38)
+                                                     1.24 (1.21, 1.27)
+                                                     1.01 (0.97, 1.05)
+                                                     2.42 (2.34, 2.50)
+                                                     1.90 (1.85, 1.95)
+
+                                                     1.47 (1.42, 1.51)
+                                                     0.92 (0.87, 0.97)
+                                                     5.82 (5.62, 6.03)
+                                                     1.48 (1.43, 1.54)
+                                                     1.67 (1.61, 1.73)
+
+                                                     1.18 (1.12, 1.25)
+119                                                  2.89 (2.76, 3.03)
+                                                     1.78 (1.71, 1.84)
+                                                     1.61 (1.55, 1.67)
+                                                     0.98 (0.92, 1.04)
+
+                                                     7.67 (7.33, 8.03)
+      Table S3. GBM IPSW-weighted associations of pCO2 category with clinical outcomes by
+                                      ABG and VBG
+
+
+                            group   outcome             contrast         OR     LCL    UCL
+
+                            ABG     IMV                 Low vs normal    1.36   1.32   1.40
+                            ABG     IMV                 High vs normal   1.30   1.26   1.33
+                            ABG     NIV                 Low vs normal    0.99   0.95   1.04
+                            ABG     NIV                 High vs normal   2.68   2.57   2.79
+                            ABG     Death (60d)         Low vs normal    1.93   1.87   2.00
+
+                            ABG     Death (60d)         High vs normal   1.45   1.40   1.50
+                            ABG     Hypercapnic RF      Low vs normal    0.94   0.89   0.99
+                            ABG     Hypercapnic RF      High vs normal   6.59   6.33   6.86
+                            VBG     IMV                 Low vs normal    1.31   1.25   1.36
+                            VBG     IMV                 High vs normal   1.55   1.49   1.61
+
+                            VBG     NIV                 Low vs normal    1.01   0.95   1.08
+                            VBG     NIV                 High vs normal   2.91   2.76   3.06
+                            VBG     Death (60d)         Low vs normal    1.77   1.70   1.85
+                            VBG     Death (60d)         High vs normal   1.46   1.40   1.52
+                            VBG     Hypercapnic RF      Low vs normal    0.86   0.80   0.93
+
+                            VBG     Hypercapnic RF      High vs normal   8.21   7.79   8.65
+
+
+
+
+                                                     OR (95% CI)
+
+                                                     1.36 (1.32, 1.40)
+                                                     1.30 (1.26, 1.33)
+                                                     0.99 (0.95, 1.04)
+                                                     2.68 (2.57, 2.79)
+                                                     1.93 (1.87, 2.00)
+
+                                                     1.45 (1.40, 1.50)
+                                                     0.94 (0.89, 0.99)
+                                                     6.59 (6.33, 6.86)
+                                                     1.31 (1.25, 1.36)
+                                                     1.55 (1.49, 1.61)
+
+120                                                  1.01 (0.95, 1.08)
+                                                     2.91 (2.76, 3.06)
+                                                     1.77 (1.70, 1.85)
+                                                     1.46 (1.40, 1.52)
+                                                     0.86 (0.80, 0.93)
+
+                                                     8.21 (7.79, 8.65)
+                Figure S6. Covariate balance after gradient-boosted propensity weighting for ABG and VBG test-ordering models
+                               Covariate balance after gradient-boosted propensity weighting for ABG and VBG test-ordering models
+
+                                                                         Sample       Raw     IPW
+
+
+                                                       ABG                                                    VBG
+  Overall (mean |SMD|)
+                 curr_bmi
+    serum_phos:<NA>
+      serum_lac:<NA>
+                       sbp
+                serum_ca
+                       dbp
+                location_0
+                location_1
+encounter_type_Inpatient
+                         hr
+             serum_hco3
+              serum_lac
+                 serum_cl
+               sbp:<NA>
+               dbp:<NA>
+              wbc:<NA>
+               temp_new
+                       wbc
+      age_at_encounter
+                         plt
+                serum_cr
+         curr_bmi:<NA>
+                   sodium
+         race_ethnicity_0
+                  hr:<NA>
+             serum_phos
+        serum_ca:<NA>
+    serum_hco3:<NA>
+         serum_cl:<NA>
+        serum_cr:<NA>
+       temp_new:<NA>
+           sodium:<NA>
+          serum_k:<NA>
+                sex_Male
+         race_ethnicity_6
+                location_3
+                 plt:<NA>
+                        chf
+                       ckd
+         race_ethnicity_1
+                  serum_k
+                        dm
+                       osa
+                       phtn
+                   asthma
+                location_2
+                      copd
+         race_ethnicity_2
+         race_ethnicity_4
+         race_ethnicity_3
+         race_ethnicity_5
+              acute_nmd
+                                0.0         0.1        0.2         0.3          0.4    0.0          0.1       0.2         0.3       0.4
+                                                                  Absolute Standardized Mean Differences
+
+
+
+
+                                                                          121
+                       Figure S7. Propensity-score overlap for gradient-boosted ABG and VBG test-ordering models
+
+              Propensity-score overlap for gradient-boosted ABG and VBG test-ordering models
+
+                                                     Group         Untested       Tested
+
+
+                                     ABG                                                           VBG
+          3
+                                                                       4
+
+
+
+
+                                                                       3
+          2
+
+
+
+Density                                                                2
+
+          1
+
+                                                                       1
+
+
+
+
+          0                                                            0
+
+              0.00      0.25         0.50         0.75         1.00        0.00        0.25        0.50            0.75   1.00
+                                                            Propensity score
+
+
+
+
+                                                                 122
+                  Figure S8. SHAP-style contribution summaries for gradient-boosted ABG and VBG test-ordering models
+                            GBM IPSW test-ordering models: SHAP-style contribution summaries
+                                                    ABG                                                                      VBG
+
+
+              serum_lac                                                                     location1
+
+
+            serum_phos                                                                          wbc
+
+
+  encounter_typeInpatient                                                                 temp_new
+
+
+encounter_typeEmergency                                                                   serum_lac
+
+
+               serum_ca                                                                    curr_bmi
+
+
+                location1                                                                   location0
+
+
+               curr_bmi                                                                          sbp
+
+
+                location0                                                               serum_phos
+
+
+              temp_new                                                                            hr
+
+
+                     sbp                                                              race_ethnicity0
+
+
+                             0.0          0.1                  0.2             0.3                      0.0            0.1         0.2   0.3
+                                                                                  Mean |SHAP value|
+
+
+                                                               Artifact check summary
+
+
+                                                check_status               severity    allowed_missing        n_rows
+
+                                                present                    none        FALSE                      56
+                                                external_manual_declared   info        TRUE                        1
+                                                suppressed_draft_only      none        TRUE                        1
+
+
+
+
+                                                                            123
+                                                        Diagnostics audit summary
+
+
+      component   metric                       status   severity   value   note
+
+      Audit       overall_status               fail     high       FAIL    Overall diagnostics audit status derived from the highest-severity unresolved issue.
+      Outcome     separation_flags_total       fail     high       328     Separation or near-separation can bias ORs and confidence intervals.
+      Inventory   expected_artifacts_missing   pass     none       0       Count of expected diagnostics artifacts missing from Results/.
+      MI          smoke_test_failed            pass     none       FALSE   Smoke test failure indicates the MI execution path is unstable.
+      MI          chain_diagnostics_issue      pass     none       FALSE   numeric_names=FALSE; drift_tail_na_frac=0.000
+
+      Balance     abg_max_abs_smd              pass     none       0.091   ABG target balance threshold is 0.10.
+      Balance     vbg_max_abs_smd              pass     none       0.042   VBG target balance threshold is 0.10.
+      Plotting    plot_drop_log_present        pass     none       TRUE    Plot drop logging should exist even if no rows are present.
+
+
+
+
+124
+                                                                                       Diagnostics audit issues
+
+      severity   component   evidence_file                       evidence_snippet                    why_it_matters                                                  recommended_fix
+
+      high       Outcome     Results/model_fit_diagnostics.csv   sep_flag TRUE for 328 / 2612 fits   High rate of separation/near-separation can bias ORs and CIs.   Inspect flagged outcomes; consider penalized fits or check data sparsity.
+
+
+
+
+                                                                                 run_id                          run_ts
+
+                                                                                 20260419_112645                 2026-04-19 11:26:45.267227
+
+
+
+
+125
+Software: R 4.5.3 ; key packages: mice, WeightIt, cobalt, survey, rms.
+
+
+
+
+                                                                     126
+

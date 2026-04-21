@@ -1,2 +1,2 @@
 "manuscript_label","numbering_slot","kind","section","artifact_role","ext","artifact_path","exists","source_type","required_in_validation","pdf_display","allowed_missing","check_status","severity","notes","run_id","run_ts"
-"Supplementary Table 1","Supplementary Table 1","table","supplement","external/manual","","",NA,"external/manual",TRUE,FALSE,TRUE,"external_manual_declared","info","Defined outside the notebook; intentionally not generated here.","20260418_181006","2026-04-18 18:10:06.674532"
+"Supplementary Table 1","Supplementary Table 1","table","supplement","external/manual","","",NA,"external/manual",TRUE,FALSE,TRUE,"external_manual_declared","info","Defined outside the notebook; intentionally not generated here.","20260419_112645","2026-04-19 11:26:45.267227"
