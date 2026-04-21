@@ -351,9 +351,10 @@ can be accessed in the usual way.
 \NormalTok{  knitr}\SpecialCharTok{::}\FunctionTok{include\_graphics}\NormalTok{(inline\_path)}
 \NormalTok{\}}
 
-\CommentTok{\# Canonical PDF path: export all figure/table artifacts and include analysis}
-\CommentTok{\# previews plus manuscript{-}facing assets in the rendered notebook.}
-\NormalTok{VALIDATION\_INLINE\_ANALYSIS\_PREVIEWS }\OtherTok{\textless{}{-}} \ConstantTok{TRUE}
+\CommentTok{\# Canonical PDF path: export all figure/table artifacts, keep executed source}
+\CommentTok{\# visible, and reserve rendered output for manuscript{-}facing displays plus}
+\CommentTok{\# compact provenance/status summaries. QA/debug figures remain sidecar artifacts.}
+\NormalTok{VALIDATION\_INLINE\_ANALYSIS\_PREVIEWS }\OtherTok{\textless{}{-}} \ConstantTok{FALSE}
 
 \CommentTok{\# helper: normalize manuscript{-}facing text to a plain{-}ASCII representation so}
 \CommentTok{\# PDF labels/captions do not depend on platform{-}specific glyph handling.}
@@ -603,6 +604,70 @@ can be accessed in the usual way.
   \FunctionTok{invisible}\NormalTok{(}\ConstantTok{NULL}\NormalTok{)}
 \NormalTok{\}}
 
+\CommentTok{\# helper: render one numbered manuscript table as multiple explicit panels.}
+\CommentTok{\# This avoids automatic wide{-}table splitting, which can detach the final column}
+\CommentTok{\# from the table body in LaTeX output.}
+\NormalTok{render\_panel\_table\_pdf }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(panels, caption, file\_stub,}
+                                   \AttributeTok{digits =} \DecValTok{2}\NormalTok{,}
+                                   \AttributeTok{display\_label =} \ConstantTok{NULL}\NormalTok{,}
+                                   \AttributeTok{landscape =} \ConstantTok{TRUE}\NormalTok{,}
+                                   \AttributeTok{page\_break\_before =} \ConstantTok{TRUE}\NormalTok{,}
+                                   \AttributeTok{csv\_df =} \ConstantTok{NULL}\NormalTok{) \{}
+  \FunctionTok{stopifnot}\NormalTok{(}\FunctionTok{is.list}\NormalTok{(panels), }\FunctionTok{length}\NormalTok{(panels) }\SpecialCharTok{\textgreater{}} \DecValTok{0}\NormalTok{L)}
+\NormalTok{  panel\_names }\OtherTok{\textless{}{-}} \FunctionTok{names}\NormalTok{(panels)}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.null}\NormalTok{(panel\_names) }\SpecialCharTok{||} \FunctionTok{any}\NormalTok{(}\SpecialCharTok{!}\FunctionTok{nzchar}\NormalTok{(panel\_names))) \{}
+\NormalTok{    panel\_names }\OtherTok{\textless{}{-}} \FunctionTok{paste}\NormalTok{(}\StringTok{"Panel"}\NormalTok{, LETTERS[}\FunctionTok{seq\_along}\NormalTok{(panels)])}
+\NormalTok{  \}}
+  \FunctionTok{stopifnot}\NormalTok{(}\FunctionTok{all}\NormalTok{(}\FunctionTok{vapply}\NormalTok{(panels, is.data.frame, }\FunctionTok{logical}\NormalTok{(}\DecValTok{1}\NormalTok{L))))}
+
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.null}\NormalTok{(csv\_df)) \{}
+\NormalTok{    csv\_df }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(}
+      \FunctionTok{lapply}\NormalTok{(}\FunctionTok{seq\_along}\NormalTok{(panels), }\ControlFlowTok{function}\NormalTok{(idx) \{}
+\NormalTok{        dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(panels[[idx]], }\AttributeTok{panel =}\NormalTok{ panel\_names[[idx]], }\AttributeTok{.before =} \DecValTok{1}\NormalTok{L)}
+\NormalTok{      \})}
+\NormalTok{    )}
+\NormalTok{  \}}
+  \FunctionTok{write\_csv\_safely}\NormalTok{(csv\_df, }\FunctionTok{results\_path}\NormalTok{(}\FunctionTok{paste0}\NormalTok{(file\_stub, }\StringTok{".csv"}\NormalTok{)), }\AttributeTok{row\_names =} \ConstantTok{FALSE}\NormalTok{)}
+
+\NormalTok{  build\_kbl }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(df\_part) \{}
+\NormalTok{    kbl }\OtherTok{\textless{}{-}}\NormalTok{ knitr}\SpecialCharTok{::}\FunctionTok{kable}\NormalTok{(}
+\NormalTok{      df\_part,}
+      \AttributeTok{format =} \StringTok{"latex"}\NormalTok{,}
+      \AttributeTok{booktabs =} \ConstantTok{TRUE}\NormalTok{,}
+      \AttributeTok{longtable =} \ConstantTok{FALSE}\NormalTok{,}
+      \AttributeTok{digits =}\NormalTok{ digits}
+\NormalTok{    )}
+\NormalTok{    kbl }\OtherTok{\textless{}{-}}\NormalTok{ kableExtra}\SpecialCharTok{::}\FunctionTok{kable\_styling}\NormalTok{(}
+\NormalTok{      kbl,}
+      \AttributeTok{latex\_options =} \FunctionTok{c}\NormalTok{(}\StringTok{"hold\_position"}\NormalTok{, }\StringTok{"scale\_down"}\NormalTok{),}
+      \AttributeTok{font\_size =} \DecValTok{7}\NormalTok{,}
+      \AttributeTok{full\_width =} \ConstantTok{FALSE}\NormalTok{,}
+      \AttributeTok{position =} \StringTok{"center"}
+\NormalTok{    )}
+    \FunctionTok{latex\_safe\_table\_text}\NormalTok{(}\FunctionTok{as.character}\NormalTok{(kbl))}
+\NormalTok{  \}}
+
+\NormalTok{  panel\_blocks }\OtherTok{\textless{}{-}} \FunctionTok{unlist}\NormalTok{(}\FunctionTok{lapply}\NormalTok{(}\FunctionTok{seq\_along}\NormalTok{(panels), }\ControlFlowTok{function}\NormalTok{(idx) \{}
+\NormalTok{    panel\_title }\OtherTok{\textless{}{-}} \FunctionTok{paste0}\NormalTok{(}\StringTok{"Panel "}\NormalTok{, LETTERS[[idx]], }\StringTok{". "}\NormalTok{, panel\_names[[idx]])}
+    \ControlFlowTok{if}\NormalTok{ (knitr}\SpecialCharTok{::}\FunctionTok{is\_latex\_output}\NormalTok{()) \{}
+      \FunctionTok{c}\NormalTok{(}
+        \FunctionTok{paste0}\NormalTok{(}\StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{medskip}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{noindent}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{textbf\{"}\NormalTok{, }\FunctionTok{escape\_latex\_text}\NormalTok{(}\FunctionTok{latex\_safe\_table\_text}\NormalTok{(panel\_title)), }\StringTok{"\}}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{par"}\NormalTok{),}
+        \FunctionTok{build\_kbl}\NormalTok{(panels[[idx]])}
+\NormalTok{      )}
+\NormalTok{    \} }\ControlFlowTok{else}\NormalTok{ \{}
+      \FunctionTok{c}\NormalTok{(}\FunctionTok{paste0}\NormalTok{(}\StringTok{"**"}\NormalTok{, panel\_title, }\StringTok{"**"}\NormalTok{), }\FunctionTok{as.character}\NormalTok{(knitr}\SpecialCharTok{::}\FunctionTok{kable}\NormalTok{(panels[[idx]], }\AttributeTok{digits =}\NormalTok{ digits)))}
+\NormalTok{    \}}
+\NormalTok{  \}))}
+
+  \FunctionTok{render\_table\_blocks}\NormalTok{(}
+\NormalTok{    panel\_blocks,}
+    \AttributeTok{title =}\NormalTok{ caption,}
+    \AttributeTok{display\_label =}\NormalTok{ display\_label,}
+    \AttributeTok{landscape =}\NormalTok{ landscape,}
+    \AttributeTok{page\_break\_before =}\NormalTok{ page\_break\_before}
+\NormalTok{  )}
+\NormalTok{\}}
+
 \CommentTok{\# helper: render a standalone table PDF that can be cited outside the notebook.}
 \CommentTok{\# This path is used for manuscript/supplement table artifacts with stable names.}
 \NormalTok{resolve\_latex\_command }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(}\AttributeTok{cmd =} \StringTok{"pdflatex"}\NormalTok{) \{}
@@ -724,6 +789,107 @@ can be accessed in the usual way.
   \FunctionTok{invisible}\NormalTok{(out\_pdf)}
 \NormalTok{\}}
 
+\CommentTok{\# helper: write a standalone sidecar PDF for a manuscript table that is rendered}
+\CommentTok{\# as explicit panels in the notebook PDF.}
+\NormalTok{write\_standalone\_panel\_table\_pdf }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(panels, caption, file\_stub,}
+                                             \AttributeTok{digits =} \DecValTok{2}\NormalTok{,}
+                                             \AttributeTok{display\_label =} \ConstantTok{NULL}\NormalTok{,}
+                                             \AttributeTok{landscape =} \ConstantTok{TRUE}\NormalTok{,}
+                                             \AttributeTok{csv\_df =} \ConstantTok{NULL}\NormalTok{) \{}
+  \FunctionTok{stopifnot}\NormalTok{(}\FunctionTok{is.list}\NormalTok{(panels), }\FunctionTok{length}\NormalTok{(panels) }\SpecialCharTok{\textgreater{}} \DecValTok{0}\NormalTok{L)}
+\NormalTok{  panel\_names }\OtherTok{\textless{}{-}} \FunctionTok{names}\NormalTok{(panels)}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.null}\NormalTok{(panel\_names) }\SpecialCharTok{||} \FunctionTok{any}\NormalTok{(}\SpecialCharTok{!}\FunctionTok{nzchar}\NormalTok{(panel\_names))) \{}
+\NormalTok{    panel\_names }\OtherTok{\textless{}{-}} \FunctionTok{paste}\NormalTok{(}\StringTok{"Panel"}\NormalTok{, LETTERS[}\FunctionTok{seq\_along}\NormalTok{(panels)])}
+\NormalTok{  \}}
+  \FunctionTok{stopifnot}\NormalTok{(}\FunctionTok{all}\NormalTok{(}\FunctionTok{vapply}\NormalTok{(panels, is.data.frame, }\FunctionTok{logical}\NormalTok{(}\DecValTok{1}\NormalTok{L))))}
+
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.null}\NormalTok{(csv\_df)) \{}
+\NormalTok{    csv\_df }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(}
+      \FunctionTok{lapply}\NormalTok{(}\FunctionTok{seq\_along}\NormalTok{(panels), }\ControlFlowTok{function}\NormalTok{(idx) \{}
+\NormalTok{        dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(panels[[idx]], }\AttributeTok{panel =}\NormalTok{ panel\_names[[idx]], }\AttributeTok{.before =} \DecValTok{1}\NormalTok{L)}
+\NormalTok{      \})}
+\NormalTok{    )}
+\NormalTok{  \}}
+  \FunctionTok{write\_csv\_safely}\NormalTok{(csv\_df, }\FunctionTok{results\_path}\NormalTok{(}\FunctionTok{paste0}\NormalTok{(file\_stub, }\StringTok{".csv"}\NormalTok{)), }\AttributeTok{row\_names =} \ConstantTok{FALSE}\NormalTok{)}
+
+\NormalTok{  build\_kbl }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(df\_part) \{}
+\NormalTok{    kbl }\OtherTok{\textless{}{-}}\NormalTok{ knitr}\SpecialCharTok{::}\FunctionTok{kable}\NormalTok{(}
+\NormalTok{      df\_part,}
+      \AttributeTok{format =} \StringTok{"latex"}\NormalTok{,}
+      \AttributeTok{booktabs =} \ConstantTok{TRUE}\NormalTok{,}
+      \AttributeTok{longtable =} \ConstantTok{FALSE}\NormalTok{,}
+      \AttributeTok{digits =}\NormalTok{ digits}
+\NormalTok{    )}
+\NormalTok{    kbl }\OtherTok{\textless{}{-}}\NormalTok{ kableExtra}\SpecialCharTok{::}\FunctionTok{kable\_styling}\NormalTok{(}
+\NormalTok{      kbl,}
+      \AttributeTok{latex\_options =} \FunctionTok{c}\NormalTok{(}\StringTok{"hold\_position"}\NormalTok{, }\StringTok{"scale\_down"}\NormalTok{),}
+      \AttributeTok{font\_size =} \DecValTok{7}\NormalTok{,}
+      \AttributeTok{full\_width =} \ConstantTok{FALSE}\NormalTok{,}
+      \AttributeTok{position =} \StringTok{"center"}
+\NormalTok{    )}
+    \FunctionTok{latex\_safe\_table\_text}\NormalTok{(}\FunctionTok{as.character}\NormalTok{(kbl))}
+\NormalTok{  \}}
+
+\NormalTok{  table\_blocks }\OtherTok{\textless{}{-}} \FunctionTok{unlist}\NormalTok{(}\FunctionTok{lapply}\NormalTok{(}\FunctionTok{seq\_along}\NormalTok{(panels), }\ControlFlowTok{function}\NormalTok{(idx) \{}
+\NormalTok{    panel\_title }\OtherTok{\textless{}{-}} \FunctionTok{paste0}\NormalTok{(}\StringTok{"Panel "}\NormalTok{, LETTERS[[idx]], }\StringTok{". "}\NormalTok{, panel\_names[[idx]])}
+    \FunctionTok{c}\NormalTok{(}
+      \FunctionTok{paste0}\NormalTok{(}\StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{medskip}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{noindent}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{textbf\{"}\NormalTok{, }\FunctionTok{escape\_latex\_text}\NormalTok{(}\FunctionTok{latex\_safe\_table\_text}\NormalTok{(panel\_title)), }\StringTok{"\}}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{par"}\NormalTok{),}
+      \FunctionTok{build\_kbl}\NormalTok{(panels[[idx]])}
+\NormalTok{    )}
+\NormalTok{  \}))}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{isTRUE}\NormalTok{(landscape)) \{}
+\NormalTok{    table\_blocks }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{begin\{landscape\}"}\NormalTok{, table\_blocks, }\StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{end\{landscape\}"}\NormalTok{)}
+\NormalTok{  \}}
+
+\NormalTok{  tex\_doc }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}
+    \StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{documentclass\{article\}"}\NormalTok{,}
+    \StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{usepackage[margin=0.75in]\{geometry\}"}\NormalTok{,}
+    \StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{usepackage\{booktabs\}"}\NormalTok{,}
+    \StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{usepackage\{pdflscape\}"}\NormalTok{,}
+    \StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{usepackage\{float\}"}\NormalTok{,}
+    \StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{usepackage\{graphicx\}"}\NormalTok{,}
+    \StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{begin\{document\}"}\NormalTok{,}
+    \FunctionTok{table\_heading\_block}\NormalTok{(caption, }\AttributeTok{display\_label =}\NormalTok{ display\_label),}
+\NormalTok{    table\_blocks,}
+    \StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{end\{document\}"}
+\NormalTok{  )}
+
+\NormalTok{  build\_dir }\OtherTok{\textless{}{-}}\NormalTok{ fs}\SpecialCharTok{::}\FunctionTok{path}\NormalTok{(}\FunctionTok{tempdir}\NormalTok{(), }\FunctionTok{paste0}\NormalTok{(}\StringTok{"table\_pdf\_"}\NormalTok{, file\_stub))}
+\NormalTok{  fs}\SpecialCharTok{::}\FunctionTok{dir\_create}\NormalTok{(build\_dir, }\AttributeTok{recurse =} \ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{  tex\_file }\OtherTok{\textless{}{-}}\NormalTok{ fs}\SpecialCharTok{::}\FunctionTok{path}\NormalTok{(build\_dir, }\FunctionTok{paste0}\NormalTok{(file\_stub, }\StringTok{".tex"}\NormalTok{))}
+  \FunctionTok{writeLines}\NormalTok{(tex\_doc, tex\_file, }\AttributeTok{useBytes =} \ConstantTok{TRUE}\NormalTok{)}
+
+\NormalTok{  latex\_cmd }\OtherTok{\textless{}{-}} \FunctionTok{resolve\_latex\_command}\NormalTok{(}\StringTok{"pdflatex"}\NormalTok{)}
+\NormalTok{  latex\_log }\OtherTok{\textless{}{-}} \FunctionTok{tryCatch}\NormalTok{(}
+    \FunctionTok{system2}\NormalTok{(}
+\NormalTok{      latex\_cmd,}
+      \AttributeTok{args =} \FunctionTok{c}\NormalTok{(}
+        \StringTok{"{-}interaction=nonstopmode"}\NormalTok{,}
+        \StringTok{"{-}halt{-}on{-}error"}\NormalTok{,}
+        \StringTok{"{-}output{-}directory"}\NormalTok{, build\_dir,}
+\NormalTok{        tex\_file}
+\NormalTok{      ),}
+      \AttributeTok{stdout =} \ConstantTok{TRUE}\NormalTok{,}
+      \AttributeTok{stderr =} \ConstantTok{TRUE}
+\NormalTok{    ),}
+    \AttributeTok{error =} \ControlFlowTok{function}\NormalTok{(e) }\FunctionTok{stop}\NormalTok{(}\StringTok{"Standalone panel table PDF render failed for "}\NormalTok{, file\_stub, }\StringTok{": "}\NormalTok{, }\FunctionTok{conditionMessage}\NormalTok{(e))}
+\NormalTok{  )}
+\NormalTok{  latex\_status }\OtherTok{\textless{}{-}} \FunctionTok{attr}\NormalTok{(latex\_log, }\StringTok{"status"}\NormalTok{)}
+  \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(latex\_status) }\SpecialCharTok{\&\&}\NormalTok{ latex\_status }\SpecialCharTok{!=} \DecValTok{0}\NormalTok{) \{}
+    \FunctionTok{stop}\NormalTok{(}
+      \StringTok{"Standalone panel table PDF render failed for "}\NormalTok{, file\_stub, }\StringTok{" via pdflatex. Last log lines: "}\NormalTok{,}
+      \FunctionTok{paste}\NormalTok{(utils}\SpecialCharTok{::}\FunctionTok{tail}\NormalTok{(latex\_log, }\DecValTok{20}\NormalTok{), }\AttributeTok{collapse =} \StringTok{" | "}\NormalTok{)}
+\NormalTok{    )}
+\NormalTok{  \}}
+\NormalTok{  pdf\_file }\OtherTok{\textless{}{-}} \FunctionTok{sub}\NormalTok{(}\StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{.tex$"}\NormalTok{, }\StringTok{".pdf"}\NormalTok{, tex\_file)}
+  \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{file.exists}\NormalTok{(pdf\_file)) \{}
+    \FunctionTok{stop}\NormalTok{(}\StringTok{"Standalone panel table PDF render failed for "}\NormalTok{, file\_stub, }\StringTok{": expected PDF not found at "}\NormalTok{, pdf\_file)}
+\NormalTok{  \}}
+\NormalTok{  out\_pdf }\OtherTok{\textless{}{-}} \FunctionTok{results\_path}\NormalTok{(}\FunctionTok{paste0}\NormalTok{(file\_stub, }\StringTok{".pdf"}\NormalTok{))}
+\NormalTok{  fs}\SpecialCharTok{::}\FunctionTok{file\_copy}\NormalTok{(pdf\_file, out\_pdf, }\AttributeTok{overwrite =} \ConstantTok{TRUE}\NormalTok{)}
+  \FunctionTok{invisible}\NormalTok{(out\_pdf)}
+\NormalTok{\}}
+
 \CommentTok{\# helper: turn any gtsummary table into a PDF{-}safe LaTeX table while keeping}
 \CommentTok{\# numbering under explicit notebook control.}
 \NormalTok{to\_pdf\_table }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(tbl, }\AttributeTok{font\_size =} \DecValTok{8}\NormalTok{, }\AttributeTok{landscape =} \ConstantTok{FALSE}\NormalTok{,}
@@ -817,7 +983,7 @@ Use \texttt{renv::restore()} before rendering.
   \FunctionTok{unique}\NormalTok{(}\FunctionTok{c}\NormalTok{(lib\_pkgs, ns\_pkgs))}
 \NormalTok{\}}
 
-\NormalTok{qmd\_source }\OtherTok{\textless{}{-}}\NormalTok{ here}\SpecialCharTok{::}\FunctionTok{here}\NormalTok{(}\StringTok{"Code Drafts"}\NormalTok{, }\StringTok{"ABG{-}VBG analysis 2026{-}2{-}28.qmd"}\NormalTok{)}
+\NormalTok{qmd\_source }\OtherTok{\textless{}{-}}\NormalTok{ here}\SpecialCharTok{::}\FunctionTok{here}\NormalTok{(}\StringTok{"Code Drafts"}\NormalTok{, }\StringTok{"ABG{-}VBG analysis 2026{-}4{-}21.qmd"}\NormalTok{)}
 \NormalTok{notebook\_pkgs }\OtherTok{\textless{}{-}} \FunctionTok{extract\_notebook\_pkgs}\NormalTok{(qmd\_source)}
 
 \NormalTok{renv\_dep\_pkgs }\OtherTok{\textless{}{-}} \FunctionTok{character}\NormalTok{()}
@@ -1653,9 +1819,9 @@ diagnostics}\label{helper-functions-for-model-diagnostics}
 \NormalTok{  candidates }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}
     \FunctionTok{tryCatch}\NormalTok{(knitr}\SpecialCharTok{::}\FunctionTok{current\_input}\NormalTok{(), }\AttributeTok{error =} \ControlFlowTok{function}\NormalTok{(e) }\ConstantTok{NA\_character\_}\NormalTok{),}
     \FunctionTok{tryCatch}\NormalTok{(knitr}\SpecialCharTok{::}\FunctionTok{current\_input}\NormalTok{(}\AttributeTok{dir =} \ConstantTok{TRUE}\NormalTok{), }\AttributeTok{error =} \ControlFlowTok{function}\NormalTok{(e) }\ConstantTok{NA\_character\_}\NormalTok{),}
-\NormalTok{    here}\SpecialCharTok{::}\FunctionTok{here}\NormalTok{(}\StringTok{"Code Drafts"}\NormalTok{, }\StringTok{"ABG{-}VBG analysis 2026{-}2{-}28.qmd"}\NormalTok{),}
-    \StringTok{"Code Drafts/ABG{-}VBG analysis 2026{-}2{-}28.qmd"}\NormalTok{,}
-    \StringTok{"ABG{-}VBG analysis 2026{-}2{-}28.qmd"}\NormalTok{,}
+\NormalTok{    here}\SpecialCharTok{::}\FunctionTok{here}\NormalTok{(}\StringTok{"Code Drafts"}\NormalTok{, }\StringTok{"ABG{-}VBG analysis 2026{-}4{-}21.qmd"}\NormalTok{),}
+    \StringTok{"Code Drafts/ABG{-}VBG analysis 2026{-}4{-}21.qmd"}\NormalTok{,}
+    \StringTok{"ABG{-}VBG analysis 2026{-}4{-}21.qmd"}\NormalTok{,}
 \NormalTok{    here}\SpecialCharTok{::}\FunctionTok{here}\NormalTok{(}\StringTok{"Code Drafts"}\NormalTok{, }\StringTok{"ABG{-}VBG analysis 2025{-}12{-}11.qmd"}\NormalTok{),}
     \StringTok{"Code Drafts/ABG{-}VBG analysis 2025{-}12{-}11.qmd"}\NormalTok{,}
     \StringTok{"ABG{-}VBG analysis 2025{-}12{-}11.qmd"}
@@ -2949,14 +3115,20 @@ diagnostics}\label{helper-functions-for-model-diagnostics}
 \NormalTok{build\_key\_results\_figure }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(or\_df, prob\_df, figure\_title, figure\_caption) \{}
 \NormalTok{  or\_plot }\OtherTok{\textless{}{-}} \FunctionTok{build\_key\_results\_or\_column}\NormalTok{(or\_df, }\AttributeTok{show\_row\_labels =} \ConstantTok{TRUE}\NormalTok{)}
 \NormalTok{  prob\_plot }\OtherTok{\textless{}{-}} \FunctionTok{build\_key\_results\_prob\_column}\NormalTok{(prob\_df, }\AttributeTok{show\_row\_labels =} \ConstantTok{FALSE}\NormalTok{)}
+\NormalTok{  annotation\_args }\OtherTok{\textless{}{-}} \FunctionTok{list}\NormalTok{(}\AttributeTok{title =}\NormalTok{ figure\_title)}
+  \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(figure\_caption) }\SpecialCharTok{\&\&} \FunctionTok{nzchar}\NormalTok{(figure\_caption)) \{}
+\NormalTok{    annotation\_args}\SpecialCharTok{$}\NormalTok{caption }\OtherTok{\textless{}{-}}\NormalTok{ figure\_caption}
+\NormalTok{  \}}
 \NormalTok{  (or\_plot }\SpecialCharTok{|}\NormalTok{ prob\_plot) }\SpecialCharTok{+}
 \NormalTok{    patchwork}\SpecialCharTok{::}\FunctionTok{plot\_layout}\NormalTok{(}\AttributeTok{guides =} \StringTok{"collect"}\NormalTok{, }\AttributeTok{widths =} \FunctionTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{, }\DecValTok{1}\NormalTok{)) }\SpecialCharTok{+}
-\NormalTok{    patchwork}\SpecialCharTok{::}\FunctionTok{plot\_annotation}\NormalTok{(}
-      \AttributeTok{title =}\NormalTok{ figure\_title,}
-      \AttributeTok{caption =}\NormalTok{ figure\_caption,}
-      \AttributeTok{theme =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{theme}\NormalTok{(}
-        \AttributeTok{plot.title =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{element\_text}\NormalTok{(}\AttributeTok{face =} \StringTok{"bold"}\NormalTok{, }\AttributeTok{hjust =} \FloatTok{0.5}\NormalTok{),}
-        \AttributeTok{plot.caption =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{element\_text}\NormalTok{(}\AttributeTok{hjust =} \DecValTok{0}\NormalTok{)}
+    \FunctionTok{do.call}\NormalTok{(}
+\NormalTok{      patchwork}\SpecialCharTok{::}\NormalTok{plot\_annotation,}
+      \FunctionTok{c}\NormalTok{(}
+\NormalTok{        annotation\_args,}
+        \FunctionTok{list}\NormalTok{(}\AttributeTok{theme =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{theme}\NormalTok{(}
+          \AttributeTok{plot.title =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{element\_text}\NormalTok{(}\AttributeTok{face =} \StringTok{"bold"}\NormalTok{, }\AttributeTok{hjust =} \FloatTok{0.5}\NormalTok{),}
+          \AttributeTok{plot.caption =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{element\_text}\NormalTok{(}\AttributeTok{hjust =} \DecValTok{0}\NormalTok{)}
+\NormalTok{        ))}
 \NormalTok{      )}
 \NormalTok{    ) }\SpecialCharTok{\&}
 \NormalTok{    ggplot2}\SpecialCharTok{::}\FunctionTok{theme}\NormalTok{(}\AttributeTok{legend.position =} \StringTok{"top"}\NormalTok{)}
@@ -3161,9 +3333,6 @@ diagnostics}\label{helper-functions-for-model-diagnostics}
       \AttributeTok{group =} \FunctionTok{as.character}\NormalTok{(group),}
       \AttributeTok{outcome =} \FunctionTok{as.character}\NormalTok{(outcome),}
       \AttributeTok{contrast =} \FunctionTok{as.character}\NormalTok{(contrast),}
-      \AttributeTok{OR =}\NormalTok{ OR,}
-      \AttributeTok{LCL =}\NormalTok{ LCL,}
-      \AttributeTok{UCL =}\NormalTok{ UCL,}
       \StringTok{\textasciigrave{}}\AttributeTok{OR (95\% CI)}\StringTok{\textasciigrave{}} \OtherTok{=} \FunctionTok{format\_or\_ci\_export}\NormalTok{(OR, LCL, UCL)}
 \NormalTok{    ) }\SpecialCharTok{|\textgreater{}}
 \NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{arrange}\NormalTok{(}
@@ -3282,14 +3451,20 @@ diagnostics}\label{helper-functions-for-model-diagnostics}
 \NormalTok{assemble\_cat3\_key\_results\_figure }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(or\_df, prob\_df, figure\_title, figure\_caption) \{}
 \NormalTok{  or\_plot }\OtherTok{\textless{}{-}} \FunctionTok{build\_cat3\_or\_column}\NormalTok{(or\_df, }\AttributeTok{show\_row\_labels =} \ConstantTok{TRUE}\NormalTok{)}
 \NormalTok{  prob\_plot }\OtherTok{\textless{}{-}} \FunctionTok{build\_cat3\_prob\_column}\NormalTok{(prob\_df, }\AttributeTok{show\_row\_labels =} \ConstantTok{FALSE}\NormalTok{)}
+\NormalTok{  annotation\_args }\OtherTok{\textless{}{-}} \FunctionTok{list}\NormalTok{(}\AttributeTok{title =}\NormalTok{ figure\_title)}
+  \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(figure\_caption) }\SpecialCharTok{\&\&} \FunctionTok{nzchar}\NormalTok{(figure\_caption)) \{}
+\NormalTok{    annotation\_args}\SpecialCharTok{$}\NormalTok{caption }\OtherTok{\textless{}{-}}\NormalTok{ figure\_caption}
+\NormalTok{  \}}
 \NormalTok{  (or\_plot }\SpecialCharTok{|}\NormalTok{ prob\_plot) }\SpecialCharTok{+}
 \NormalTok{    patchwork}\SpecialCharTok{::}\FunctionTok{plot\_layout}\NormalTok{(}\AttributeTok{guides =} \StringTok{"collect"}\NormalTok{, }\AttributeTok{widths =} \FunctionTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{, }\DecValTok{1}\NormalTok{)) }\SpecialCharTok{+}
-\NormalTok{    patchwork}\SpecialCharTok{::}\FunctionTok{plot\_annotation}\NormalTok{(}
-      \AttributeTok{title =}\NormalTok{ figure\_title,}
-      \AttributeTok{caption =}\NormalTok{ figure\_caption,}
-      \AttributeTok{theme =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{theme}\NormalTok{(}
-        \AttributeTok{plot.title =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{element\_text}\NormalTok{(}\AttributeTok{face =} \StringTok{"bold"}\NormalTok{, }\AttributeTok{hjust =} \FloatTok{0.5}\NormalTok{),}
-        \AttributeTok{plot.caption =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{element\_text}\NormalTok{(}\AttributeTok{hjust =} \DecValTok{0}\NormalTok{)}
+    \FunctionTok{do.call}\NormalTok{(}
+\NormalTok{      patchwork}\SpecialCharTok{::}\NormalTok{plot\_annotation,}
+      \FunctionTok{c}\NormalTok{(}
+\NormalTok{        annotation\_args,}
+        \FunctionTok{list}\NormalTok{(}\AttributeTok{theme =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{theme}\NormalTok{(}
+          \AttributeTok{plot.title =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{element\_text}\NormalTok{(}\AttributeTok{face =} \StringTok{"bold"}\NormalTok{, }\AttributeTok{hjust =} \FloatTok{0.5}\NormalTok{),}
+          \AttributeTok{plot.caption =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{element\_text}\NormalTok{(}\AttributeTok{hjust =} \DecValTok{0}\NormalTok{)}
+\NormalTok{        ))}
 \NormalTok{      )}
 \NormalTok{    ) }\SpecialCharTok{\&}
 \NormalTok{    ggplot2}\SpecialCharTok{::}\FunctionTok{theme}\NormalTok{(}\AttributeTok{legend.position =} \StringTok{"top"}\NormalTok{)}
@@ -3999,693 +4174,14 @@ models}\label{configuration-for-the-ipw-models}
 \NormalTok{\})}
 \NormalTok{factor\_diag }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(factor\_diag)}
 \FunctionTok{write\_csv\_safely}\NormalTok{(factor\_diag, }\FunctionTok{results\_path}\NormalTok{(}\StringTok{"factor\_levels\_diagnostic.csv"}\NormalTok{), }\AttributeTok{row\_names =} \ConstantTok{FALSE}\NormalTok{)}
-\FunctionTok{render\_table\_pdf}\NormalTok{(}
+\FunctionTok{render\_table\_pdf\_maybe}\NormalTok{(}
 \NormalTok{  factor\_diag,}
   \AttributeTok{caption =} \StringTok{"Factor level diagnostics (all variables)"}\NormalTok{,}
   \AttributeTok{file\_stub =} \StringTok{"factor\_levels\_diagnostic"}\NormalTok{,}
-  \AttributeTok{digits =} \DecValTok{1}
+  \AttributeTok{digits =} \DecValTok{1}\NormalTok{,}
+  \AttributeTok{show =} \ConstantTok{FALSE}
 \NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{center}\textbf{Factor level diagnostics (all variables)}\end{center}
-
-\begingroup\fontsize{7}{9}\selectfont
-
-\begin{longtable*}{llrrr}
-\toprule
-variable & class & nlevels & n\_missing & pct\_missing\\
-\midrule
-\endfirsthead
-\multicolumn{5}{@{}l}{\textit{(continued)}}\\
-\toprule
-variable & class & nlevels & n\_missing & pct\_missing\\
-\midrule
-\endhead
-
-\endfoot
-\bottomrule
-\endlastfoot
-encounter\_id & character & NA & 0 & 0.0\\
-rfs & character & NA & 0 & 0.0\\
-sex & factor & 2 & 0 & 0.0\\
-race & haven\_labelled & NA & 0 & 0.0\\
-ethnicity & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-location & factor & 4 & 0 & 0.0\\
-age\_at\_encounter & numeric & NA & 0 & 0.0\\
-los & numeric & NA & 0 & 0.0\\
-curr\_bmi & numeric & NA & 2934 & 56.7\\
-hr & numeric & NA & 1890 & 36.5\\
-\addlinespace
-curr\_height & numeric & NA & 1462 & 28.3\\
-vbg\_temp & numeric & NA & 5175 & 100.0\\
-abg\_temp & numeric & NA & 5175 & 100.0\\
-vbg\_o2sat & numeric & NA & 4474 & 86.5\\
-abg\_o2sat & numeric & NA & 4097 & 79.2\\
-\addlinespace
-sao2\_blood & numeric & NA & 4932 & 95.3\\
-value\_prev\_weight & numeric & NA & 4720 & 91.2\\
-value\_prev\_height & numeric & NA & 4488 & 86.7\\
-value\_prev\_bmi & numeric & NA & 4859 & 93.9\\
-value\_highest\_20198 & numeric & NA & 3929 & 75.9\\
-\addlinespace
-value\_highest\_115576 & numeric & NA & 4652 & 89.9\\
-value\_highest\_327718 & numeric & NA & 4939 & 95.4\\
-vbg\_co2 & numeric & NA & 3730 & 72.1\\
-highest\_vbg\_co2 & numeric & NA & 3726 & 72.0\\
-pco2\_nos & numeric & NA & 4568 & 88.3\\
-\addlinespace
-highest\_pco2\_nos & numeric & NA & 4568 & 88.3\\
-abg\_ph & numeric & NA & 3240 & 62.6\\
-vbg\_ph & numeric & NA & 3638 & 70.3\\
-abg\_hco3 & numeric & NA & 4021 & 77.7\\
-vbg\_hco3 & numeric & NA & 3859 & 74.6\\
-\addlinespace
-sodium & numeric & NA & 261 & 5.0\\
-serum\_cr & numeric & NA & 481 & 9.3\\
-hgb & numeric & NA & 566 & 10.9\\
-serum\_hco3 & numeric & NA & 282 & 5.4\\
-serum\_cl & numeric & NA & 298 & 5.8\\
-\addlinespace
-serum\_lac & numeric & NA & 3125 & 60.4\\
-serum\_k & numeric & NA & 402 & 7.8\\
-temp\_cor\_oxygen & numeric & NA & 5090 & 98.4\\
-vbg\_ph\_temp\_cor & numeric & NA & 5091 & 98.4\\
-vbg\_po2 & numeric & NA & 3878 & 74.9\\
-\addlinespace
-vbg\_lactate & numeric & NA & 4993 & 96.5\\
-vbg\_hco3\_calc & numeric & NA & 5050 & 97.6\\
-abg\_po2 & numeric & NA & 3983 & 77.0\\
-abg\_po2\_temp\_cor & numeric & NA & 4925 & 95.2\\
-abg\_ph\_temp\_cor & numeric & NA & 4933 & 95.3\\
-\addlinespace
-abg\_lactate & numeric & NA & 4975 & 96.1\\
-ph\_blood & numeric & NA & 4621 & 89.3\\
-po2\_blood & numeric & NA & 4670 & 90.2\\
-wbc & numeric & NA & 894 & 17.3\\
-plt & numeric & NA & 401 & 7.7\\
-\addlinespace
-bnp\_date & character & NA & 0 & 0.0\\
-serum\_phos\_date & character & NA & 0 & 0.0\\
-serum\_phos & numeric & NA & 2732 & 52.8\\
-serum\_ca\_date & character & NA & 0 & 0.0\\
-serum\_ca & numeric & NA & 515 & 10.0\\
-\addlinespace
-serum\_albumin\_date & character & NA & 0 & 0.0\\
-serum\_albumin & numeric & NA & 1859 & 35.9\\
-serum\_tprot\_date & character & NA & 0 & 0.0\\
-serum\_tprot & numeric & NA & 1961 & 37.9\\
-has\_j9612 & numeric & NA & 0 & 0.0\\
-\addlinespace
-has\_j9622 & numeric & NA & 0 & 0.0\\
-has\_j9602 & numeric & NA & 0 & 0.0\\
-has\_j9692 & numeric & NA & 0 & 0.0\\
-ohs\_code & numeric & NA & 0 & 0.0\\
-has\_j9600 & numeric & NA & 0 & 0.0\\
-\addlinespace
-principal\_diagnosis\_indicator & character & NA & 0 & 0.0\\
-admitting\_diagnosis & character & NA & 0 & 0.0\\
-reason\_for\_visit & character & NA & 0 & 0.0\\
-has\_j9601 & numeric & NA & 0 & 0.0\\
-has\_j961 & numeric & NA & 0 & 0.0\\
-\addlinespace
-has\_j9610 & numeric & NA & 0 & 0.0\\
-has\_j9611 & numeric & NA & 0 & 0.0\\
-has\_j962 & numeric & NA & 0 & 0.0\\
-has\_j9620 & numeric & NA & 0 & 0.0\\
-has\_j9621 & numeric & NA & 0 & 0.0\\
-\addlinespace
-has\_j9690 & numeric & NA & 0 & 0.0\\
-has\_j9691 & numeric & NA & 0 & 0.0\\
-other\_abn\_of\_br & haven\_labelled & NA & 0 & 0.0\\
-cfdo & haven\_labelled & NA & 0 & 0.0\\
-has\_i50\_acute & numeric & NA & 0 & 0.0\\
-\addlinespace
-acute\_nmd & haven\_labelled & NA & 0 & 0.0\\
-sepsis\_dx & haven\_labelled & NA & 0 & 0.0\\
-stupor\_dx & haven\_labelled & NA & 0 & 0.0\\
-cog\_signs\_dx & haven\_labelled & NA & 0 & 0.0\\
-mal\_fat\_dx & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-resp\_acid\_dx & haven\_labelled & NA & 0 & 0.0\\
-sleep\_hypovent\_dx & haven\_labelled & NA & 0 & 0.0\\
-cchs\_dx & haven\_labelled & NA & 0 & 0.0\\
-other\_sleep\_hypovent\_dx & haven\_labelled & NA & 0 & 0.0\\
-acidosis\_unspec & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-headache\_dx & haven\_labelled & NA & 0 & 0.0\\
-cpap & haven\_labelled & NA & 0 & 0.0\\
-tte\_proc & haven\_labelled & NA & 0 & 0.0\\
-aero & haven\_labelled & NA & 0 & 0.0\\
-inh\_teaching & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-cxr1v & haven\_labelled & NA & 0 & 0.0\\
-cxr2v & haven\_labelled & NA & 0 & 0.0\\
-ctcnoncon & haven\_labelled & NA & 0 & 0.0\\
-ctccon & haven\_labelled & NA & 0 & 0.0\\
-cc\_time & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-meas\_venous\_o2\_proc & haven\_labelled & NA & 0 & 0.0\\
-meas\_arterial\_gas\_proc & haven\_labelled & NA & 0 & 0.0\\
-blood\_cx\_proc & haven\_labelled & NA & 0 & 0.0\\
-art\_punct\_proc & haven\_labelled & NA & 0 & 0.0\\
-ctabdpelv & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-osa & haven\_labelled & NA & 0 & 0.0\\
-asthma & haven\_labelled & NA & 0 & 0.0\\
-copd & haven\_labelled & NA & 0 & 0.0\\
-chf & haven\_labelled & NA & 0 & 0.0\\
-stroke & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-ckd & haven\_labelled & NA & 0 & 0.0\\
-pvd & haven\_labelled & NA & 0 & 0.0\\
-oud & haven\_labelled & NA & 0 & 0.0\\
-sedatives & haven\_labelled & NA & 0 & 0.0\\
-phtn & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-polycy & haven\_labelled & NA & 0 & 0.0\\
-po\_steroid & haven\_labelled & NA & 0 & 0.0\\
-narcan & haven\_labelled & NA & 0 & 0.0\\
-inpt\_inh & haven\_labelled & NA & 0 & 0.0\\
-vasodilators & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-ip\_diuretics & haven\_labelled & NA & 0 & 0.0\\
-ip\_abx & haven\_labelled & NA & 0 & 0.0\\
-paralytic & haven\_labelled & NA & 0 & 0.0\\
-op\_diuretics & haven\_labelled & NA & 0 & 0.0\\
-op\_opiate & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-op\_mat & haven\_labelled & NA & 0 & 0.0\\
-op\_nrt & haven\_labelled & NA & 0 & 0.0\\
-copd\_med & haven\_labelled & NA & 0 & 0.0\\
-muscle\_relax & haven\_labelled & NA & 0 & 0.0\\
-pat\_enc\_hash & character & NA & 0 & 0.0\\
-\addlinespace
-ABG\_rfs & numeric & NA & 0 & 0.0\\
-is\_amb & numeric & NA & 0 & 0.0\\
-encounter\_date & Date & NA & 0 & 0.0\\
-age\_by\_ten & numeric & NA & 0 & 0.0\\
-age\_decade & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-death\_date & numeric & NA & 4467 & 86.3\\
-died & numeric & NA & 0 & 0.0\\
-months\_death\_or\_cens & numeric & NA & 0 & 0.0\\
-curr\_weight & numeric & NA & 1624 & 31.4\\
-curr\_weight\_date & numeric & NA & 1624 & 31.4\\
-\addlinespace
-prev\_weight\_date & numeric & NA & 4720 & 91.2\\
-curr\_height\_date & numeric & NA & 1462 & 28.3\\
-prev\_height\_date & numeric & NA & 4488 & 86.7\\
-curr\_bmi\_date & numeric & NA & 2934 & 56.7\\
-prev\_bmi\_date & numeric & NA & 4858 & 93.9\\
-\addlinespace
-height & numeric & NA & 1459 & 28.2\\
-height\_date & numeric & NA & 1459 & 28.2\\
-weight & numeric & NA & 1620 & 31.3\\
-weight\_date & numeric & NA & 1620 & 31.3\\
-calc\_bmi & numeric & NA & 2191 & 42.3\\
-\addlinespace
-calc\_bmi\_date & numeric & NA & 2191 & 42.3\\
-working\_bmi & numeric & NA & 2932 & 56.7\\
-working\_bmi\_date & numeric & NA & 2932 & 56.7\\
-bmi & numeric & NA & 1777 & 34.3\\
-bmi\_date & numeric & NA & 1777 & 34.3\\
-\addlinespace
-bmi\_int & numeric & NA & 1777 & 34.3\\
-bmi\_by\_five & numeric & NA & 1777 & 34.3\\
-rr & numeric & NA & 2845 & 55.0\\
-rr\_date & numeric & NA & 2838 & 54.8\\
-temp\_new & numeric & NA & 2501 & 48.3\\
-\addlinespace
-new\_temp\_date & numeric & NA & 2501 & 48.3\\
-sbp & numeric & NA & 1544 & 29.8\\
-sbp\_date & numeric & NA & 1544 & 29.8\\
-dbp & numeric & NA & 1556 & 30.1\\
-dbp\_date & numeric & NA & 1550 & 30.0\\
-\addlinespace
-spo2\_date & numeric & NA & 3665 & 70.8\\
-hr\_date & numeric & NA & 1889 & 36.5\\
-abg\_ph\_date & numeric & NA & 4054 & 78.3\\
-vbg\_ph\_date & numeric & NA & 3754 & 72.5\\
-abg\_hco3\_date & numeric & NA & 4004 & 77.4\\
-\addlinespace
-abg\_hco3\_int & numeric & NA & 4021 & 77.7\\
-vbg\_hco3\_date & numeric & NA & 3841 & 74.2\\
-sodium\_date & numeric & NA & 260 & 5.0\\
-serum\_k\_date & numeric & NA & 402 & 7.8\\
-hgb\_date & numeric & NA & 426 & 8.2\\
-\addlinespace
-wbc\_date & numeric & NA & 759 & 14.7\\
-plt\_date & numeric & NA & 344 & 6.6\\
-serum\_hco3\_date & numeric & NA & 276 & 5.3\\
-any\_bicarb & numeric & NA & 230 & 4.4\\
-int\_bicarb & numeric & NA & 230 & 4.4\\
-\addlinespace
-hco3\_cat & haven\_labelled & NA & 282 & 5.4\\
-serum\_cl\_date & numeric & NA & 292 & 5.6\\
-serum\_cr\_date & numeric & NA & 444 & 8.6\\
-serum\_lac\_date & numeric & NA & 3085 & 59.6\\
-vbg\_co2\_date & numeric & NA & 3723 & 71.9\\
-\addlinespace
-pco2\_nos\_date & numeric & NA & 4568 & 88.3\\
-highest\_vbg\_co2\_date & numeric & NA & 3723 & 71.9\\
-highest\_pco2\_nos\_date & numeric & NA & 4568 & 88.3\\
-paco2 & numeric & NA & 3264 & 63.1\\
-paco2\_date\_1 & numeric & NA & 3928 & 75.9\\
-\addlinespace
-paco2\_date\_2 & numeric & NA & 4652 & 89.9\\
-paco2\_date\_3 & numeric & NA & 4939 & 95.4\\
-paco2\_date & numeric & NA & 3259 & 63.0\\
-paco2\_int & numeric & NA & 3264 & 63.1\\
-highest\_paco2 & numeric & NA & 3260 & 63.0\\
-\addlinespace
-paco2\_date\_highest\_1 & numeric & NA & 3928 & 75.9\\
-paco2\_date\_highest\_2 & numeric & NA & 4652 & 89.9\\
-paco2\_date\_highest\_3 & numeric & NA & 4939 & 95.4\\
-paco2\_date\_highest & numeric & NA & 3259 & 63.0\\
-temp\_cor\_oxygen\_date & numeric & NA & 5060 & 97.8\\
-\addlinespace
-temp\_cor\_vbg\_ph\_date & numeric & NA & 5091 & 98.4\\
-vbg\_po2\_date & numeric & NA & 3847 & 74.3\\
-vbg\_lactate\_date & numeric & NA & 4992 & 96.5\\
-vbg\_hco3\_calc\_date & numeric & NA & 5049 & 97.6\\
-abg\_po2\_date & numeric & NA & 3982 & 76.9\\
-\addlinespace
-abg\_po2\_temp\_cor\_date & numeric & NA & 4925 & 95.2\\
-abg\_ph\_temp\_cor\_date & numeric & NA & 4933 & 95.3\\
-abg\_lactate\_date & numeric & NA & 4974 & 96.1\\
-ph\_blood\_date & numeric & NA & 4621 & 89.3\\
-po2\_blood\_date & numeric & NA & 4662 & 90.1\\
-\addlinespace
-vbg\_temp\_date & numeric & NA & 5175 & 100.0\\
-abg\_temp\_date & numeric & NA & 5166 & 99.8\\
-vbg\_o2sat\_date & numeric & NA & 4468 & 86.3\\
-abg\_o2sat\_date & numeric & NA & 3959 & 76.5\\
-sao2\_blood\_date & numeric & NA & 4890 & 94.5\\
-\addlinespace
-paco2\_flag & haven\_labelled & NA & 3264 & 63.1\\
-highest\_paco2\_flag & haven\_labelled & NA & 3260 & 63.0\\
-paco2\_52\_flag & haven\_labelled & NA & 3264 & 63.1\\
-vbg\_co2\_flag & haven\_labelled & NA & 3730 & 72.1\\
-highest\_vbg\_co2\_flag & haven\_labelled & NA & 3726 & 72.0\\
-\addlinespace
-miss\_paco2\_flag & numeric & NA & 0 & 0.0\\
-miss\_vbg\_co2\_flag & numeric & NA & 0 & 0.0\\
-miss\_vbg\_or\_abg\_co2\_flag & numeric & NA & 0 & 0.0\\
-hco3\_flag & haven\_labelled & NA & 282 & 5.4\\
-not\_paco2\_flag & numeric & NA & 3264 & 63.1\\
-\addlinespace
-not\_hco3\_flag & numeric & NA & 282 & 5.4\\
-k\_cat & haven\_labelled & NA & 402 & 7.8\\
-acidemia & haven\_labelled & NA & 2284 & 44.1\\
-abg\_sbe & numeric & NA & 4062 & 78.5\\
-vbg\_sbe & numeric & NA & 3867 & 74.7\\
-\addlinespace
-cw\_simple\_acute\_resp\_acid & haven\_labelled & NA & 4331 & 83.7\\
-paco2\_52\_comp\_flag & haven\_labelled & NA & 3266 & 63.1\\
-po\_steroid\_date & numeric & NA & 2857 & 55.2\\
-narcan\_date & numeric & NA & 4148 & 80.2\\
-inpt\_inh\_date & numeric & NA & 2994 & 57.9\\
-\addlinespace
-vasodilators\_date & numeric & NA & 5152 & 99.6\\
-ip\_diuretics\_date & numeric & NA & 5112 & 98.8\\
-ip\_abx\_date & numeric & NA & 5065 & 97.9\\
-paralytic\_date & numeric & NA & 5134 & 99.2\\
-inpt\_inh\_0 & numeric & NA & 0 & 0.0\\
-\addlinespace
-ip\_abx\_0 & numeric & NA & 0 & 0.0\\
-ip\_diuretics\_0 & numeric & NA & 0 & 0.0\\
-narcan\_0 & numeric & NA & 0 & 0.0\\
-paralytic\_0 & numeric & NA & 0 & 0.0\\
-po\_steroid\_0 & numeric & NA & 0 & 0.0\\
-\addlinespace
-vasodilators\_0 & numeric & NA & 0 & 0.0\\
-op\_diuretics\_first\_date & numeric & NA & 3245 & 62.7\\
-op\_diuretics\_last\_date & numeric & NA & 3256 & 62.9\\
-op\_diuretics\_365d & haven\_labelled & NA & 0 & 0.0\\
-op\_opiate\_first\_date & numeric & NA & 1907 & 36.9\\
-\addlinespace
-op\_opiate\_last\_date & numeric & NA & 1917 & 37.0\\
-op\_opiate\_365d & haven\_labelled & NA & 0 & 0.0\\
-op\_mat\_first\_date & numeric & NA & 4967 & 96.0\\
-op\_mat\_last\_date & numeric & NA & 4970 & 96.0\\
-op\_mat\_365d & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-op\_nrt\_first\_date & numeric & NA & 4588 & 88.7\\
-op\_nrt\_last\_date & numeric & NA & 4590 & 88.7\\
-op\_nrt\_365d & haven\_labelled & NA & 0 & 0.0\\
-copd\_med\_first\_date & numeric & NA & 2608 & 50.4\\
-copd\_med\_last\_date & numeric & NA & 2615 & 50.5\\
-\addlinespace
-copd\_med\_365d & haven\_labelled & NA & 0 & 0.0\\
-muscle\_relax\_first\_date & numeric & NA & 3983 & 77.0\\
-muscle\_relax\_last\_date & numeric & NA & 3989 & 77.1\\
-muscle\_relax\_365d & haven\_labelled & NA & 0 & 0.0\\
-tte\_proc\_first\_date & numeric & NA & 4527 & 87.5\\
-\addlinespace
-tte\_proc\_last\_date & numeric & NA & 4527 & 87.5\\
-vent\_proc & haven\_labelled & NA & 0 & 0.0\\
-niv\_proc & haven\_labelled & NA & 0 & 0.0\\
-imv\_proc & haven\_labelled & NA & 0 & 0.0\\
-cpap\_first\_date & numeric & NA & 4868 & 94.1\\
-\addlinespace
-cpap\_last\_date & numeric & NA & 4868 & 94.1\\
-niv\_proc\_first\_date & numeric & NA & 4841 & 93.5\\
-niv\_proc\_last\_date & numeric & NA & 4841 & 93.5\\
-imv\_proc\_first\_date & numeric & NA & 4621 & 89.3\\
-imv\_proc\_last\_date & numeric & NA & 4621 & 89.3\\
-\addlinespace
-vent\_proc\_first\_date & numeric & NA & 4344 & 83.9\\
-vent\_proc\_last\_date & numeric & NA & 4344 & 83.9\\
-aero\_first\_date & numeric & NA & 4506 & 87.1\\
-aero\_last\_date & numeric & NA & 4506 & 87.1\\
-inh\_teaching\_first\_date & numeric & NA & 5020 & 97.0\\
-\addlinespace
-inh\_teaching\_last\_date & numeric & NA & 5020 & 97.0\\
-cxr1v\_first\_date & numeric & NA & 3799 & 73.4\\
-cxr1v\_last\_date & numeric & NA & 3799 & 73.4\\
-cxr2v\_first\_date & numeric & NA & 5025 & 97.1\\
-cxr2v\_last\_date & numeric & NA & 5025 & 97.1\\
-\addlinespace
-ctcnoncon\_first\_date & numeric & NA & 5025 & 97.1\\
-ctcnoncon\_last\_date & numeric & NA & 5025 & 97.1\\
-ctccon\_first\_date & numeric & NA & 4944 & 95.5\\
-ctccon\_last\_date & numeric & NA & 4944 & 95.5\\
-ctabdpelv\_first\_date & numeric & NA & 4870 & 94.1\\
-\addlinespace
-ctabdpelv\_last\_date & numeric & NA & 4870 & 94.1\\
-meas\_venous\_o2\_proc\_first\_date & numeric & NA & 5109 & 98.7\\
-meas\_venous\_o2\_proc\_last\_date & numeric & NA & 5109 & 98.7\\
-meas\_art\_gas\_proc\_first\_date & numeric & NA & 5130 & 99.1\\
-meas\_art\_gas\_proc\_last\_date & numeric & NA & 5130 & 99.1\\
-\addlinespace
-blood\_cx\_proc\_first\_date & numeric & NA & 4493 & 86.8\\
-blood\_cx\_proc\_last\_date & numeric & NA & 4493 & 86.8\\
-art\_punct\_proc\_first\_date & numeric & NA & 4892 & 94.5\\
-art\_punct\_proc\_last\_date & numeric & NA & 4892 & 94.5\\
-cc\_time\_first\_date & numeric & NA & 4002 & 77.3\\
-\addlinespace
-cc\_time\_last\_date & numeric & NA & 4002 & 77.3\\
-aero\_0 & numeric & NA & 0 & 0.0\\
-blood\_cx\_proc\_0 & numeric & NA & 0 & 0.0\\
-cc\_time\_0 & numeric & NA & 0 & 0.0\\
-cpap\_0 & numeric & NA & 0 & 0.0\\
-\addlinespace
-ctabdpelv\_0 & numeric & NA & 0 & 0.0\\
-ctccon\_0 & numeric & NA & 0 & 0.0\\
-ctcnoncon\_0 & numeric & NA & 0 & 0.0\\
-cxr1v\_0 & numeric & NA & 0 & 0.0\\
-cxr2v\_0 & numeric & NA & 0 & 0.0\\
-\addlinespace
-imv\_proc\_0 & numeric & NA & 0 & 0.0\\
-inh\_teaching\_0 & numeric & NA & 0 & 0.0\\
-niv\_proc\_0 & numeric & NA & 0 & 0.0\\
-tte\_proc\_0 & numeric & NA & 0 & 0.0\\
-vent\_proc\_0 & numeric & NA & 0 & 0.0\\
-\addlinespace
-aero\_dur & numeric & NA & 4506 & 87.1\\
-blood\_cx\_proc\_dur & numeric & NA & 4493 & 86.8\\
-cpap\_dur & numeric & NA & 4868 & 94.1\\
-ctabdpelv\_dur & numeric & NA & 4870 & 94.1\\
-ctccon\_dur & numeric & NA & 4944 & 95.5\\
-\addlinespace
-ctcnoncon\_dur & numeric & NA & 5025 & 97.1\\
-cxr1v\_dur & numeric & NA & 3799 & 73.4\\
-cxr2v\_dur & numeric & NA & 5025 & 97.1\\
-imv\_proc\_dur & numeric & NA & 4621 & 89.3\\
-inh\_teaching\_dur & numeric & NA & 5020 & 97.0\\
-\addlinespace
-niv\_proc\_dur & numeric & NA & 4841 & 93.5\\
-tte\_proc\_dur & numeric & NA & 4527 & 87.5\\
-hypercap\_resp\_failure & haven\_labelled & NA & 0 & 0.0\\
-j9612\_date & numeric & NA & 5139 & 99.3\\
-j9612\_pcpl & haven\_labelled & NA & 5139 & 99.3\\
-\addlinespace
-j9612\_adm & haven\_labelled & NA & 5139 & 99.3\\
-j9612\_vr & haven\_labelled & NA & 5139 & 99.3\\
-j9622\_date & numeric & NA & 5064 & 97.9\\
-j9622\_pcpl & haven\_labelled & NA & 5067 & 97.9\\
-j9622\_adm & haven\_labelled & NA & 5064 & 97.9\\
-\addlinespace
-j9622\_vr & haven\_labelled & NA & 5064 & 97.9\\
-j9602\_date & numeric & NA & 5007 & 96.8\\
-j9602\_pcpl & haven\_labelled & NA & 5010 & 96.8\\
-j9602\_adm & haven\_labelled & NA & 5007 & 96.8\\
-j9602\_vr & haven\_labelled & NA & 5007 & 96.8\\
-\addlinespace
-j9692\_date & numeric & NA & 5153 & 99.6\\
-j9692\_pcpl & haven\_labelled & NA & 5153 & 99.6\\
-j9692\_adm & haven\_labelled & NA & 5153 & 99.6\\
-j9692\_vr & haven\_labelled & NA & 5153 & 99.6\\
-ohs\_code\_date & numeric & NA & 5124 & 99.0\\
-\addlinespace
-e662\_pcpl & haven\_labelled & NA & 5124 & 99.0\\
-e662\_adm & haven\_labelled & NA & 5124 & 99.0\\
-e662\_vr & haven\_labelled & NA & 5124 & 99.0\\
-hypercap\_resp\_failure\_date & numeric & NA & 4873 & 94.2\\
-other\_resp\_failure & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-j9600\_date & numeric & NA & 4995 & 96.5\\
-j9601\_date & numeric & NA & 4265 & 82.4\\
-j961\_date & numeric & NA & 5175 & 100.0\\
-j9610\_date & numeric & NA & 5140 & 99.3\\
-j9611\_date & numeric & NA & 5047 & 97.5\\
-\addlinespace
-j962\_date & numeric & NA & 5175 & 100.0\\
-j9620\_date & numeric & NA & 5153 & 99.6\\
-j9621\_date & numeric & NA & 4916 & 95.0\\
-j9690\_date & numeric & NA & 5050 & 97.6\\
-j9691\_date & numeric & NA & 5105 & 98.6\\
-\addlinespace
-other\_resp\_failure\_date & numeric & NA & 3864 & 74.7\\
-sepsis\_dx\_date & numeric & NA & 4571 & 88.3\\
-stupor\_dx\_date & numeric & NA & 5057 & 97.7\\
-cog\_signs\_dx\_date & numeric & NA & 4689 & 90.6\\
-mal\_fat\_dx\_date & numeric & NA & 4598 & 88.9\\
-\addlinespace
-resp\_acid\_dx\_date & numeric & NA & 5127 & 99.1\\
-sleep\_hypovent\_dx\_date & numeric & NA & 5170 & 99.9\\
-cchs\_dx\_date & numeric & NA & 5175 & 100.0\\
-other\_sleep\_hypovent\_dx\_date & numeric & NA & 5169 & 99.9\\
-acidosis\_unspec\_date & numeric & NA & 5016 & 96.9\\
-\addlinespace
-headache\_dx\_date & numeric & NA & 5023 & 97.1\\
-dysp\_dx & haven\_labelled & NA & 0 & 0.0\\
-dysp\_dx\_date & numeric & NA & 4423 & 85.5\\
-symp\_obs & haven\_labelled & NA & 0 & 0.0\\
-symp\_obs\_date & numeric & NA & 5124 & 99.0\\
-\addlinespace
-abn\_br\_dx & haven\_labelled & NA & 0 & 0.0\\
-abn\_br\_dx\_date & numeric & NA & 5167 & 99.8\\
-resp\_abnormality & haven\_labelled & NA & 0 & 0.0\\
-r0689\_date & numeric & NA & 5089 & 98.3\\
-resp\_abnormality\_date & numeric & NA & 5076 & 98.1\\
-\addlinespace
-other\_abn\_of\_br\_date & numeric & NA & 5089 & 98.3\\
-fast\_br & haven\_labelled & NA & 0 & 0.0\\
-fast\_br\_date & numeric & NA & 5147 & 99.5\\
-pulm\_edema\_dx & haven\_labelled & NA & 0 & 0.0\\
-pulm\_edema\_dx\_date & numeric & NA & 5018 & 97.0\\
-\addlinespace
-pna\_dx & haven\_labelled & NA & 0 & 0.0\\
-pna\_dx\_date & numeric & NA & 4440 & 85.8\\
-acute\_chf & numeric & NA & 0 & 0.0\\
-acute\_old & haven\_labelled & NA & 0 & 0.0\\
-acute\_old\_date & numeric & NA & 0 & 0.0\\
-\addlinespace
-resp\_dep\_compl & haven\_labelled & NA & 0 & 0.0\\
-resp\_dep\_compl\_date & numeric & NA & 5004 & 96.7\\
-acute\_nmd\_date & numeric & NA & 5164 & 99.8\\
-osa\_first\_date & numeric & NA & 4294 & 83.0\\
-osa\_last\_date & numeric & NA & 4296 & 83.0\\
-\addlinespace
-asthma\_first\_date & numeric & NA & 4491 & 86.8\\
-asthma\_last\_date & numeric & NA & 4491 & 86.8\\
-copd\_first\_date & numeric & NA & 4159 & 80.4\\
-copd\_last\_date & numeric & NA & 4160 & 80.4\\
-chf\_first\_date & numeric & NA & 4122 & 79.7\\
-\addlinespace
-chf\_last\_date & numeric & NA & 4126 & 79.7\\
-stroke\_first\_date & numeric & NA & 4805 & 92.9\\
-stroke\_last\_date & numeric & NA & 4807 & 92.9\\
-ckd\_first\_date & numeric & NA & 4267 & 82.5\\
-ckd\_last\_date & numeric & NA & 4268 & 82.5\\
-\addlinespace
-ctd & haven\_labelled & NA & 0 & 0.0\\
-ctd\_first\_date & numeric & NA & 4897 & 94.6\\
-ctd\_last\_date & numeric & NA & 4897 & 94.6\\
-dem & haven\_labelled & NA & 0 & 0.0\\
-dem\_first\_date & numeric & NA & 4853 & 93.8\\
-\addlinespace
-dem\_last\_date & numeric & NA & 4853 & 93.8\\
-dm & haven\_labelled & NA & 0 & 0.0\\
-dm\_first\_date & numeric & NA & 3654 & 70.6\\
-dm\_last\_date & numeric & NA & 3658 & 70.7\\
-pvd\_first\_date & numeric & NA & 4669 & 90.2\\
-\addlinespace
-pvd\_last\_date & numeric & NA & 4669 & 90.2\\
-oud\_first\_date & numeric & NA & 4892 & 94.5\\
-oud\_last\_date & numeric & NA & 4893 & 94.6\\
-sedatives\_first\_date & numeric & NA & 5124 & 99.0\\
-sedatives\_last\_date & numeric & NA & 5124 & 99.0\\
-\addlinespace
-cfdo\_first\_date & numeric & NA & 5166 & 99.8\\
-cfdo\_last\_date & numeric & NA & 5166 & 99.8\\
-phtn\_first\_date & numeric & NA & 4739 & 91.6\\
-phtn\_last\_date & numeric & NA & 4739 & 91.6\\
-polycy\_first\_date & numeric & NA & 5112 & 98.8\\
-\addlinespace
-polycy\_last\_date & numeric & NA & 5112 & 98.8\\
-nmd & haven\_labelled & NA & 0 & 0.0\\
-nmd\_first\_date & numeric & NA & 4942 & 95.5\\
-nmd\_last\_date & numeric & NA & 4943 & 95.5\\
-nic & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-nic\_first\_date & numeric & NA & 3951 & 76.3\\
-nic\_last\_date & numeric & NA & 3952 & 76.4\\
-ovs & haven\_labelled & NA & 0 & 0.0\\
-ats\_ohs\_flag & numeric & NA & 4531 & 87.6\\
-pos\_ohs\_flag & numeric & NA & 0 & 0.0\\
-\addlinespace
-ats\_copd\_flag & numeric & NA & 4560 & 88.1\\
-guidelines & haven\_labelled & NA & 4560 & 88.1\\
-OBESITY\_rfs & numeric & NA & 0 & 0.0\\
-\_merge\_amb\_obes & haven\_labelled & NA & 5175 & 100.0\\
-PREDISPOSITION\_rfs & numeric & NA & 0 & 0.0\\
-\addlinespace
-\_merge\_amb\_predisp & haven\_labelled & NA & 5175 & 100.0\\
-RESPFAIL\_rfs & numeric & NA & 0 & 0.0\\
-\_merge\_amb\_respfail & haven\_labelled & NA & 5175 & 100.0\\
-VBG\_rfs & numeric & NA & 0 & 0.0\\
-\_merge\_amb\_vbg & haven\_labelled & NA & 5175 & 100.0\\
-\addlinespace
-VENTSUPPORT\_rfs & numeric & NA & 0 & 0.0\\
-\_merge\_amb\_ventsupp & haven\_labelled & NA & 5175 & 100.0\\
-is\_emer & numeric & NA & 0 & 0.0\\
-\_merge\_emer\_obes & haven\_labelled & NA & 4674 & 90.3\\
-\_merge\_emer\_predisp & haven\_labelled & NA & 3875 & 74.9\\
-\addlinespace
-\_merge\_emer\_respfail & haven\_labelled & NA & 3818 & 73.8\\
-\_merge\_emer\_vbg & haven\_labelled & NA & 3480 & 67.2\\
-\_merge\_emer\_ventsupp & haven\_labelled & NA & 3465 & 67.0\\
-\_merge\_emer & haven\_labelled & NA & 3465 & 67.0\\
-is\_inp & haven\_labelled & NA & 1710 & 33.0\\
-\addlinespace
-\_merge\_inpat\_obes & haven\_labelled & NA & 3752 & 72.5\\
-\_merge\_inpat\_predisp & haven\_labelled & NA & 2575 & 49.8\\
-\_merge\_inpat\_respfail & haven\_labelled & NA & 2264 & 43.7\\
-\_merge\_inpat\_vbg & haven\_labelled & NA & 1841 & 35.6\\
-\_merge\_inpat\_ventsupp & haven\_labelled & NA & 1710 & 33.0\\
-\addlinespace
-\_merge\_inpat & haven\_labelled & NA & 0 & 0.0\\
-patient\_id & numeric & NA & 0 & 0.0\\
-rfsgroup & haven\_labelled & NA & 0 & 0.0\\
-encounter\_type & factor & 2 & 0 & 0.0\\
-first\_encounter & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-has\_abg & integer & NA & 0 & 0.0\\
-has\_vbg & integer & NA & 0 & 0.0\\
-max\_hco3\_or\_its\_met\_alk & numeric & NA & 3264 & 63.1\\
-prim\_met\_alk & numeric & NA & 4560 & 88.1\\
-max\_hco3\_or\_its\_comb\_met\_alk & numeric & NA & 3264 & 63.1\\
-\addlinespace
-combo\_met\_alk & numeric & NA & 4560 & 88.1\\
-alkalemia & numeric & NA & 2284 & 44.1\\
-paco2\_flag\_and\_alk & numeric & NA & 4560 & 88.1\\
-paco2\_50\_flag & haven\_labelled & NA & 3264 & 63.1\\
-hypercap\_dx\_adm\_flag & numeric & NA & 4873 & 94.2\\
-\addlinespace
-hypercap\_dx\_pcpl\_flag & numeric & NA & 4877 & 94.2\\
-hypercap\_dx\_vr\_flag & numeric & NA & 4873 & 94.2\\
-hypercap\_on\_abg & numeric & NA & 0 & 0.0\\
-hypercap\_on\_vbg & numeric & NA & 0 & 0.0\\
-has\_both\_abg\_vbg & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-has\_neither\_abg\_vbg & haven\_labelled & NA & 0 & 0.0\\
-vbg\_or\_abg\_co2\_flag & haven\_labelled & NA & 0 & 0.0\\
-dx\_hypercap\_on\_abg & numeric & NA & 4873 & 94.2\\
-sugg\_hypercap\_dx\_on\_vbg & numeric & NA & 4873 & 94.2\\
-dx\_hypercap\_on\_vbg & numeric & NA & 4873 & 94.2\\
-\addlinespace
-vbg\_o2sat\_calc & numeric & NA & 0 & 0.0\\
-abg\_o2sat\_calc & numeric & NA & 0 & 0.0\\
-corr\_vbg\_co2 & numeric & NA & 3730 & 72.1\\
-corr\_vbg\_co2\_flag & haven\_labelled & NA & 3730 & 72.1\\
-corr\_hypercap\_on\_vbg & numeric & NA & 0 & 0.0\\
-\addlinespace
-race\_ethnicity & factor & 7 & 0 & 0.0\\
-has\_vbg\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_bmi\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_weight\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_height\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-has\_hr\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_sbp\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_rr\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_temp\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_spo2\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-has\_cl\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_k\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_hco3\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_lactate\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_na\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-has\_cr\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_hgb\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_wbc\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_plt\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_bnp\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-\addlinespace
-has\_phos\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_ca\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_alb\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-has\_tprot\_and\_cat & haven\_labelled & NA & 0 & 0.0\\
-encounter\_type\_dummy1 & numeric & NA & 0 & 0.0\\
-\addlinespace
-encounter\_type\_dummy2 & numeric & NA & 0 & 0.0\\
-encounter\_type\_dummy3 & numeric & NA & 0 & 0.0\\
-female & haven\_labelled & NA & 0 & 0.0\\
-male & numeric & NA & 0 & 0.0\\
-white\_race & numeric & NA & 0 & 0.0\\
-\addlinespace
-black\_race & numeric & NA & 0 & 0.0\\
-unknown\_race & numeric & NA & 0 & 0.0\\
-asian\_race & numeric & NA & 0 & 0.0\\
-nat\_am\_race & numeric & NA & 0 & 0.0\\
-nhpi\_race & numeric & NA & 0 & 0.0\\
-\addlinespace
-not\_hisp\_eth & numeric & NA & 0 & 0.0\\
-hisp\_eth & numeric & NA & 0 & 0.0\\
-unknown\_eth & numeric & NA & 0 & 0.0\\
-location\_dummy1 & numeric & NA & 0 & 0.0\\
-location\_dummy2 & numeric & NA & 0 & 0.0\\
-\addlinespace
-location\_dummy3 & numeric & NA & 0 & 0.0\\
-location\_dummy4 & numeric & NA & 0 & 0.0\\
-ps & numeric & NA & 0 & 0.0\\
-tx\_pr\_decile & numeric & NA & 0 & 0.0\\
-ps\_trunc & numeric & NA & 0 & 0.0\\
-\addlinespace
-sumofweights & numeric & NA & 0 & 0.0\\
-ipw & numeric & NA & 0 & 0.0\\
-stabilized\_weight & numeric & NA & 0 & 0.0\\
-approx\_ipw\_fweight & numeric & NA & 0 & 0.0\\
-vbg\_ps & numeric & NA & 0 & 0.0\\
-\addlinespace
-vbg\_tx\_pr\_decile & numeric & NA & 0 & 0.0\\
-vbg\_ps\_trunc & numeric & NA & 0 & 0.0\\
-vbg\_sumofweights & numeric & NA & 0 & 0.0\\
-vbg\_ipw & numeric & NA & 0 & 0.0\\
-vbg\_stabilized\_weight & numeric & NA & 0 & 0.0\\
-\addlinespace
-vbg\_approx\_ipw\_fweight & numeric & NA & 0 & 0.0\\*
-\end{longtable*}
-\endgroup{}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{\# Factor expansion guard (logs only)}
 \NormalTok{factor\_guard }\OtherTok{\textless{}{-}}\NormalTok{ factor\_diag }\SpecialCharTok{|\textgreater{}}
 \NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(}\SpecialCharTok{!}\FunctionTok{is.na}\NormalTok{(nlevels) }\SpecialCharTok{\&}\NormalTok{ nlevels }\SpecialCharTok{\textgreater{}}\NormalTok{ MAX\_LEVELS\_GBM)}
@@ -4963,7 +4459,7 @@ vbg\_approx\_ipw\_fweight & numeric & NA & 0 & 0.0\\*
 \toprule
 run\_id & run\_mode & pilot\_frac & mi\_ram\_gb & mi\_ram\_gb\_source & mi\_batch\_threshold\\
 \midrule
-20260421\_061058 & pilot & 0.01 & 16 & auto:Darwin & 5000\\
+20260421\_073405 & pilot & 0.01 & 16 & auto:Darwin & 5000\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -5603,7 +5099,7 @@ Inpatient & 3,465 (67\%) & 2,483 (67\%) & 982 (68\%)\\*
 \NormalTok{vbg\_group\_cols }\OtherTok{\textless{}{-}} \FunctionTok{setdiff}\NormalTok{(}\FunctionTok{names}\NormalTok{(tbl1\_vbg\_csv), }\FunctionTok{c}\NormalTok{(table1\_key\_cols, }\StringTok{"panel"}\NormalTok{, }\StringTok{"Everyone"}\NormalTok{))}
 \FunctionTok{stopifnot}\NormalTok{(}\FunctionTok{length}\NormalTok{(abg\_group\_cols) }\SpecialCharTok{==} \DecValTok{2}\NormalTok{L, }\FunctionTok{length}\NormalTok{(vbg\_group\_cols) }\SpecialCharTok{==} \DecValTok{2}\NormalTok{L)}
 
-\NormalTok{tbl1\_combined\_csv }\OtherTok{\textless{}{-}}\NormalTok{ tbl1\_abg\_csv }\SpecialCharTok{|\textgreater{}}
+\NormalTok{tbl1\_combined\_internal }\OtherTok{\textless{}{-}}\NormalTok{ tbl1\_abg\_csv }\SpecialCharTok{|\textgreater{}}
 \NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(}
 \NormalTok{    .data}\SpecialCharTok{$}\NormalTok{row\_id, .data}\SpecialCharTok{$}\NormalTok{panel, .data}\SpecialCharTok{$}\NormalTok{variable, .data}\SpecialCharTok{$}\NormalTok{var\_type, .data}\SpecialCharTok{$}\NormalTok{row\_type,}
 \NormalTok{    .data}\SpecialCharTok{$}\NormalTok{var\_label, .data}\SpecialCharTok{$}\NormalTok{label, .data}\SpecialCharTok{$}\NormalTok{Everyone, dplyr}\SpecialCharTok{::}\FunctionTok{all\_of}\NormalTok{(abg\_group\_cols)}
@@ -5615,8 +5111,24 @@ Inpatient & 3,465 (67\%) & 2,483 (67\%) & 982 (68\%)\\*
 \NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
 \NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(}\SpecialCharTok{{-}}\NormalTok{.data}\SpecialCharTok{$}\NormalTok{row\_id)}
 
+\NormalTok{tbl1\_combined\_csv }\OtherTok{\textless{}{-}}\NormalTok{ tbl1\_combined\_internal }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{transmute}\NormalTok{(}
+    \AttributeTok{Characteristic =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{if\_else}\NormalTok{(}
+\NormalTok{      .data}\SpecialCharTok{$}\NormalTok{row\_type }\SpecialCharTok{==} \StringTok{"level"}\NormalTok{,}
+      \FunctionTok{paste0}\NormalTok{(}\StringTok{"  "}\NormalTok{, .data}\SpecialCharTok{$}\NormalTok{label),}
+\NormalTok{      .data}\SpecialCharTok{$}\NormalTok{label}
+\NormalTok{    ),}
+    \AttributeTok{Everyone =}\NormalTok{ .data}\SpecialCharTok{$}\NormalTok{Everyone,}
+    \StringTok{\textasciigrave{}}\AttributeTok{Did not get ABG}\StringTok{\textasciigrave{}} \OtherTok{=}\NormalTok{ .data[[abg\_group\_cols[[}\DecValTok{1}\NormalTok{L]]]],}
+    \StringTok{\textasciigrave{}}\AttributeTok{Did get ABG}\StringTok{\textasciigrave{}} \OtherTok{=}\NormalTok{ .data[[abg\_group\_cols[[}\DecValTok{2}\NormalTok{L]]]],}
+    \StringTok{\textasciigrave{}}\AttributeTok{Did not get VBG}\StringTok{\textasciigrave{}} \OtherTok{=}\NormalTok{ .data[[vbg\_group\_cols[[}\DecValTok{1}\NormalTok{L]]]],}
+    \StringTok{\textasciigrave{}}\AttributeTok{Did get VBG}\StringTok{\textasciigrave{}} \OtherTok{=}\NormalTok{ .data[[vbg\_group\_cols[[}\DecValTok{2}\NormalTok{L]]]]}
+\NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(dplyr}\SpecialCharTok{::}\FunctionTok{across}\NormalTok{(dplyr}\SpecialCharTok{::}\FunctionTok{everything}\NormalTok{(), }\SpecialCharTok{\textasciitilde{}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{if\_else}\NormalTok{(}\FunctionTok{is.na}\NormalTok{(.x), }\StringTok{""}\NormalTok{, }\FunctionTok{as.character}\NormalTok{(.x))))}
+
 \FunctionTok{write\_csv\_safely}\NormalTok{(tbl1\_abg\_csv, }\FunctionTok{results\_path}\NormalTok{(}\StringTok{"table1\_abg\_status.csv"}\NormalTok{), }\AttributeTok{row\_names =} \ConstantTok{FALSE}\NormalTok{)}
 \FunctionTok{write\_csv\_safely}\NormalTok{(tbl1\_vbg\_csv, }\FunctionTok{results\_path}\NormalTok{(}\StringTok{"table1\_vbg\_status.csv"}\NormalTok{), }\AttributeTok{row\_names =} \ConstantTok{FALSE}\NormalTok{)}
+\FunctionTok{write\_csv\_safely}\NormalTok{(tbl1\_combined\_internal, }\FunctionTok{results\_path}\NormalTok{(}\StringTok{"table1\_combined\_internal.csv"}\NormalTok{), }\AttributeTok{row\_names =} \ConstantTok{FALSE}\NormalTok{)}
 \FunctionTok{write\_csv\_safely}\NormalTok{(tbl1\_combined\_csv, }\FunctionTok{results\_path}\NormalTok{(}\StringTok{"table1\_combined.csv"}\NormalTok{), }\AttributeTok{row\_names =} \ConstantTok{FALSE}\NormalTok{)}
 
 \FunctionTok{write\_standalone\_table\_pdf}\NormalTok{(}
@@ -5625,7 +5137,7 @@ Inpatient & 3,465 (67\%) & 2,483 (67\%) & 982 (68\%)\\*
   \AttributeTok{file\_stub =} \StringTok{"table1\_combined"}\NormalTok{,}
   \AttributeTok{wide =} \ConstantTok{TRUE}\NormalTok{,}
   \AttributeTok{digits =} \DecValTok{2}\NormalTok{,}
-  \AttributeTok{max\_cols =} \DecValTok{8}\NormalTok{,}
+  \AttributeTok{max\_cols =} \DecValTok{6}\NormalTok{,}
   \AttributeTok{landscape =} \ConstantTok{TRUE}\NormalTok{,}
   \AttributeTok{display\_label =} \StringTok{"Table 1"}
 \NormalTok{)}
@@ -6423,10 +5935,6 @@ Three groups using low/normal/high CO2 categories
 \end{Highlighting}
 \end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/or-plot-three-level-unweighted-report-preview.png}
-\end{center}
-
 \subsection{Observed outcome rates by CO2 bin
 (unweighted)}\label{observed-outcome-rates-by-co2-bin-unweighted}
 
@@ -6471,22 +5979,9 @@ Three groups using low/normal/high CO2 categories
 \NormalTok{)}
 
 \FunctionTok{print\_plot\_once}\NormalTok{(p\_co2\_rate\_unw\_abg, }\StringTok{"co2{-}binned{-}rates{-}unweighted{-}abg"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \FloatTok{6.0}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/co2-binned-rates-unweighted-abg-report-preview.png}
-\end{center}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \FunctionTok{print\_plot\_once}\NormalTok{(p\_co2\_rate\_unw\_vbg, }\StringTok{"co2{-}binned{-}rates{-}unweighted{-}vbg"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \FloatTok{6.0}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/co2-binned-rates-unweighted-vbg-report-preview.png}
-\end{center}
 
 \subsection{Restricted cubic spline regressions
 (unweighted)}\label{restricted-cubic-spline-regressions-unweighted}
@@ -6718,25 +6213,8 @@ VBG}\label{unweighted-restricted-cubic-spline---vbg}
 \NormalTok{  )}
 
 \FunctionTok{print\_plot\_once}\NormalTok{(unw\_abg\_panel, }\StringTok{"spline{-}unweighted{-}abg"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \DecValTok{6}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/spline-unweighted-abg-report-preview.png}
-\end{center}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \FunctionTok{print\_plot\_once}\NormalTok{(unw\_vbg\_panel, }\StringTok{"spline{-}unweighted{-}vbg"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \DecValTok{6}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/spline-unweighted-vbg-report-preview.png}
-\end{center}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{axis\_unw\_prob }\OtherTok{\textless{}{-}} \FunctionTok{compute\_prob\_axis\_spec}\NormalTok{(}
   \FunctionTok{list}\NormalTok{(pred\_imv, pred\_niv, pred\_death, pred\_hcrf,}
 \NormalTok{       pred\_imv\_vbg, pred\_niv\_vbg, pred\_death\_vbg, pred\_hcrf\_vbg),}
@@ -6794,22 +6272,9 @@ VBG}\label{unweighted-restricted-cubic-spline---vbg}
 \NormalTok{  )}
 
 \FunctionTok{print\_plot\_once}\NormalTok{(unw\_abg\_prob\_panel, }\StringTok{"spline{-}unweighted{-}abg{-}prob"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \DecValTok{6}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/spline-unweighted-abg-prob-report-preview.png}
-\end{center}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \FunctionTok{print\_plot\_once}\NormalTok{(unw\_vbg\_prob\_panel, }\StringTok{"spline{-}unweighted{-}vbg{-}prob"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \DecValTok{6}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/spline-unweighted-vbg-prob-report-preview.png}
-\end{center}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -7129,15 +6594,7 @@ percentile)}\label{abg-ipw-spline-models-298th-percentile}
 \NormalTok{  )}
 
 \FunctionTok{print\_plot\_once}\NormalTok{(ipw\_abg\_panel, }\StringTok{"spline{-}ipw{-}abg{-}trimmed"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \DecValTok{6}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/spline-ipw-abg-trimmed-report-preview.png}
-\end{center}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{axis\_abg\_ipw\_trim\_prob }\OtherTok{\textless{}{-}} \FunctionTok{compute\_prob\_axis\_spec}\NormalTok{(}
   \FunctionTok{list}\NormalTok{(pred\_imv\_abg, pred\_niv\_abg, pred\_death\_abg, pred\_hcrf\_abg),}
   \AttributeTok{lo\_col =} \StringTok{"p\_LCL"}\NormalTok{, }\AttributeTok{hi\_col =} \StringTok{"p\_UCL"}
@@ -7172,10 +6629,6 @@ percentile)}\label{abg-ipw-spline-models-298th-percentile}
 \FunctionTok{print\_plot\_once}\NormalTok{(ipw\_abg\_prob\_panel, }\StringTok{"spline{-}ipw{-}abg{-}trimmed{-}prob"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \DecValTok{6}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/spline-ipw-abg-trimmed-prob-report-preview.png}
-\end{center}
 
 VBG uses the same GBM tuning as ABG (shared \texttt{gbm\_params}).
 
@@ -7344,15 +6797,7 @@ models}\label{vbg-ipw-weighting-and-spline-models}
 \NormalTok{  )}
 
 \FunctionTok{print\_plot\_once}\NormalTok{(ipw\_vbg\_panel, }\StringTok{"spline{-}ipw{-}vbg"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \DecValTok{6}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/spline-ipw-vbg-report-preview.png}
-\end{center}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{\# helper: draw one VBG IPW predicted{-}probability panel using the ABG/VBG{-}shared}
 \CommentTok{\# probability axis.}
 \NormalTok{plt\_prob\_vbg }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(dat, title)}
@@ -7377,15 +6822,7 @@ models}\label{vbg-ipw-weighting-and-spline-models}
 \NormalTok{  )}
 
 \FunctionTok{print\_plot\_once}\NormalTok{(ipw\_vbg\_prob\_panel, }\StringTok{"spline{-}ipw{-}vbg{-}prob"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \DecValTok{6}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/spline-ipw-vbg-prob-report-preview.png}
-\end{center}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{\# ABG plots with the same axis (shared with VBG)}
 \NormalTok{xlab\_abg }\OtherTok{\textless{}{-}} \FunctionTok{expression}\NormalTok{(}\FunctionTok{paste}\NormalTok{(}\StringTok{"ABG CO"}\NormalTok{[}\DecValTok{2}\NormalTok{], }\StringTok{" (mmHg)"}\NormalTok{))}
 
@@ -7415,15 +6852,7 @@ models}\label{vbg-ipw-weighting-and-spline-models}
 \NormalTok{  )}
 
 \FunctionTok{print\_plot\_once}\NormalTok{(ipw\_abg\_shared\_panel, }\StringTok{"spline{-}ipw{-}abg{-}shared"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \DecValTok{6}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/spline-ipw-abg-shared-report-preview.png}
-\end{center}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{\# helper: redraw the ABG IPW predicted{-}probability panels on the same axis used}
 \CommentTok{\# for VBG so the overlaid comparison figures remain visually comparable.}
 \NormalTok{plt\_prob\_abg }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(dat, title)}
@@ -7448,15 +6877,7 @@ models}\label{vbg-ipw-weighting-and-spline-models}
 \NormalTok{  )}
 
 \FunctionTok{print\_plot\_once}\NormalTok{(ipw\_abg\_shared\_prob\_panel, }\StringTok{"spline{-}ipw{-}abg{-}shared{-}prob"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \DecValTok{6}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/spline-ipw-abg-shared-prob-report-preview.png}
-\end{center}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{\# ABG + VBG overlaid spline panel (non{-}MI IPSW), matching MI{-}style comparison}
 \NormalTok{ipw\_curve\_abg }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(}
 \NormalTok{  pred\_imv\_abg   }\SpecialCharTok{|\textgreater{}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}\AttributeTok{outcome =} \StringTok{"IMV"}\NormalTok{),}
@@ -7499,15 +6920,7 @@ models}\label{vbg-ipw-weighting-and-spline-models}
   \FunctionTok{theme\_pub}\NormalTok{(}\AttributeTok{base\_size =} \DecValTok{10}\NormalTok{)}
 
 \FunctionTok{print\_plot\_once}\NormalTok{(ipw\_overlay\_plot, }\StringTok{"spline{-}ipw{-}overlay{-}abg{-}vbg"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \FloatTok{6.5}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/spline-ipw-overlay-abg-vbg-report-preview.png}
-\end{center}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{ipw\_curve\_abg\_prob }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(}
 \NormalTok{  pred\_imv\_abg   }\SpecialCharTok{|\textgreater{}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}\AttributeTok{outcome =} \StringTok{"IMV"}\NormalTok{),}
 \NormalTok{  pred\_niv\_abg   }\SpecialCharTok{|\textgreater{}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}\AttributeTok{outcome =} \StringTok{"NIV"}\NormalTok{),}
@@ -7553,10 +6966,6 @@ models}\label{vbg-ipw-weighting-and-spline-models}
 \FunctionTok{print\_plot\_once}\NormalTok{(ipw\_overlay\_prob\_plot, }\StringTok{"spline{-}ipw{-}overlay{-}abg{-}vbg{-}prob"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \FloatTok{6.5}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/spline-ipw-overlay-abg-vbg-prob-report-preview.png}
-\end{center}
 
 \subsubsection{Three-level PCO2 categories (weighted; ABG,
 VBG)}\label{three-level-pco2-categories-weighted-abg-vbg}
@@ -7700,10 +7109,6 @@ Three groups with weights and covariate adjustment
 \end{Highlighting}
 \end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/or-plot-three-level-weighted-report-preview.png}
-\end{center}
-
 \subsubsection{Observed outcome rates by CO2 bin (GBM IPSW,
 non-MI)}\label{observed-outcome-rates-by-co2-bin-gbm-ipsw-non-mi}
 
@@ -7750,22 +7155,9 @@ non-MI)}\label{observed-outcome-rates-by-co2-bin-gbm-ipsw-non-mi}
 \NormalTok{)}
 
 \FunctionTok{print\_plot\_once}\NormalTok{(p\_co2\_rate\_ipw\_abg, }\StringTok{"co2{-}binned{-}rates{-}ipw{-}abg"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \FloatTok{6.0}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/co2-binned-rates-ipw-abg-report-preview.png}
-\end{center}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \FunctionTok{print\_plot\_once}\NormalTok{(p\_co2\_rate\_ipw\_vbg, }\StringTok{"co2{-}binned{-}rates{-}ipw{-}vbg"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \FloatTok{6.0}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/co2-binned-rates-ipw-vbg-report-preview.png}
-\end{center}
 
 \subsection{Propensity score
 diagnostics}\label{propensity-score-diagnostics}
@@ -7821,10 +7213,6 @@ Plotting propensity scores
 \FunctionTok{print\_plot\_once}\NormalTok{(p\_ps\_cond, }\StringTok{"propensity{-}histograms{-}conditional"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \DecValTok{5}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/propensity-histograms-conditional-report-preview.png}
-\end{center}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -8002,10 +7390,6 @@ Plotting propensity scores
 \end{Highlighting}
 \end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/loveplot-ipw-gbm-abg-vbg-report-preview.png}
-\end{center}
-
 \begin{Shaded}
 \begin{Highlighting}[]
 \CommentTok{\# Purpose: manuscript Figure S8 SHAP summary for GBM weighting.}
@@ -8035,10 +7419,6 @@ Plotting propensity scores
 \FunctionTok{print\_plot\_force}\NormalTok{(p\_shap, }\StringTok{"shap{-}top10{-}ipw{-}gbm{-}abg{-}vbg"}\NormalTok{, }\AttributeTok{width =} \DecValTok{9}\NormalTok{, }\AttributeTok{height =} \DecValTok{5}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/shap-top10-ipw-gbm-abg-vbg-report-preview.png}
-\end{center}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -10294,15 +9674,7 @@ scale)}\label{predictor-matrix-methods.-run-mice-moderate-settings-for-scale}
 
 \NormalTok{mc\_model\_desc }\OtherTok{\textless{}{-}} \StringTok{"Diagnostic model: imv\_proc \textasciitilde{} has\_abg + age\_at\_encounter + curr\_bmi + sex + encounter\_type (unweighted)."}
 \NormalTok{knitr}\SpecialCharTok{::}\FunctionTok{asis\_output}\NormalTok{(}\FunctionTok{paste0}\NormalTok{(}\StringTok{"**MC error diagnostic model:** "}\NormalTok{, mc\_model\_desc, }\StringTok{"}\SpecialCharTok{\textbackslash{}n}\StringTok{"}\NormalTok{))}
-\end{Highlighting}
-\end{Shaded}
 
-\textbf{MC error diagnostic model:} Diagnostic model: imv\_proc
-\textasciitilde{} has\_abg + age\_at\_encounter + curr\_bmi + sex +
-encounter\_type (unweighted).
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{gt}\SpecialCharTok{::}\FunctionTok{gt}\NormalTok{(mc\_tab) }\SpecialCharTok{|\textgreater{}}
 \NormalTok{  gt}\SpecialCharTok{::}\FunctionTok{tab\_header}\NormalTok{(}\AttributeTok{title =} \StringTok{"Monte Carlo error vs SE (diagnostic only)"}\NormalTok{) }\SpecialCharTok{|\textgreater{}}
 \NormalTok{  gt}\SpecialCharTok{::}\FunctionTok{cols\_label}\NormalTok{(}
@@ -10316,30 +9688,7 @@ encounter\_type (unweighted).
 \NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
 \NormalTok{  gt}\SpecialCharTok{::}\FunctionTok{fmt\_number}\NormalTok{(}\AttributeTok{columns =} \FunctionTok{c}\NormalTok{(estimate, std.error, mc\_error, mc\_err\_over\_se), }\AttributeTok{decimals =} \DecValTok{3}\NormalTok{) }\SpecialCharTok{|\textgreater{}}
 \NormalTok{  gt}\SpecialCharTok{::}\FunctionTok{fmt\_missing}\NormalTok{(}\AttributeTok{columns =}\NormalTok{ gt}\SpecialCharTok{::}\FunctionTok{everything}\NormalTok{(), }\AttributeTok{missing\_text =} \StringTok{"—"}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{table}
-\caption*{
-{\fontsize{20}{25}\selectfont  Monte Carlo error vs SE (diagnostic only)\fontsize{12}{15}\selectfont }
-} 
-\fontsize{12.0pt}{14.0pt}\selectfont
-\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}crrrrrr}
-\toprule
-Term & Estimate & SE & MC error & MC error / SE & 2.5\% & 97.5\% \\ 
-\midrule\addlinespace[2.5pt]
-(Intercept) & -4.044 & 0.460 & 0.070 & 0.153 & -4.960245472 & -3.128229607 \\ 
-has\_abg & 2.140 & 0.124 & 0.004 & 0.034 & 1.897087427 & 2.382226944 \\ 
-age\_at\_encounter & -0.003 & 0.003 & 0.000 & 0.035 & -0.008406873 & 0.003042864 \\ 
-curr\_bmi & -0.009 & 0.011 & 0.002 & 0.177 & -0.032126225 & 0.013355070 \\ 
-sexMale & 0.244 & 0.099 & 0.003 & 0.029 & 0.050154975 & 0.438227845 \\ 
-encounter\_typeInpatient & 1.188 & 0.166 & 0.002 & 0.013 & 0.863066780 & 1.512114356 \\ 
-\bottomrule
-\end{tabular*}
-\end{table}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \CommentTok{\# QC flag for key estimands only (diagnostic, not pass/fail for all coefficients)}
 \NormalTok{mc\_key\_terms }\OtherTok{\textless{}{-}} \FunctionTok{intersect}\NormalTok{(}\FunctionTok{c}\NormalTok{(}\StringTok{"has\_abg"}\NormalTok{), mc\_tab}\SpecialCharTok{$}\NormalTok{term)}
 \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{length}\NormalTok{(mc\_key\_terms)) \{}
@@ -10503,6 +9852,7 @@ encounter\_typeInpatient & 1.188 & 0.166 & 0.002 & 0.013 & 0.863066780 & 1.51211
 \NormalTok{      ggplot2}\SpecialCharTok{::}\FunctionTok{facet\_wrap}\NormalTok{(}\SpecialCharTok{\textasciitilde{}}\NormalTok{variable, }\AttributeTok{scales =} \StringTok{"free\_y"}\NormalTok{) }\SpecialCharTok{+}
       \FunctionTok{theme\_pub}\NormalTok{(}\AttributeTok{base\_size =} \DecValTok{10}\NormalTok{) }\SpecialCharTok{+}
 \NormalTok{      ggplot2}\SpecialCharTok{::}\FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \StringTok{"Mean imputed value by imputation"}\NormalTok{, }\AttributeTok{x =} \StringTok{"Imputation"}\NormalTok{, }\AttributeTok{y =} \StringTok{"Mean"}\NormalTok{)}
+    \FunctionTok{save\_diag\_plot}\NormalTok{(p\_trace, }\FunctionTok{results\_path}\NormalTok{(}\StringTok{"figs"}\NormalTok{, }\StringTok{"diag{-}mi{-}trace{-}means.png"}\NormalTok{), }\AttributeTok{width =} \DecValTok{8}\NormalTok{, }\AttributeTok{height =} \DecValTok{5}\NormalTok{, }\AttributeTok{dpi =} \DecValTok{300}\NormalTok{)}
     \FunctionTok{print}\NormalTok{(p\_trace)}
 \NormalTok{  \}}
 
@@ -10527,6 +9877,7 @@ encounter\_typeInpatient & 1.188 & 0.166 & 0.002 & 0.013 & 0.863066780 & 1.51211
 \NormalTok{    ggplot2}\SpecialCharTok{::}\FunctionTok{facet\_wrap}\NormalTok{(}\SpecialCharTok{\textasciitilde{}}\NormalTok{variable, }\AttributeTok{scales =} \StringTok{"free"}\NormalTok{) }\SpecialCharTok{+}
     \FunctionTok{theme\_pub}\NormalTok{(}\AttributeTok{base\_size =} \DecValTok{10}\NormalTok{) }\SpecialCharTok{+}
 \NormalTok{    ggplot2}\SpecialCharTok{::}\FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \StringTok{"Observed vs imputed distributions (imp1)"}\NormalTok{, }\AttributeTok{x =} \ConstantTok{NULL}\NormalTok{, }\AttributeTok{y =} \StringTok{"Density"}\NormalTok{)}
+  \FunctionTok{save\_diag\_plot}\NormalTok{(p\_dens, }\FunctionTok{results\_path}\NormalTok{(}\StringTok{"figs"}\NormalTok{, }\StringTok{"diag{-}mi{-}density{-}imp1.png"}\NormalTok{), }\AttributeTok{width =} \DecValTok{8}\NormalTok{, }\AttributeTok{height =} \DecValTok{5}\NormalTok{, }\AttributeTok{dpi =} \DecValTok{300}\NormalTok{)}
   \FunctionTok{print}\NormalTok{(p\_dens)}
 
 \NormalTok{  p\_box }\OtherTok{\textless{}{-}}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{ggplot}\NormalTok{(dens\_df, ggplot2}\SpecialCharTok{::}\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ status, }\AttributeTok{y =}\NormalTok{ value, }\AttributeTok{fill =}\NormalTok{ status)) }\SpecialCharTok{+}
@@ -10535,16 +9886,11 @@ encounter\_typeInpatient & 1.188 & 0.166 & 0.002 & 0.013 & 0.863066780 & 1.51211
     \FunctionTok{theme\_pub}\NormalTok{(}\AttributeTok{base\_size =} \DecValTok{10}\NormalTok{) }\SpecialCharTok{+}
 \NormalTok{    ggplot2}\SpecialCharTok{::}\FunctionTok{theme}\NormalTok{(}\AttributeTok{axis.text.x =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{element\_text}\NormalTok{(}\AttributeTok{angle =} \DecValTok{20}\NormalTok{, }\AttributeTok{hjust =} \DecValTok{1}\NormalTok{)) }\SpecialCharTok{+}
 \NormalTok{    ggplot2}\SpecialCharTok{::}\FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \StringTok{"Observed vs imputed (imp1)"}\NormalTok{, }\AttributeTok{x =} \ConstantTok{NULL}\NormalTok{, }\AttributeTok{y =} \ConstantTok{NULL}\NormalTok{)}
+  \FunctionTok{save\_diag\_plot}\NormalTok{(p\_box, }\FunctionTok{results\_path}\NormalTok{(}\StringTok{"figs"}\NormalTok{, }\StringTok{"diag{-}mi{-}box{-}imp1.png"}\NormalTok{), }\AttributeTok{width =} \DecValTok{8}\NormalTok{, }\AttributeTok{height =} \DecValTok{5}\NormalTok{, }\AttributeTok{dpi =} \DecValTok{300}\NormalTok{)}
   \FunctionTok{print}\NormalTok{(p\_box)}
 \NormalTok{\}}
 \end{Highlighting}
 \end{Shaded}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-diagnostics-1.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-diagnostics-2.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-diagnostics-3.png}}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -10659,6 +10005,13 @@ encounter\_typeInpatient & 1.188 & 0.166 & 0.002 & 0.013 & 0.863066780 & 1.51211
         \FunctionTok{theme\_pub}\NormalTok{() }\SpecialCharTok{+}
         \FunctionTok{coord\_flip}\NormalTok{()}
 \NormalTok{    \}}
+    \FunctionTok{save\_diag\_plot}\NormalTok{(}
+\NormalTok{      p,}
+      \FunctionTok{results\_path}\NormalTok{(}\StringTok{"figs"}\NormalTok{, }\FunctionTok{paste0}\NormalTok{(}\StringTok{"diag{-}mi{-}obs{-}imp{-}"}\NormalTok{, }\FunctionTok{.make\_safe\_name}\NormalTok{(v), }\StringTok{".png"}\NormalTok{)),}
+      \AttributeTok{width =} \DecValTok{7}\NormalTok{,}
+      \AttributeTok{height =} \DecValTok{5}\NormalTok{,}
+      \AttributeTok{dpi =} \DecValTok{300}
+\NormalTok{    )}
     \FunctionTok{print}\NormalTok{(p)}
 \NormalTok{  \}}
 
@@ -10709,66 +10062,6 @@ encounter\_typeInpatient & 1.188 & 0.166 & 0.002 & 0.013 & 0.863066780 & 1.51211
 \end{Highlighting}
 \end{Shaded}
 
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-1.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-2.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-3.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-4.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-5.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-6.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-7.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-8.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-9.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-10.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-11.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-12.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-13.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-14.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-15.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-16.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-17.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-18.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-19.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-20.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-21.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-22.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-23.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-24.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-25.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-26.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-27.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-28.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-29.png}}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-imputation-diagnostics-30.png}}
-
 \begin{Shaded}
 \begin{Highlighting}[]
 \CommentTok{\# Purpose: mi mcerr progress.}
@@ -10812,11 +10105,10 @@ encounter\_typeInpatient & 1.188 & 0.166 & 0.002 & 0.013 & 0.863066780 & 1.51211
   \FunctionTok{coord\_flip}\NormalTok{() }\SpecialCharTok{+}
   \FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \StringTok{"Top missing variables (after MI)"}\NormalTok{, }\AttributeTok{x =} \ConstantTok{NULL}\NormalTok{, }\AttributeTok{y =} \StringTok{"\% missing"}\NormalTok{) }\SpecialCharTok{+}
   \FunctionTok{theme\_pub}\NormalTok{()}
+\FunctionTok{save\_diag\_plot}\NormalTok{(p\_top, }\FunctionTok{results\_path}\NormalTok{(}\StringTok{"figs"}\NormalTok{, }\StringTok{"missingness{-}after{-}mi{-}top{-}vars.png"}\NormalTok{), }\AttributeTok{width =} \DecValTok{8}\NormalTok{, }\AttributeTok{height =} \DecValTok{7}\NormalTok{, }\AttributeTok{dpi =} \DecValTok{300}\NormalTok{)}
 \FunctionTok{print}\NormalTok{(p\_top)}
 \end{Highlighting}
 \end{Shaded}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-missing-audit-1.png}}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -10828,11 +10120,10 @@ encounter\_typeInpatient & 1.188 & 0.166 & 0.002 & 0.013 & 0.863066780 & 1.51211
 
 \NormalTok{p\_heat }\OtherTok{\textless{}{-}}\NormalTok{ naniar}\SpecialCharTok{::}\FunctionTok{vis\_miss}\NormalTok{(rows\_heat[, cols\_heat, }\AttributeTok{drop =} \ConstantTok{FALSE}\NormalTok{]) }\SpecialCharTok{+}
   \FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \FunctionTok{sprintf}\NormalTok{(}\StringTok{"Missingness heatmap on imputed data (\%d rows × \%d cols)"}\NormalTok{, R, }\FunctionTok{length}\NormalTok{(cols\_heat)))}
+\FunctionTok{save\_diag\_plot}\NormalTok{(p\_heat, }\FunctionTok{results\_path}\NormalTok{(}\StringTok{"figs"}\NormalTok{, }\StringTok{"missingness{-}after{-}mi{-}heatmap.png"}\NormalTok{), }\AttributeTok{width =} \DecValTok{10}\NormalTok{, }\AttributeTok{height =} \DecValTok{7}\NormalTok{, }\AttributeTok{dpi =} \DecValTok{300}\NormalTok{)}
 \FunctionTok{print}\NormalTok{(p\_heat)}
 \end{Highlighting}
 \end{Shaded}
-
-\pandocbounded{\includegraphics[keepaspectratio]{Results/figs/mi-missing-audit-2.png}}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -11687,8 +10978,8 @@ outputs and will stop if they are missing.
 
 \begin{verbatim}
             used   (Mb) gc trigger   (Mb) limit (Mb)  max used   (Mb)
-Ncells   7071945  377.7   11758637  628.0         NA  11758637  628.0
-Vcells 485022291 3700.5  964618557 7359.5      16384 963793415 7353.2
+Ncells   7072742  377.8   12848267  686.2         NA  12848267  686.2
+Vcells 485026471 3700.5 1007639446 7687.7      16384 966766603 7375.9
 \end{verbatim}
 
 \begin{Shaded}
@@ -13402,7 +12693,7 @@ tracks}\label{summary-adjusted-co2-category-associations-across-analysis-tracks}
   \AttributeTok{row\_names =} \ConstantTok{FALSE}
 \NormalTok{)}
 
-\NormalTok{table\_2\_weighted\_categorical\_outcomes }\OtherTok{\textless{}{-}}\NormalTok{ table\_summary\_key\_results\_cat3 }\SpecialCharTok{|\textgreater{}}
+\NormalTok{table\_2\_weighted\_categorical\_wide }\OtherTok{\textless{}{-}}\NormalTok{ table\_summary\_key\_results\_cat3 }\SpecialCharTok{|\textgreater{}}
 \NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(method }\SpecialCharTok{==} \StringTok{"Weighted and adjusted"}\NormalTok{) }\SpecialCharTok{|\textgreater{}}
 \NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(}
 \NormalTok{    group,}
@@ -13416,15 +12707,59 @@ tracks}\label{summary-adjusted-co2-category-associations-across-analysis-tracks}
     \StringTok{\textasciigrave{}}\AttributeTok{High probability (95\% CI)}\StringTok{\textasciigrave{}}
 \NormalTok{  )}
 
-\FunctionTok{write\_standalone\_table\_pdf}\NormalTok{(}
-\NormalTok{  table\_2\_weighted\_categorical\_outcomes,}
+\NormalTok{table\_2\_weighted\_or\_panel }\OtherTok{\textless{}{-}}\NormalTok{ table\_2\_weighted\_categorical\_wide }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(}
+\NormalTok{    group,}
+\NormalTok{    outcome,}
+\NormalTok{    n\_model,}
+\NormalTok{    events,}
+    \StringTok{\textasciigrave{}}\AttributeTok{Low vs normal OR (95\% CI)}\StringTok{\textasciigrave{}}\NormalTok{,}
+    \StringTok{\textasciigrave{}}\AttributeTok{High vs normal OR (95\% CI)}\StringTok{\textasciigrave{}}
+\NormalTok{  )}
+
+\NormalTok{table\_2\_weighted\_probability\_panel }\OtherTok{\textless{}{-}}\NormalTok{ table\_2\_weighted\_categorical\_wide }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(}
+\NormalTok{    group,}
+\NormalTok{    outcome,}
+    \StringTok{\textasciigrave{}}\AttributeTok{Normal probability (95\% CI)}\StringTok{\textasciigrave{}}\NormalTok{,}
+    \StringTok{\textasciigrave{}}\AttributeTok{Low probability (95\% CI)}\StringTok{\textasciigrave{}}\NormalTok{,}
+    \StringTok{\textasciigrave{}}\AttributeTok{High probability (95\% CI)}\StringTok{\textasciigrave{}}
+\NormalTok{  )}
+
+\NormalTok{table\_2\_weighted\_categorical\_outcomes }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(}
+\NormalTok{  table\_2\_weighted\_or\_panel }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    tidyr}\SpecialCharTok{::}\FunctionTok{pivot\_longer}\NormalTok{(}
+      \AttributeTok{cols =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{ends\_with}\NormalTok{(}\StringTok{"OR (95\% CI)"}\NormalTok{),}
+      \AttributeTok{names\_to =} \StringTok{"measure"}\NormalTok{,}
+      \AttributeTok{values\_to =} \StringTok{"estimate"}
+\NormalTok{    ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}\AttributeTok{panel =} \StringTok{"Odds ratios"}\NormalTok{, }\AttributeTok{.before =} \DecValTok{1}\NormalTok{L),}
+\NormalTok{  table\_2\_weighted\_probability\_panel }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    tidyr}\SpecialCharTok{::}\FunctionTok{pivot\_longer}\NormalTok{(}
+      \AttributeTok{cols =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{ends\_with}\NormalTok{(}\StringTok{"probability (95\% CI)"}\NormalTok{),}
+      \AttributeTok{names\_to =} \StringTok{"measure"}\NormalTok{,}
+      \AttributeTok{values\_to =} \StringTok{"estimate"}
+\NormalTok{    ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+      \AttributeTok{panel =} \StringTok{"Predicted probabilities"}\NormalTok{,}
+      \AttributeTok{n\_model =} \ConstantTok{NA\_integer\_}\NormalTok{,}
+      \AttributeTok{events =} \ConstantTok{NA\_integer\_}\NormalTok{,}
+      \AttributeTok{.before =} \DecValTok{1}\NormalTok{L}
+\NormalTok{    ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{panel, .data}\SpecialCharTok{$}\NormalTok{group, .data}\SpecialCharTok{$}\NormalTok{outcome, .data}\SpecialCharTok{$}\NormalTok{n\_model, .data}\SpecialCharTok{$}\NormalTok{events, .data}\SpecialCharTok{$}\NormalTok{measure, .data}\SpecialCharTok{$}\NormalTok{estimate)}
+\NormalTok{)}
+
+\FunctionTok{write\_standalone\_panel\_table\_pdf}\NormalTok{(}
+  \FunctionTok{list}\NormalTok{(}
+    \StringTok{"Odds ratios"} \OtherTok{=}\NormalTok{ table\_2\_weighted\_or\_panel,}
+    \StringTok{"Predicted probabilities"} \OtherTok{=}\NormalTok{ table\_2\_weighted\_probability\_panel}
+\NormalTok{  ),}
   \AttributeTok{caption =} \StringTok{"MI{-}pooled, MI{-}logistic IPSW{-}weighted 3{-}level categorical results for ABG and VBG"}\NormalTok{,}
   \AttributeTok{file\_stub =} \StringTok{"table\_2\_weighted\_categorical\_outcomes"}\NormalTok{,}
-  \AttributeTok{wide =} \ConstantTok{TRUE}\NormalTok{,}
   \AttributeTok{digits =} \DecValTok{2}\NormalTok{,}
-  \AttributeTok{max\_cols =} \DecValTok{8}\NormalTok{,}
   \AttributeTok{landscape =} \ConstantTok{TRUE}\NormalTok{,}
-  \AttributeTok{display\_label =} \StringTok{"Table 2"}
+  \AttributeTok{display\_label =} \StringTok{"Table 2"}\NormalTok{,}
+  \AttributeTok{csv\_df =}\NormalTok{ table\_2\_weighted\_categorical\_outcomes}
 \NormalTok{)}
 
 \NormalTok{table\_summary\_key\_results\_cat3\_abg }\OtherTok{\textless{}{-}}\NormalTok{ table\_summary\_key\_results\_cat3 }\SpecialCharTok{|\textgreater{}}
@@ -13432,186 +12767,24 @@ tracks}\label{summary-adjusted-co2-category-associations-across-analysis-tracks}
 \NormalTok{table\_summary\_key\_results\_cat3\_vbg }\OtherTok{\textless{}{-}}\NormalTok{ table\_summary\_key\_results\_cat3 }\SpecialCharTok{|\textgreater{}}
 \NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(group }\SpecialCharTok{==} \StringTok{"VBG"}\NormalTok{)}
 
-\FunctionTok{render\_table\_pdf}\NormalTok{(}
+\FunctionTok{render\_table\_pdf\_maybe}\NormalTok{(}
 \NormalTok{  table\_summary\_key\_results\_cat3\_abg,}
   \AttributeTok{caption =} \StringTok{"Categorical key results for the ABG cohort across crude, unweighted adjusted, imputed non{-}weighted, MI{-}logistic IPSW{-}weighted, and GBM IPSW{-}weighted analyses; probabilities are conditional on X\_ref except in the crude track."}\NormalTok{,}
   \AttributeTok{file\_stub =} \StringTok{"table\_summary\_key\_results\_cat3\_abg"}\NormalTok{,}
   \AttributeTok{wide =} \ConstantTok{TRUE}\NormalTok{,}
-  \AttributeTok{digits =} \DecValTok{2}
+  \AttributeTok{digits =} \DecValTok{2}\NormalTok{,}
+  \AttributeTok{show =} \ConstantTok{FALSE}
 \NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{landscape}
-
-\begin{center}\textbf{Categorical key results for the ABG cohort across crude, unweighted adjusted, imputed non-weighted, MI-logistic IPSW-weighted, and GBM IPSW-weighted analyses; probabilities are conditional on X\_ref except in the crude track.}\end{center}
-
-\begin{table}[!h]
-\centering\begingroup\fontsize{6}{8}\selectfont
-
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{rrllll}
-\toprule
-n\_model & events & method & group & outcome & Low vs normal OR (95\% CI)\\
-\midrule
-1911 & 463 & Crude & ABG & IMV & 1.44 (1.12, 1.86)\\
-1911 & 183 & Crude & ABG & NIV & 1.00 (0.65, 1.52)\\
-1911 & 322 & Crude & ABG & Death (60d) & 1.60 (1.19, 2.15)\\
-1911 & 206 & Crude & ABG & Hypercapnic RF & 1.36 (0.81, 2.28)\\
-1911 & 463 & Adjusted & ABG & IMV & 1.39 (1.07, 1.80)\\
-\addlinespace
-1911 & 183 & Adjusted & ABG & NIV & 0.99 (0.64, 1.52)\\
-1911 & 322 & Adjusted & ABG & Death (60d) & 1.76 (1.29, 2.39)\\
-1911 & 206 & Adjusted & ABG & Hypercapnic RF & 1.37 (0.81, 2.30)\\
-1911 & 463 & Imputed & ABG & IMV & 1.39 (1.07, 1.80)\\
-1911 & 183 & Imputed & ABG & NIV & 0.99 (0.64, 1.53)\\
-\addlinespace
-1911 & 322 & Imputed & ABG & Death (60d) & 1.76 (1.29, 2.39)\\
-1911 & 206 & Imputed & ABG & Hypercapnic RF & 1.37 (0.82, 2.29)\\
-1911 & 463 & Weighted and adjusted & ABG & IMV & 1.41 (1.05, 1.90)\\
-1911 & 183 & Weighted and adjusted & ABG & NIV & 1.04 (0.63, 1.72)\\
-1911 & 322 & Weighted and adjusted & ABG & Death (60d) & 1.55 (1.07, 2.25)\\
-\addlinespace
-1911 & 206 & Weighted and adjusted & ABG & Hypercapnic RF & 1.26 (0.70, 2.26)\\
-1911 & 463 & GBM-weighted & ABG & IMV & 1.40 (1.06, 1.86)\\
-1911 & 183 & GBM-weighted & ABG & NIV & 1.04 (0.65, 1.69)\\
-1911 & 322 & GBM-weighted & ABG & Death (60d) & 1.52 (1.08, 2.16)\\
-1911 & 206 & GBM-weighted & ABG & Hypercapnic RF & 1.54 (0.84, 2.82)\\
-\bottomrule
-\end{tabular}}
-\endgroup{}
-\end{table}
-
-\begin{table}[!h]
-\centering\begingroup\fontsize{6}{8}\selectfont
-
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{llll}
-\toprule
-High vs normal OR (95\% CI) & Normal probability (95\% CI) & Low probability (95\% CI) & High probability (95\% CI)\\
-\midrule
-1.28 (0.99, 1.65) & 0.21 (0.18, 0.24) & 0.28 (0.24, 0.32) & 0.25 (0.22, 0.29)\\
-2.26 (1.60, 3.21) & 0.07 (0.06, 0.09) & 0.07 (0.05, 0.10) & 0.15 (0.12, 0.18)\\
-1.55 (1.16, 2.08) & 0.13 (0.11, 0.16) & 0.20 (0.17, 0.23) & 0.19 (0.16, 0.23)\\
-8.29 (5.65, 12.50) & 0.04 (0.03, 0.06) & 0.05 (0.04, 0.08) & 0.26 (0.22, 0.29)\\
-1.25 (0.96, 1.61) & 0.22 (0.18, 0.26) & 0.28 (0.23, 0.33) & 0.25 (0.21, 0.31)\\
-\addlinespace
-2.62 (1.83, 3.78) & 0.08 (0.06, 0.11) & 0.08 (0.06, 0.12) & 0.19 (0.14, 0.25)\\
-1.54 (1.14, 2.08) & 0.12 (0.09, 0.15) & 0.19 (0.15, 0.24) & 0.17 (0.13, 0.22)\\
-8.50 (5.76, 12.89) & 0.04 (0.03, 0.06) & 0.05 (0.03, 0.08) & 0.26 (0.20, 0.32)\\
-1.25 (0.96, 1.61) & 0.22 (0.18, 0.26) & 0.28 (0.23, 0.33) & 0.25 (0.21, 0.31)\\
-2.62 (1.83, 3.76) & 0.08 (0.06, 0.11) & 0.08 (0.06, 0.12) & 0.19 (0.14, 0.24)\\
-\addlinespace
-1.54 (1.14, 2.08) & 0.12 (0.09, 0.15) & 0.19 (0.15, 0.24) & 0.17 (0.13, 0.22)\\
-8.50 (5.68, 12.72) & 0.04 (0.03, 0.06) & 0.05 (0.03, 0.08) & 0.26 (0.20, 0.32)\\
-1.26 (0.93, 1.71) & 0.21 (0.17, 0.25) & 0.27 (0.22, 0.33) & 0.25 (0.20, 0.31)\\
-3.05 (1.99, 4.68) & 0.06 (0.04, 0.09) & 0.06 (0.04, 0.10) & 0.17 (0.12, 0.22)\\
-1.50 (1.06, 2.14) & 0.10 (0.08, 0.14) & 0.15 (0.11, 0.21) & 0.15 (0.11, 0.20)\\
-\addlinespace
-9.21 (5.73, 14.81) & 0.03 (0.02, 0.05) & 0.04 (0.02, 0.07) & 0.23 (0.17, 0.30)\\
-1.14 (0.85, 1.52) & 0.22 (0.18, 0.26) & 0.28 (0.23, 0.34) & 0.24 (0.19, 0.30)\\
-2.82 (1.90, 4.17) & 0.07 (0.05, 0.11) & 0.08 (0.05, 0.12) & 0.18 (0.13, 0.24)\\
-1.46 (1.05, 2.02) & 0.11 (0.08, 0.14) & 0.15 (0.11, 0.21) & 0.15 (0.11, 0.20)\\
-9.39 (5.99, 14.73) & 0.03 (0.02, 0.05) & 0.05 (0.03, 0.09) & 0.25 (0.18, 0.32)\\
-\bottomrule
-\end{tabular}}
-\endgroup{}
-\end{table}
-
-\end{landscape}
-
-\begin{Shaded}
-\begin{Highlighting}[]
-\FunctionTok{render\_table\_pdf}\NormalTok{(}
+\FunctionTok{render\_table\_pdf\_maybe}\NormalTok{(}
 \NormalTok{  table\_summary\_key\_results\_cat3\_vbg,}
   \AttributeTok{caption =} \StringTok{"Categorical key results for the VBG cohort across crude, unweighted adjusted, imputed non{-}weighted, MI{-}logistic IPSW{-}weighted, and GBM IPSW{-}weighted analyses; probabilities are conditional on X\_ref except in the crude track."}\NormalTok{,}
   \AttributeTok{file\_stub =} \StringTok{"table\_summary\_key\_results\_cat3\_vbg"}\NormalTok{,}
   \AttributeTok{wide =} \ConstantTok{TRUE}\NormalTok{,}
-  \AttributeTok{digits =} \DecValTok{2}
+  \AttributeTok{digits =} \DecValTok{2}\NormalTok{,}
+  \AttributeTok{show =} \ConstantTok{FALSE}
 \NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{landscape}
-
-\begin{center}\textbf{Categorical key results for the VBG cohort across crude, unweighted adjusted, imputed non-weighted, MI-logistic IPSW-weighted, and GBM IPSW-weighted analyses; probabilities are conditional on X\_ref except in the crude track.}\end{center}
-
-\begin{table}[!h]
-\centering\begingroup\fontsize{6}{8}\selectfont
-
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{rrllll}
-\toprule
-n\_model & events & method & group & outcome & Low vs normal OR (95\% CI)\\
-\midrule
-1445 & 208 & Crude & VBG & IMV & 1.48 (1.03, 2.13)\\
-1445 & 100 & Crude & VBG & NIV & 1.21 (0.69, 2.09)\\
-1445 & 200 & Crude & VBG & Death (60d) & 1.71 (1.19, 2.45)\\
-1445 & 133 & Crude & VBG & Hypercapnic RF & 0.99 (0.51, 1.85)\\
-1445 & 208 & Adjusted & VBG & IMV & 1.27 (0.87, 1.85)\\
-\addlinespace
-1445 & 100 & Adjusted & VBG & NIV & 1.00 (0.56, 1.77)\\
-1445 & 200 & Adjusted & VBG & Death (60d) & 1.53 (1.04, 2.25)\\
-1445 & 133 & Adjusted & VBG & Hypercapnic RF & 0.84 (0.43, 1.58)\\
-1445 & 208 & Imputed & VBG & IMV & 1.27 (0.87, 1.85)\\
-1445 & 100 & Imputed & VBG & NIV & 1.00 (0.56, 1.78)\\
-\addlinespace
-1445 & 200 & Imputed & VBG & Death (60d) & 1.53 (1.04, 2.26)\\
-1445 & 133 & Imputed & VBG & Hypercapnic RF & 0.84 (0.44, 1.59)\\
-1445 & 208 & Weighted and adjusted & VBG & IMV & 1.24 (0.77, 2.00)\\
-1445 & 100 & Weighted and adjusted & VBG & NIV & 0.76 (0.38, 1.52)\\
-1445 & 200 & Weighted and adjusted & VBG & Death (60d) & 1.10 (0.68, 1.79)\\
-\addlinespace
-1445 & 133 & Weighted and adjusted & VBG & Hypercapnic RF & 0.68 (0.30, 1.54)\\
-1445 & 208 & GBM-weighted & VBG & IMV & 1.34 (0.89, 2.03)\\
-1445 & 100 & GBM-weighted & VBG & NIV & 0.88 (0.47, 1.67)\\
-1445 & 200 & GBM-weighted & VBG & Death (60d) & 1.38 (0.91, 2.10)\\
-1445 & 133 & GBM-weighted & VBG & Hypercapnic RF & 0.76 (0.37, 1.56)\\
-\bottomrule
-\end{tabular}}
-\endgroup{}
-\end{table}
-
-\begin{table}[!h]
-\centering\begingroup\fontsize{6}{8}\selectfont
-
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{llll}
-\toprule
-High vs normal OR (95\% CI) & Normal probability (95\% CI) & Low probability (95\% CI) & High probability (95\% CI)\\
-\midrule
-1.80 (1.27, 2.57) & 0.11 (0.09, 0.14) & 0.16 (0.12, 0.20) & 0.18 (0.15, 0.23)\\
-2.61 (1.63, 4.23) & 0.05 (0.03, 0.07) & 0.06 (0.04, 0.08) & 0.12 (0.09, 0.15)\\
-1.58 (1.10, 2.29) & 0.11 (0.09, 0.13) & 0.17 (0.14, 0.21) & 0.16 (0.13, 0.20)\\
-7.13 (4.58, 11.46) & 0.04 (0.03, 0.06) & 0.04 (0.02, 0.06) & 0.23 (0.19, 0.27)\\
-1.61 (1.11, 2.33) & 0.20 (0.15, 0.26) & 0.24 (0.18, 0.31) & 0.29 (0.22, 0.36)\\
-\addlinespace
-2.80 (1.71, 4.68) & 0.03 (0.01, 0.05) & 0.03 (0.01, 0.05) & 0.07 (0.04, 0.12)\\
-1.29 (0.87, 1.89) & 0.15 (0.10, 0.20) & 0.21 (0.15, 0.28) & 0.18 (0.13, 0.25)\\
-7.09 (4.49, 11.55) & 0.05 (0.03, 0.08) & 0.04 (0.02, 0.08) & 0.27 (0.20, 0.36)\\
-1.61 (1.11, 2.34) & 0.20 (0.15, 0.27) & 0.24 (0.18, 0.31) & 0.29 (0.22, 0.36)\\
-2.80 (1.70, 4.63) & 0.03 (0.01, 0.05) & 0.03 (0.01, 0.06) & 0.07 (0.04, 0.13)\\
-\addlinespace
-1.29 (0.88, 1.88) & 0.15 (0.10, 0.20) & 0.21 (0.15, 0.29) & 0.18 (0.13, 0.25)\\
-7.09 (4.42, 11.36) & 0.05 (0.03, 0.09) & 0.04 (0.02, 0.08) & 0.27 (0.20, 0.36)\\
-1.63 (1.02, 2.60) & 0.19 (0.13, 0.27) & 0.23 (0.16, 0.32) & 0.28 (0.20, 0.38)\\
-2.69 (1.47, 4.90) & 0.02 (0.01, 0.05) & 0.02 (0.01, 0.04) & 0.06 (0.03, 0.12)\\
-1.10 (0.70, 1.74) & 0.13 (0.09, 0.19) & 0.14 (0.09, 0.21) & 0.14 (0.09, 0.21)\\
-\addlinespace
-6.28 (3.50, 11.25) & 0.04 (0.02, 0.08) & 0.03 (0.01, 0.07) & 0.22 (0.15, 0.32)\\
-1.58 (1.06, 2.37) & 0.19 (0.13, 0.25) & 0.23 (0.17, 0.31) & 0.27 (0.20, 0.35)\\
-2.77 (1.62, 4.75) & 0.03 (0.02, 0.06) & 0.03 (0.01, 0.06) & 0.08 (0.05, 0.14)\\
-1.31 (0.87, 1.98) & 0.13 (0.09, 0.18) & 0.17 (0.11, 0.24) & 0.16 (0.11, 0.23)\\
-7.58 (4.54, 12.67) & 0.04 (0.02, 0.08) & 0.03 (0.02, 0.07) & 0.26 (0.18, 0.35)\\
-\bottomrule
-\end{tabular}}
-\endgroup{}
-\end{table}
-
-\end{landscape}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \NormalTok{legacy\_counts\_tbl }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(}
 \NormalTok{  counts\_tbl\_cat3 }\SpecialCharTok{|\textgreater{}}
 \NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(method }\SpecialCharTok{==} \StringTok{"Adjusted"}\NormalTok{) }\SpecialCharTok{|\textgreater{}}
@@ -13649,145 +12822,23 @@ High vs normal OR (95\% CI) & Normal probability (95\% CI) & Low probability (95
 \NormalTok{table\_summary\_vbg }\OtherTok{\textless{}{-}}\NormalTok{ table\_summary }\SpecialCharTok{|\textgreater{}}
 \NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(group }\SpecialCharTok{==} \StringTok{"VBG"}\NormalTok{)}
 
-\FunctionTok{render\_table\_pdf}\NormalTok{(}
+\FunctionTok{render\_table\_pdf\_maybe}\NormalTok{(}
 \NormalTok{  table\_summary\_abg,}
   \AttributeTok{caption =} \StringTok{"Adjusted odds ratios (low/high vs normal) across unweighted adjusted, GBM IPSW{-}weighted, and MI{-}logistic IPSW{-}weighted analysis tracks for the ABG cohort; n/events reflect model sample size (median across imputations for MI{-}based tracks)."}\NormalTok{,}
   \AttributeTok{file\_stub =} \StringTok{"table\_summary\_adjusted\_threelevel\_abg"}\NormalTok{,}
-  \AttributeTok{digits =} \DecValTok{2}
+  \AttributeTok{digits =} \DecValTok{2}\NormalTok{,}
+  \AttributeTok{show =} \ConstantTok{FALSE}
 \NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{landscape}
-
-\begin{center}\textbf{Adjusted odds ratios (low/high vs normal) across unweighted adjusted, GBM IPSW-weighted, and MI-logistic IPSW-weighted analysis tracks for the ABG cohort; n/events reflect model sample size (median across imputations for MI-based tracks).}\end{center}
-
-\begin{table}[!h]
-\centering\begingroup\fontsize{7}{9}\selectfont
-
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{lllrrl}
-\toprule
-method & group & outcome & n\_model & events & Low vs normal\\
-\midrule
-Unweighted adjusted & ABG & IMV & 1911 & 463 & 1.39 (1.07, 1.80)\\
-Unweighted adjusted & ABG & NIV & 1911 & 183 & 0.99 (0.64, 1.52)\\
-Unweighted adjusted & ABG & Death (60d) & 1911 & 322 & 1.76 (1.29, 2.39)\\
-Unweighted adjusted & ABG & Hypercapnic RF & 1911 & 206 & 1.37 (0.81, 2.30)\\
-IPW adjusted & ABG & IMV & 1911 & 463 & 1.40 (1.06, 1.86)\\
-\addlinespace
-IPW adjusted & ABG & NIV & 1911 & 183 & 1.04 (0.65, 1.69)\\
-IPW adjusted & ABG & Death (60d) & 1911 & 322 & 1.52 (1.08, 2.16)\\
-IPW adjusted & ABG & Hypercapnic RF & 1911 & 206 & 1.54 (0.84, 2.82)\\
-IPW + MI adjusted & ABG & IMV & 1911 & 463 & 1.41 (1.05, 1.90)\\
-IPW + MI adjusted & ABG & NIV & 1911 & 183 & 1.04 (0.63, 1.72)\\
-\addlinespace
-IPW + MI adjusted & ABG & Death (60d) & 1911 & 322 & 1.55 (1.07, 2.25)\\
-IPW + MI adjusted & ABG & Hypercapnic RF & 1911 & 206 & 1.26 (0.70, 2.26)\\
-\bottomrule
-\end{tabular}}
-\endgroup{}
-\end{table}
-
-\begin{table}[!h]
-\centering\begingroup\fontsize{7}{9}\selectfont
-
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{l}
-\toprule
-High vs normal\\
-\midrule
-1.25 (0.96, 1.61)\\
-2.62 (1.83, 3.78)\\
-1.54 (1.14, 2.08)\\
-8.50 (5.76, 12.89)\\
-1.14 (0.85, 1.52)\\
-\addlinespace
-2.82 (1.90, 4.17)\\
-1.46 (1.05, 2.02)\\
-9.39 (5.99, 14.73)\\
-1.26 (0.93, 1.71)\\
-3.05 (1.99, 4.68)\\
-\addlinespace
-1.50 (1.06, 2.14)\\
-9.21 (5.73, 14.81)\\
-\bottomrule
-\end{tabular}}
-\endgroup{}
-\end{table}
-
-\end{landscape}
-
-\begin{Shaded}
-\begin{Highlighting}[]
-\FunctionTok{render\_table\_pdf}\NormalTok{(}
+\FunctionTok{render\_table\_pdf\_maybe}\NormalTok{(}
 \NormalTok{  table\_summary\_vbg,}
   \AttributeTok{caption =} \StringTok{"Adjusted odds ratios (low/high vs normal) across unweighted adjusted, GBM IPSW{-}weighted, and MI{-}logistic IPSW{-}weighted analysis tracks for the VBG cohort; n/events reflect model sample size (median across imputations for MI{-}based tracks)."}\NormalTok{,}
   \AttributeTok{file\_stub =} \StringTok{"table\_summary\_adjusted\_threelevel\_vbg"}\NormalTok{,}
-  \AttributeTok{digits =} \DecValTok{2}
+  \AttributeTok{digits =} \DecValTok{2}\NormalTok{,}
+  \AttributeTok{show =} \ConstantTok{FALSE}
 \NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{landscape}
-
-\begin{center}\textbf{Adjusted odds ratios (low/high vs normal) across unweighted adjusted, GBM IPSW-weighted, and MI-logistic IPSW-weighted analysis tracks for the VBG cohort; n/events reflect model sample size (median across imputations for MI-based tracks).}\end{center}
-
-\begin{table}[!h]
-\centering\begingroup\fontsize{7}{9}\selectfont
-
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{lllrrl}
-\toprule
-method & group & outcome & n\_model & events & Low vs normal\\
-\midrule
-Unweighted adjusted & VBG & IMV & 1445 & 208 & 1.27 (0.87, 1.85)\\
-Unweighted adjusted & VBG & NIV & 1445 & 100 & 1.00 (0.56, 1.77)\\
-Unweighted adjusted & VBG & Death (60d) & 1445 & 200 & 1.53 (1.04, 2.25)\\
-Unweighted adjusted & VBG & Hypercapnic RF & 1445 & 133 & 0.84 (0.43, 1.58)\\
-IPW adjusted & VBG & IMV & 1445 & 208 & 1.34 (0.89, 2.03)\\
-\addlinespace
-IPW adjusted & VBG & NIV & 1445 & 100 & 0.88 (0.47, 1.67)\\
-IPW adjusted & VBG & Death (60d) & 1445 & 200 & 1.38 (0.91, 2.10)\\
-IPW adjusted & VBG & Hypercapnic RF & 1445 & 133 & 0.76 (0.37, 1.56)\\
-IPW + MI adjusted & VBG & IMV & 1445 & 208 & 1.24 (0.77, 2.00)\\
-IPW + MI adjusted & VBG & NIV & 1445 & 100 & 0.76 (0.38, 1.52)\\
-\addlinespace
-IPW + MI adjusted & VBG & Death (60d) & 1445 & 200 & 1.10 (0.68, 1.79)\\
-IPW + MI adjusted & VBG & Hypercapnic RF & 1445 & 133 & 0.68 (0.30, 1.54)\\
-\bottomrule
-\end{tabular}}
-\endgroup{}
-\end{table}
-
-\begin{table}[!h]
-\centering\begingroup\fontsize{7}{9}\selectfont
-
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{l}
-\toprule
-High vs normal\\
-\midrule
-1.61 (1.11, 2.33)\\
-2.80 (1.71, 4.68)\\
-1.29 (0.87, 1.89)\\
-7.09 (4.49, 11.55)\\
-1.58 (1.06, 2.37)\\
-\addlinespace
-2.77 (1.62, 4.75)\\
-1.31 (0.87, 1.98)\\
-7.58 (4.54, 12.67)\\
-1.63 (1.02, 2.60)\\
-2.69 (1.47, 4.90)\\
-\addlinespace
-1.10 (0.70, 1.74)\\
-6.28 (3.50, 11.25)\\
-\bottomrule
-\end{tabular}}
-\endgroup{}
-\end{table}
-
-\end{landscape}
 
 \subsection{Canonical Categorical Key-Results Figures Across Analysis
 Tracks}\label{canonical-categorical-key-results-figures-across-analysis-tracks}
@@ -13838,7 +12889,7 @@ Tracks}\label{canonical-categorical-key-results-figures-across-analysis-tracks}
 \NormalTok{  main\_cat3\_results,}
 \NormalTok{  main\_cat3\_probs,}
   \AttributeTok{figure\_title =} \StringTok{"MI{-}logistic IPSW{-}weighted categorical associations of pCO2 category with clinical outcomes by ABG and VBG"}\NormalTok{,}
-  \AttributeTok{figure\_caption =}\NormalTok{ key\_results\_cat3\_caption\_main}
+  \AttributeTok{figure\_caption =} \ConstantTok{NULL}
 \NormalTok{)}
 \NormalTok{key\_results\_cat3\_gbm\_plot }\OtherTok{\textless{}{-}} \FunctionTok{assemble\_cat3\_key\_results\_figure}\NormalTok{(}
 \NormalTok{  gbm\_cat3\_results,}
@@ -13861,10 +12912,6 @@ Tracks}\label{canonical-categorical-key-results-figures-across-analysis-tracks}
 \end{Highlighting}
 \end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/key-results-cat3-crude-abg-vbg-report-preview.png}
-\end{center}
-
 \begin{Shaded}
 \begin{Highlighting}[]
 \CommentTok{\# Purpose: canonical categorical key{-}results figure for adjusted models.}
@@ -13876,10 +12923,6 @@ Tracks}\label{canonical-categorical-key-results-figures-across-analysis-tracks}
 \NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/key-results-cat3-adjusted-abg-vbg-report-preview.png}
-\end{center}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -13893,10 +12936,6 @@ Tracks}\label{canonical-categorical-key-results-figures-across-analysis-tracks}
 \end{Highlighting}
 \end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/key-results-cat3-imputed-abg-vbg-report-preview.png}
-\end{center}
-
 \begin{Shaded}
 \begin{Highlighting}[]
 \CommentTok{\# Purpose: manuscript Figure S4 weighted categorical associations for the primary MI{-}weighted analysis.}
@@ -13909,10 +12948,6 @@ Tracks}\label{canonical-categorical-key-results-figures-across-analysis-tracks}
 \end{Highlighting}
 \end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/key-results-cat3-main-mi-ipw-abg-vbg-report-preview.png}
-\end{center}
-
 \begin{Shaded}
 \begin{Highlighting}[]
 \CommentTok{\# Purpose: canonical categorical key{-}results figure for GBM{-}weighted models.}
@@ -13924,10 +12959,6 @@ Tracks}\label{canonical-categorical-key-results-figures-across-analysis-tracks}
 \NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/key-results-cat3-gbm-weighted-abg-vbg-report-preview.png}
-\end{center}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -14013,25 +13044,8 @@ IPSW)}\label{observed-outcome-rates-by-co2-bin-mi-logistic-ipsw}
 \NormalTok{)}
 
 \FunctionTok{print\_plot\_once}\NormalTok{(p\_co2\_rate\_mi\_abg, }\StringTok{"co2{-}binned{-}rates{-}mi{-}ipw{-}abg"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \FloatTok{6.0}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/co2-binned-rates-mi-ipw-abg-report-preview.png}
-\end{center}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \FunctionTok{print\_plot\_once}\NormalTok{(p\_co2\_rate\_mi\_vbg, }\StringTok{"co2{-}binned{-}rates{-}mi{-}ipw{-}vbg"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \FloatTok{6.0}\NormalTok{)}
-\end{Highlighting}
-\end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/co2-binned-rates-mi-ipw-vbg-report-preview.png}
-\end{center}
-
-\begin{Shaded}
-\begin{Highlighting}[]
 \FunctionTok{rm}\NormalTok{(co2\_rate\_mi\_rows\_abg, co2\_rate\_mi\_rows\_vbg, co2\_rate\_mi\_abg, co2\_rate\_mi\_vbg,}
 \NormalTok{   p\_co2\_rate\_mi\_abg, p\_co2\_rate\_mi\_vbg)}
 \FunctionTok{invisible}\NormalTok{(}\FunctionTok{gc}\NormalTok{(}\ConstantTok{FALSE}\NormalTok{))}
@@ -14245,10 +13259,6 @@ ORs}\label{visualization-pooled-three-level-ors}
 \end{Highlighting}
 \end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/or-plot-mi-weighted-report-preview.png}
-\end{center}
-
 \subsubsection{Visualization: pooled three-level predicted
 probabilities}\label{visualization-pooled-three-level-predicted-probabilities}
 
@@ -14297,10 +13307,6 @@ probabilities}\label{visualization-pooled-three-level-predicted-probabilities}
 \FunctionTok{print\_plot\_once}\NormalTok{(mi\_cat\_prob\_plot, }\StringTok{"ipw{-}three{-}level{-}mi{-}abg{-}vbg{-}prob"}\NormalTok{, }\AttributeTok{width =} \FloatTok{7.8}\NormalTok{, }\AttributeTok{height =} \FloatTok{4.9}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/ipw-three-level-mi-abg-vbg-prob-report-preview.png}
-\end{center}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -14397,10 +13403,6 @@ probabilities}\label{visualization-pooled-three-level-predicted-probabilities}
 \end{Highlighting}
 \end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/propensity-histograms-mi-logistic-report-preview.png}
-\end{center}
-
 \begin{Shaded}
 \begin{Highlighting}[]
 \CommentTok{\# Purpose: manuscript Figure S1 covariate balance after the primary MI logistic IPSW analysis.}
@@ -14439,10 +13441,6 @@ probabilities}\label{visualization-pooled-three-level-predicted-probabilities}
 \end{Highlighting}
 \end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/loveplot-mi-logistic-abg-vbg-report-preview.png}
-\end{center}
-
 \begin{Shaded}
 \begin{Highlighting}[]
 \CommentTok{\# Purpose: manuscript Figure S3 SHAP{-}style contribution summaries for the MI logistic IPSW models.}
@@ -14472,10 +13470,6 @@ probabilities}\label{visualization-pooled-three-level-predicted-probabilities}
 \FunctionTok{print\_plot\_force}\NormalTok{(p\_shap, }\StringTok{"shap{-}top10{-}mi{-}logistic{-}abg{-}vbg"}\NormalTok{, }\AttributeTok{width =} \DecValTok{9}\NormalTok{, }\AttributeTok{height =} \DecValTok{5}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/shap-top10-mi-logistic-abg-vbg-report-preview.png}
-\end{center}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -14542,10 +13536,6 @@ probabilities}\label{visualization-pooled-three-level-predicted-probabilities}
 \end{Highlighting}
 \end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/ipw-rcs-overlay-mi-abg-vbg-report-preview.png}
-\end{center}
-
 \begin{Shaded}
 \begin{Highlighting}[]
 \CommentTok{\# Purpose: MI pooled IPSW spline probability overlay.}
@@ -14587,10 +13577,6 @@ probabilities}\label{visualization-pooled-three-level-predicted-probabilities}
 \FunctionTok{print\_plot\_once}\NormalTok{(mi\_prob\_overlay, }\StringTok{"ipw{-}rcs{-}overlay{-}mi{-}abg{-}vbg{-}prob"}\NormalTok{, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \FloatTok{6.5}\NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/ipw-rcs-overlay-mi-abg-vbg-prob-report-preview.png}
-\end{center}
 
 \subsection{Canonical Key-Results Figures Across Analysis
 Tracks}\label{canonical-key-results-figures-across-analysis-tracks}
@@ -14843,7 +13829,7 @@ displays across crude, adjusted, imputed, and weighted analyses.
 \NormalTok{  key\_results\_adjusted\_or\_df,}
 \NormalTok{  key\_results\_adjusted\_prob\_df,}
   \AttributeTok{figure\_title =} \StringTok{"Unweighted covariate{-}adjusted spline associations of pCO2 with clinical outcomes by ABG and VBG"}\NormalTok{,}
-  \AttributeTok{figure\_caption =}\NormalTok{ key\_results\_caption\_adjusted}
+  \AttributeTok{figure\_caption =} \ConstantTok{NULL}
 \NormalTok{)}
 \NormalTok{key\_results\_imputed\_plot }\OtherTok{\textless{}{-}} \FunctionTok{build\_key\_results\_figure}\NormalTok{(}
 \NormalTok{  key\_results\_imputed\_or\_df,}
@@ -14855,7 +13841,7 @@ displays across crude, adjusted, imputed, and weighted analyses.
 \NormalTok{  key\_results\_main\_mi\_ipw\_or\_df,}
 \NormalTok{  key\_results\_main\_mi\_ipw\_prob\_df,}
   \AttributeTok{figure\_title =} \StringTok{"Primary MI{-}logistic IPSW{-}weighted spline associations of pCO2 with clinical outcomes by ABG and VBG"}\NormalTok{,}
-  \AttributeTok{figure\_caption =}\NormalTok{ key\_results\_caption\_main}
+  \AttributeTok{figure\_caption =} \ConstantTok{NULL}
 \NormalTok{)}
 \NormalTok{key\_results\_gbm\_weighted\_plot }\OtherTok{\textless{}{-}} \FunctionTok{build\_key\_results\_figure}\NormalTok{(}
 \NormalTok{  key\_results\_gbm\_weighted\_or\_df,}
@@ -14878,10 +13864,6 @@ displays across crude, adjusted, imputed, and weighted analyses.
 \end{Highlighting}
 \end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/key-results-spline-crude-abg-vbg-report-preview.png}
-\end{center}
-
 \begin{Shaded}
 \begin{Highlighting}[]
 \CommentTok{\# Purpose: manuscript Figure S5 unweighted covariate{-}adjusted spline associations by ABG and VBG.}
@@ -14893,10 +13875,6 @@ displays across crude, adjusted, imputed, and weighted analyses.
 \NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/key-results-spline-adjusted-abg-vbg-report-preview.png}
-\end{center}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -14910,10 +13888,6 @@ displays across crude, adjusted, imputed, and weighted analyses.
 \end{Highlighting}
 \end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/key-results-spline-imputed-abg-vbg-report-preview.png}
-\end{center}
-
 \begin{Shaded}
 \begin{Highlighting}[]
 \CommentTok{\# Purpose: manuscript Figure 2 primary weighted spline associations.}
@@ -14926,10 +13900,6 @@ displays across crude, adjusted, imputed, and weighted analyses.
 \end{Highlighting}
 \end{Shaded}
 
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/key-results-spline-main-mi-ipw-abg-vbg-report-preview.png}
-\end{center}
-
 \begin{Shaded}
 \begin{Highlighting}[]
 \CommentTok{\# Purpose: canonical key{-}results figure for GBM{-}weighted spline models.}
@@ -14941,10 +13911,6 @@ displays across crude, adjusted, imputed, and weighted analyses.
 \NormalTok{)}
 \end{Highlighting}
 \end{Shaded}
-
-\begin{center}
-\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/key-results-spline-gbm-weighted-abg-vbg-report-preview.png}
-\end{center}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -15166,6 +14132,227 @@ TRUE \\
 
 \begin{Shaded}
 \begin{Highlighting}[]
+\CommentTok{\# Purpose: generate Supplementary Tables S1, S4, and S5 from notebook state.}
+\NormalTok{table\_s1\_inclusion\_criteria }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+  \AttributeTok{step =} \FunctionTok{seq\_len}\NormalTok{(}\DecValTok{5}\NormalTok{L),}
+  \AttributeTok{criterion =} \FunctionTok{c}\NormalTok{(}
+    \StringTok{"Source extract"}\NormalTok{,}
+    \StringTok{"ED/inpatient encounters"}\NormalTok{,}
+    \StringTok{"ABG{-}tested cohort"}\NormalTok{,}
+    \StringTok{"VBG{-}tested cohort"}\NormalTok{,}
+    \StringTok{"Target population"}
+\NormalTok{  ),}
+  \StringTok{\textasciigrave{}}\AttributeTok{Source field / rule}\StringTok{\textasciigrave{}} \OtherTok{=} \FunctionTok{c}\NormalTok{(}
+    \StringTok{"TriNetX{-}derived 2022 extract"}\NormalTok{,}
+    \StringTok{"encounter\_type != ambulatory"}\NormalTok{,}
+    \StringTok{"has\_abg == 1"}\NormalTok{,}
+    \StringTok{"has\_vbg == 1"}\NormalTok{,}
+    \StringTok{"ED/inpatient analytic cohort"}
+\NormalTok{  ),}
+  \StringTok{\textasciigrave{}}\AttributeTok{Excluded, n}\StringTok{\textasciigrave{}} \OtherTok{=}\NormalTok{ scales}\SpecialCharTok{::}\FunctionTok{comma}\NormalTok{(}\FunctionTok{c}\NormalTok{(}
+    \DecValTok{0}\NormalTok{L,}
+\NormalTok{    cohort\_flow\_counts}\SpecialCharTok{$}\NormalTok{excluded\_ambulatory,}
+\NormalTok{    cohort\_flow\_counts}\SpecialCharTok{$}\NormalTok{analytic\_ed\_inpatient }\SpecialCharTok{{-}}\NormalTok{ cohort\_flow\_counts}\SpecialCharTok{$}\NormalTok{abg\_tested,}
+\NormalTok{    cohort\_flow\_counts}\SpecialCharTok{$}\NormalTok{analytic\_ed\_inpatient }\SpecialCharTok{{-}}\NormalTok{ cohort\_flow\_counts}\SpecialCharTok{$}\NormalTok{vbg\_tested,}
+    \DecValTok{0}\NormalTok{L}
+\NormalTok{  )),}
+  \StringTok{\textasciigrave{}}\AttributeTok{Retained, n}\StringTok{\textasciigrave{}} \OtherTok{=}\NormalTok{ scales}\SpecialCharTok{::}\FunctionTok{comma}\NormalTok{(}\FunctionTok{c}\NormalTok{(}
+\NormalTok{    cohort\_flow\_counts}\SpecialCharTok{$}\NormalTok{total\_extracted,}
+\NormalTok{    cohort\_flow\_counts}\SpecialCharTok{$}\NormalTok{analytic\_ed\_inpatient,}
+\NormalTok{    cohort\_flow\_counts}\SpecialCharTok{$}\NormalTok{abg\_tested,}
+\NormalTok{    cohort\_flow\_counts}\SpecialCharTok{$}\NormalTok{vbg\_tested,}
+\NormalTok{    cohort\_flow\_counts}\SpecialCharTok{$}\NormalTok{analytic\_ed\_inpatient}
+\NormalTok{  )),}
+  \AttributeTok{notes =} \FunctionTok{c}\NormalTok{(}
+    \StringTok{"Initial local source cohort."}\NormalTok{,}
+    \StringTok{"Matches Figure 1 cohort{-}flow restriction."}\NormalTok{,}
+    \StringTok{"Measured arterial CO2 outcome models."}\NormalTok{,}
+    \StringTok{"Measured venous CO2 outcome models."}\NormalTok{,}
+    \StringTok{"Target for IPSW standardization."}
+\NormalTok{  )}
+\NormalTok{)}
+
+\FunctionTok{write\_standalone\_table\_pdf}\NormalTok{(}
+\NormalTok{  table\_s1\_inclusion\_criteria,}
+  \AttributeTok{caption =} \StringTok{"Inclusion criteria into the enriched sample"}\NormalTok{,}
+  \AttributeTok{file\_stub =} \StringTok{"table\_s1\_inclusion\_criteria"}\NormalTok{,}
+  \AttributeTok{wide =} \ConstantTok{TRUE}\NormalTok{,}
+  \AttributeTok{digits =} \DecValTok{0}\NormalTok{,}
+  \AttributeTok{max\_cols =} \DecValTok{6}\NormalTok{,}
+  \AttributeTok{landscape =} \ConstantTok{TRUE}\NormalTok{,}
+  \AttributeTok{display\_label =} \StringTok{"Table S1"}
+\NormalTok{)}
+
+\NormalTok{baseline\_role\_vars }\OtherTok{\textless{}{-}} \FunctionTok{intersect}\NormalTok{(covars\_ps, }\FunctionTok{names}\NormalTok{(subset\_data\_raw))}
+\NormalTok{baseline\_role\_labels }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}
+  \AttributeTok{age\_at\_encounter =} \StringTok{"Age"}\NormalTok{,}
+  \AttributeTok{curr\_bmi =} \StringTok{"BMI"}\NormalTok{,}
+  \AttributeTok{sex =} \StringTok{"Sex"}\NormalTok{,}
+  \AttributeTok{race\_ethnicity =} \StringTok{"Race/ethnicity"}\NormalTok{,}
+  \AttributeTok{location =} \StringTok{"Location"}\NormalTok{,}
+  \AttributeTok{encounter\_type =} \StringTok{"Encounter type"}\NormalTok{,}
+  \AttributeTok{copd =} \StringTok{"COPD"}\NormalTok{,}
+  \AttributeTok{asthma =} \StringTok{"Asthma"}\NormalTok{,}
+  \AttributeTok{osa =} \StringTok{"OSA"}\NormalTok{,}
+  \AttributeTok{chf =} \StringTok{"CHF"}\NormalTok{,}
+  \AttributeTok{acute\_nmd =} \StringTok{"Neuromuscular disease"}\NormalTok{,}
+  \AttributeTok{phtn =} \StringTok{"Pulmonary hypertension"}\NormalTok{,}
+  \AttributeTok{ckd =} \StringTok{"Chronic kidney disease"}\NormalTok{,}
+  \AttributeTok{dm =} \StringTok{"Diabetes"}\NormalTok{,}
+  \AttributeTok{temp\_new =} \StringTok{"Temperature"}\NormalTok{,}
+  \AttributeTok{sbp =} \StringTok{"Systolic blood pressure"}\NormalTok{,}
+  \AttributeTok{dbp =} \StringTok{"Diastolic blood pressure"}\NormalTok{,}
+  \AttributeTok{hr =} \StringTok{"Heart rate"}\NormalTok{,}
+  \AttributeTok{sodium =} \StringTok{"Sodium"}\NormalTok{,}
+  \AttributeTok{serum\_cr =} \StringTok{"Serum creatinine"}\NormalTok{,}
+  \AttributeTok{serum\_hco3 =} \StringTok{"Serum bicarbonate"}\NormalTok{,}
+  \AttributeTok{serum\_cl =} \StringTok{"Serum chloride"}\NormalTok{,}
+  \AttributeTok{serum\_lac =} \StringTok{"Serum lactate"}\NormalTok{,}
+  \AttributeTok{serum\_k =} \StringTok{"Serum potassium"}\NormalTok{,}
+  \AttributeTok{wbc =} \StringTok{"White blood cell count"}\NormalTok{,}
+  \AttributeTok{plt =} \StringTok{"Platelet count"}\NormalTok{,}
+  \AttributeTok{serum\_phos =} \StringTok{"Serum phosphate"}\NormalTok{,}
+  \AttributeTok{serum\_ca =} \StringTok{"Serum calcium"}
+\NormalTok{)}
+
+\NormalTok{role\_for\_var }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(v) \{}
+\NormalTok{  roles }\OtherTok{\textless{}{-}} \FunctionTok{character}\NormalTok{()}
+  \ControlFlowTok{if}\NormalTok{ (v }\SpecialCharTok{\%in\%}\NormalTok{ adj\_core) roles }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(roles, }\StringTok{"direct adjustment"}\NormalTok{)}
+  \ControlFlowTok{if}\NormalTok{ (v }\SpecialCharTok{\%in\%}\NormalTok{ covars\_ps) roles }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(roles, }\StringTok{"PS model"}\NormalTok{)}
+  \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{length}\NormalTok{(roles)) roles }\OtherTok{\textless{}{-}} \StringTok{"auxiliary"}
+  \FunctionTok{paste}\NormalTok{(}\FunctionTok{unique}\NormalTok{(roles), }\AttributeTok{collapse =} \StringTok{"; "}\NormalTok{)}
+\NormalTok{\}}
+
+\NormalTok{missing\_lookup }\OtherTok{\textless{}{-}}\NormalTok{ miss\_tbl }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{variable, .data}\SpecialCharTok{$}\NormalTok{pct\_missing)}
+
+\NormalTok{table\_s4\_missingness\_primary\_analysis }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}\AttributeTok{variable =}\NormalTok{ baseline\_role\_vars) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{left\_join}\NormalTok{(missing\_lookup, }\AttributeTok{by =} \StringTok{"variable"}\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+    \AttributeTok{variable =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{recode}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{variable, }\SpecialCharTok{!!!}\NormalTok{baseline\_role\_labels, }\AttributeTok{.default =}\NormalTok{ .data}\SpecialCharTok{$}\NormalTok{variable),}
+    \StringTok{\textasciigrave{}}\AttributeTok{Analysis role}\StringTok{\textasciigrave{}} \OtherTok{=} \FunctionTok{vapply}\NormalTok{(baseline\_role\_vars, role\_for\_var, }\FunctionTok{character}\NormalTok{(}\DecValTok{1}\NormalTok{L)),}
+    \StringTok{\textasciigrave{}}\AttributeTok{\% missing}\StringTok{\textasciigrave{}} \OtherTok{=} \FunctionTok{sprintf}\NormalTok{(}\StringTok{"\%.1f\%\%"}\NormalTok{, .data}\SpecialCharTok{$}\NormalTok{pct\_missing),}
+    \StringTok{\textasciigrave{}}\AttributeTok{Imputed in primary MI}\StringTok{\textasciigrave{}} \OtherTok{=}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{if\_else}\NormalTok{(}
+\NormalTok{      dplyr}\SpecialCharTok{::}\FunctionTok{coalesce}\NormalTok{(meth[baseline\_role\_vars], }\StringTok{""}\NormalTok{) }\SpecialCharTok{!=} \StringTok{""}\NormalTok{,}
+      \StringTok{"Yes"}\NormalTok{,}
+      \StringTok{"No"}
+\NormalTok{    )}
+\NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{variable, .data}\SpecialCharTok{$}\StringTok{\textasciigrave{}}\AttributeTok{Analysis role}\StringTok{\textasciigrave{}}\NormalTok{, .data}\SpecialCharTok{$}\StringTok{\textasciigrave{}}\AttributeTok{\% missing}\StringTok{\textasciigrave{}}\NormalTok{, .data}\SpecialCharTok{$}\StringTok{\textasciigrave{}}\AttributeTok{Imputed in primary MI}\StringTok{\textasciigrave{}}\NormalTok{)}
+
+\FunctionTok{write\_standalone\_table\_pdf}\NormalTok{(}
+\NormalTok{  table\_s4\_missingness\_primary\_analysis,}
+  \AttributeTok{caption =} \StringTok{"Missingness of baseline covariates used in the primary analysis"}\NormalTok{,}
+  \AttributeTok{file\_stub =} \StringTok{"table\_s4\_missingness\_primary\_analysis"}\NormalTok{,}
+  \AttributeTok{wide =} \ConstantTok{FALSE}\NormalTok{,}
+  \AttributeTok{digits =} \DecValTok{1}\NormalTok{,}
+  \AttributeTok{max\_cols =} \DecValTok{4}\NormalTok{,}
+  \AttributeTok{landscape =} \ConstantTok{FALSE}\NormalTok{,}
+  \AttributeTok{display\_label =} \StringTok{"Table S4"}
+\NormalTok{)}
+
+\NormalTok{diag\_df\_for\_s5 }\OtherTok{\textless{}{-}}\NormalTok{ mi\_outcome\_diag}
+\NormalTok{diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{sep\_warn }\OtherTok{\textless{}{-}} \FunctionTok{grepl}\NormalTok{(}\StringTok{"fitted probabilities numerically 0 or 1"}\NormalTok{,}
+\NormalTok{                                  diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{top\_warning, }\AttributeTok{fixed =} \ConstantTok{TRUE}\NormalTok{) }\SpecialCharTok{|}
+  \FunctionTok{grepl}\NormalTok{(}\StringTok{"separat"}\NormalTok{, diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{top\_warning, }\AttributeTok{ignore.case =} \ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{phat\_extreme }\OtherTok{\textless{}{-}}\NormalTok{ (diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{min\_phat }\SpecialCharTok{\textless{}}\NormalTok{ PROB\_EPS) }\SpecialCharTok{|}
+\NormalTok{  (diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{max\_phat }\SpecialCharTok{\textgreater{}} \DecValTok{1} \SpecialCharTok{{-}}\NormalTok{ PROB\_EPS)}
+\NormalTok{diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{sep\_flag }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{coalesce}\NormalTok{(}\FunctionTok{as.logical}\NormalTok{(diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{sep\_flag), }\ConstantTok{FALSE}\NormalTok{)}
+\NormalTok{diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{nonconv\_flag }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{coalesce}\NormalTok{(}\FunctionTok{as.logical}\NormalTok{(diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{nonconv\_flag), }\ConstantTok{FALSE}\NormalTok{) }\SpecialCharTok{|}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{coalesce}\NormalTok{(}\SpecialCharTok{!}\FunctionTok{as.logical}\NormalTok{(diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{converged), }\ConstantTok{FALSE}\NormalTok{)}
+
+\NormalTok{mi\_variants\_for\_s5 }\OtherTok{\textless{}{-}} \FunctionTok{intersect}\NormalTok{(}\FunctionTok{c}\NormalTok{(}\StringTok{"mi\_ipw"}\NormalTok{, }\StringTok{"weighted\_imputed"}\NormalTok{), }\FunctionTok{unique}\NormalTok{(diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{analysis\_variant))}
+\ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{length}\NormalTok{(mi\_variants\_for\_s5)) mi\_variants\_for\_s5 }\OtherTok{\textless{}{-}} \FunctionTok{unique}\NormalTok{(diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{analysis\_variant)}
+
+\NormalTok{issue\_summary }\OtherTok{\textless{}{-}}\NormalTok{ diag\_df\_for\_s5 }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(analysis\_variant }\SpecialCharTok{\%in\%}\NormalTok{ mi\_variants\_for\_s5) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(group, outcome, component, analysis\_variant) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{summarise}\NormalTok{(}
+    \AttributeTok{n\_fits =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{n}\NormalTok{(),}
+    \AttributeTok{n\_nonconv =} \FunctionTok{sum}\NormalTok{(nonconv\_flag }\SpecialCharTok{\%in\%} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{n\_sep\_warn =} \FunctionTok{sum}\NormalTok{(sep\_warn }\SpecialCharTok{\%in\%} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{n\_phat\_extreme =} \FunctionTok{sum}\NormalTok{(phat\_extreme }\SpecialCharTok{\%in\%} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{n\_sep\_flag =} \FunctionTok{sum}\NormalTok{(sep\_flag }\SpecialCharTok{\%in\%} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{.groups =} \StringTok{"drop"}
+\NormalTok{  )}
+\FunctionTok{write\_csv\_safely}\NormalTok{(issue\_summary, }\FunctionTok{results\_path}\NormalTok{(}\StringTok{"mi\_fit\_issue\_summary.csv"}\NormalTok{), }\AttributeTok{row\_names =} \ConstantTok{FALSE}\NormalTok{)}
+
+\NormalTok{safe\_max }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(x) \{}
+\NormalTok{  x }\OtherTok{\textless{}{-}}\NormalTok{ x[}\FunctionTok{is.finite}\NormalTok{(x)]}
+  \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{length}\NormalTok{(x)) }\FunctionTok{return}\NormalTok{(}\ConstantTok{NA\_real\_}\NormalTok{)}
+  \FunctionTok{max}\NormalTok{(x)}
+\NormalTok{\}}
+
+\NormalTok{table\_s5\_mi\_diagnostic\_summary }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+  \AttributeTok{domain =} \FunctionTok{c}\NormalTok{(}
+    \StringTok{"Imputation run"}\NormalTok{,}
+    \StringTok{"Imputation run"}\NormalTok{,}
+    \StringTok{"Imputation run"}\NormalTok{,}
+    \StringTok{"Monte Carlo error"}\NormalTok{,}
+    \StringTok{"Chain diagnostics"}\NormalTok{,}
+    \StringTok{"Chain diagnostics"}\NormalTok{,}
+    \StringTok{"MICE logged events"}\NormalTok{,}
+    \StringTok{"Captured warnings"}\NormalTok{,}
+    \StringTok{"Outcome fit diagnostics"}\NormalTok{,}
+    \StringTok{"Outcome fit diagnostics"}\NormalTok{,}
+    \StringTok{"Outcome fit diagnostics"}
+\NormalTok{  ),}
+  \AttributeTok{metric =} \FunctionTok{c}\NormalTok{(}
+    \StringTok{"Completed imputations"}\NormalTok{,}
+    \StringTok{"Iterations per imputation"}\NormalTok{,}
+    \StringTok{"Variables imputed"}\NormalTok{,}
+    \StringTok{"Maximum MC error / SE in diagnostic model"}\NormalTok{,}
+    \StringTok{"Variables with available chain diagnostics"}\NormalTok{,}
+    \StringTok{"Variables flagged for drift"}\NormalTok{,}
+    \StringTok{"Total logged events"}\NormalTok{,}
+    \StringTok{"Captured warning rows"}\NormalTok{,}
+    \StringTok{"MI model fits audited"}\NormalTok{,}
+    \StringTok{"Fits with nonconvergence flags"}\NormalTok{,}
+    \StringTok{"Fits with separation/extreme{-}probability flags"}
+\NormalTok{  ),}
+  \AttributeTok{value =} \FunctionTok{c}\NormalTok{(}
+    \FunctionTok{as.character}\NormalTok{(imp}\SpecialCharTok{$}\NormalTok{m),}
+    \FunctionTok{as.character}\NormalTok{(MAXIT\_RUN),}
+    \FunctionTok{as.character}\NormalTok{(}\FunctionTok{length}\NormalTok{(impute\_vars)),}
+    \FunctionTok{ifelse}\NormalTok{(}\FunctionTok{is.finite}\NormalTok{(}\FunctionTok{safe\_max}\NormalTok{(mc\_tab}\SpecialCharTok{$}\NormalTok{mc\_err\_over\_se)), }\FunctionTok{sprintf}\NormalTok{(}\StringTok{"\%.3f"}\NormalTok{, }\FunctionTok{safe\_max}\NormalTok{(mc\_tab}\SpecialCharTok{$}\NormalTok{mc\_err\_over\_se)), }\StringTok{"Not estimable"}\NormalTok{),}
+    \FunctionTok{as.character}\NormalTok{(}\FunctionTok{nrow}\NormalTok{(chain\_diag)),}
+    \FunctionTok{as.character}\NormalTok{(}\FunctionTok{sum}\NormalTok{(chain\_diag}\SpecialCharTok{$}\NormalTok{flag }\SpecialCharTok{\%in\%} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)),}
+    \FunctionTok{as.character}\NormalTok{(}\FunctionTok{sum}\NormalTok{(log\_events\_summary}\SpecialCharTok{$}\NormalTok{n, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)),}
+    \FunctionTok{as.character}\NormalTok{(}\FunctionTok{nrow}\NormalTok{(mi\_warn\_log)),}
+    \FunctionTok{as.character}\NormalTok{(}\FunctionTok{nrow}\NormalTok{(diag\_df\_for\_s5)),}
+    \FunctionTok{as.character}\NormalTok{(}\FunctionTok{sum}\NormalTok{(diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{nonconv\_flag }\SpecialCharTok{\%in\%} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)),}
+    \FunctionTok{as.character}\NormalTok{(}\FunctionTok{sum}\NormalTok{(diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{sep\_flag }\SpecialCharTok{\%in\%} \ConstantTok{TRUE} \SpecialCharTok{|}\NormalTok{ diag\_df\_for\_s5}\SpecialCharTok{$}\NormalTok{phat\_extreme }\SpecialCharTok{\%in\%} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{))}
+\NormalTok{  ),}
+  \AttributeTok{interpretation =} \FunctionTok{c}\NormalTok{(}
+    \StringTok{"Primary analysis imputation count used in this render."}\NormalTok{,}
+    \StringTok{"Configured MICE iteration count for this render."}\NormalTok{,}
+    \StringTok{"Variables with non{-}empty MICE imputation methods and observed missingness."}\NormalTok{,}
+    \StringTok{"Diagnostic model ratio; lower values indicate less simulation noise relative to model SE."}\NormalTok{,}
+    \StringTok{"Imputed variables with traceable chain{-}mean diagnostics."}\NormalTok{,}
+    \StringTok{"Variables exceeding drift/slope screening thresholds."}\NormalTok{,}
+    \StringTok{"Rows reported by mice::loggedEvents across batches."}\NormalTok{,}
+    \StringTok{"Warnings captured by notebook{-}level diagnostics wrappers."}\NormalTok{,}
+    \StringTok{"Outcome{-}model diagnostic rows captured for MI analyses."}\NormalTok{,}
+    \StringTok{"Potential convergence problems requiring review if nonzero."}\NormalTok{,}
+    \StringTok{"Known separation/extreme{-}probability screen; interpret affected estimates cautiously."}
+\NormalTok{  )}
+\NormalTok{)}
+
+\FunctionTok{write\_standalone\_table\_pdf}\NormalTok{(}
+\NormalTok{  table\_s5\_mi\_diagnostic\_summary,}
+  \AttributeTok{caption =} \StringTok{"Multiple{-}imputation diagnostic summary"}\NormalTok{,}
+  \AttributeTok{file\_stub =} \StringTok{"table\_s5\_mi\_diagnostic\_summary"}\NormalTok{,}
+  \AttributeTok{wide =} \ConstantTok{TRUE}\NormalTok{,}
+  \AttributeTok{digits =} \DecValTok{3}\NormalTok{,}
+  \AttributeTok{max\_cols =} \DecValTok{4}\NormalTok{,}
+  \AttributeTok{landscape =} \ConstantTok{TRUE}\NormalTok{,}
+  \AttributeTok{display\_label =} \StringTok{"Table S5"}
+\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{Shaded}
+\begin{Highlighting}[]
 \CommentTok{\# Purpose: freeze manuscript{-}facing numbering, paths, aliases, and targeted duplicate cleanup.}
 \CommentTok{\# helper: delete only the known duplicate spill files for mapped supplement}
 \CommentTok{\# artifacts, leaving unrelated historical files untouched.}
@@ -15240,7 +14427,9 @@ TRUE \\
   \StringTok{"Figure S6"}\NormalTok{, }\StringTok{"Figure S6"}\NormalTok{, }\StringTok{"Covariate balance after gradient{-}boosted propensity weighting for ABG and VBG test{-}ordering models"}\NormalTok{, }\StringTok{"figure"}\NormalTok{, }\StringTok{"supplement"}\NormalTok{, }\StringTok{"loveplot{-}ipw{-}gbm"}\NormalTok{, }\StringTok{"generated"}\NormalTok{, }\StringTok{"notebook\_generated"}\NormalTok{, }\ConstantTok{TRUE}\NormalTok{, }\StringTok{"png,pdf"}\NormalTok{, }\ConstantTok{TRUE}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"fail"}\NormalTok{, }\StringTok{"Raw{-}versus{-}weighted absolute standardized mean differences; dashed line marks |SMD| = 0.1."}\NormalTok{, }\StringTok{"gbm\_sensitivity"}\NormalTok{, }\StringTok{"figs"}\NormalTok{, }\StringTok{"loveplot{-}ipw{-}gbm{-}abg{-}vbg"}\NormalTok{, }\StringTok{"figs"}\NormalTok{, }\StringTok{"figure\_s6\_covariate\_balance\_gbm\_weighting"}\NormalTok{, }\StringTok{"png"}\NormalTok{,}
   \StringTok{"Figure S7"}\NormalTok{, }\StringTok{"Figure S7"}\NormalTok{, }\StringTok{"Propensity{-}score overlap for gradient{-}boosted ABG and VBG test{-}ordering models"}\NormalTok{, }\StringTok{"figure"}\NormalTok{, }\StringTok{"supplement"}\NormalTok{, }\StringTok{"propensity{-}histograms{-}conditional"}\NormalTok{, }\StringTok{"generated"}\NormalTok{, }\StringTok{"notebook\_generated"}\NormalTok{, }\ConstantTok{TRUE}\NormalTok{, }\StringTok{"png,pdf"}\NormalTok{, }\ConstantTok{TRUE}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"fail"}\NormalTok{, }\StringTok{"Tested{-}versus{-}untested propensity{-}score distributions under the GBM sensitivity models."}\NormalTok{, }\StringTok{"gbm\_sensitivity"}\NormalTok{, }\StringTok{"figs"}\NormalTok{, }\StringTok{"propensity{-}histograms{-}conditional"}\NormalTok{, }\StringTok{"figs"}\NormalTok{, }\StringTok{"figure\_s7\_propensity\_score\_overlap\_gbm"}\NormalTok{, }\StringTok{"png"}\NormalTok{,}
   \StringTok{"Figure S8"}\NormalTok{, }\StringTok{"Figure S8"}\NormalTok{, }\StringTok{"SHAP{-}style contribution summaries for gradient{-}boosted ABG and VBG test{-}ordering models"}\NormalTok{, }\StringTok{"figure"}\NormalTok{, }\StringTok{"supplement"}\NormalTok{, }\StringTok{"shap{-}top10{-}ipw{-}gbm{-}display"}\NormalTok{, }\StringTok{"generated"}\NormalTok{, }\StringTok{"notebook\_generated"}\NormalTok{, }\ConstantTok{TRUE}\NormalTok{, }\StringTok{"png,pdf"}\NormalTok{, }\ConstantTok{TRUE}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"fail"}\NormalTok{, }\StringTok{"Mean absolute SHAP value summaries; not interpreted as independent predictors."}\NormalTok{, }\StringTok{"gbm\_sensitivity"}\NormalTok{, }\StringTok{"figs"}\NormalTok{, }\StringTok{"shap{-}top10{-}ipw{-}gbm{-}abg{-}vbg"}\NormalTok{, }\StringTok{"figs"}\NormalTok{, }\StringTok{"figure\_s8\_shap\_style\_contributions\_gbm"}\NormalTok{, }\StringTok{"png"}\NormalTok{,}
-  \StringTok{"Supplementary Table 1"}\NormalTok{, }\StringTok{"Supplementary Table 1"}\NormalTok{, }\StringTok{"Inclusion criteria into the enriched sample"}\NormalTok{, }\StringTok{"table"}\NormalTok{, }\StringTok{"supplement"}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"external/manual"}\NormalTok{, }\StringTok{"external/manual"}\NormalTok{, }\ConstantTok{TRUE}\NormalTok{, }\StringTok{""}\NormalTok{, }\ConstantTok{FALSE}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"info"}\NormalTok{, }\StringTok{"Defined outside the notebook; intentionally not generated here."}\NormalTok{, }\StringTok{"external"}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{""}\NormalTok{,}
+  \StringTok{"Table S1"}\NormalTok{, }\StringTok{"Table S1"}\NormalTok{, }\StringTok{"Inclusion criteria into the enriched sample"}\NormalTok{, }\StringTok{"table"}\NormalTok{, }\StringTok{"supplement"}\NormalTok{, }\StringTok{"manuscript{-}supplement{-}tables{-}additional"}\NormalTok{, }\StringTok{"generated"}\NormalTok{, }\StringTok{"notebook\_generated"}\NormalTok{, }\ConstantTok{TRUE}\NormalTok{, }\StringTok{"csv,pdf"}\NormalTok{, }\ConstantTok{TRUE}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"fail"}\NormalTok{, }\StringTok{"Notebook{-}generated inclusion/restriction table derived from the same cohort{-}flow logic as Figure 1."}\NormalTok{, }\StringTok{"inclusion"}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"table\_s1\_inclusion\_criteria"}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"table\_s1\_inclusion\_criteria"}\NormalTok{, }\StringTok{"pdf"}\NormalTok{,}
+  \StringTok{"Table S4"}\NormalTok{, }\StringTok{"Table S4"}\NormalTok{, }\StringTok{"Missingness of baseline covariates used in the primary analysis"}\NormalTok{, }\StringTok{"table"}\NormalTok{, }\StringTok{"supplement"}\NormalTok{, }\StringTok{"manuscript{-}supplement{-}tables{-}additional"}\NormalTok{, }\StringTok{"generated"}\NormalTok{, }\StringTok{"notebook\_generated"}\NormalTok{, }\ConstantTok{TRUE}\NormalTok{, }\StringTok{"csv,pdf"}\NormalTok{, }\ConstantTok{TRUE}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"fail"}\NormalTok{, }\StringTok{"Notebook{-}generated missingness table for baseline covariates used in the primary PS/direct{-}adjustment analysis."}\NormalTok{, }\StringTok{"missingness"}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"table\_s4\_missingness\_primary\_analysis"}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"table\_s4\_missingness\_primary\_analysis"}\NormalTok{, }\StringTok{"pdf"}\NormalTok{,}
+  \StringTok{"Table S5"}\NormalTok{, }\StringTok{"Table S5"}\NormalTok{, }\StringTok{"Multiple{-}imputation diagnostic summary"}\NormalTok{, }\StringTok{"table"}\NormalTok{, }\StringTok{"supplement"}\NormalTok{, }\StringTok{"manuscript{-}supplement{-}tables{-}additional"}\NormalTok{, }\StringTok{"generated"}\NormalTok{, }\StringTok{"notebook\_generated"}\NormalTok{, }\ConstantTok{TRUE}\NormalTok{, }\StringTok{"csv,pdf"}\NormalTok{, }\ConstantTok{TRUE}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"fail"}\NormalTok{, }\StringTok{"Compact manuscript{-}facing summary of MI execution, chain, Monte Carlo error, logged{-}event, warning, and outcome{-}fit diagnostics."}\NormalTok{, }\StringTok{"mi\_diagnostics"}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"table\_s5\_mi\_diagnostic\_summary"}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"table\_s5\_mi\_diagnostic\_summary"}\NormalTok{, }\StringTok{"pdf"}\NormalTok{,}
   \StringTok{"Figure 3"}\NormalTok{, }\StringTok{"Figure 3"}\NormalTok{, }\StringTok{"Deprecated draft{-}only reference for weighted categorical results"}\NormalTok{, }\StringTok{"figure"}\NormalTok{, }\StringTok{"draft\_only"}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{"draft\_only"}\NormalTok{, }\StringTok{"suppressed/deprecated"}\NormalTok{, }\ConstantTok{FALSE}\NormalTok{, }\StringTok{""}\NormalTok{, }\ConstantTok{FALSE}\NormalTok{, }\StringTok{"Figure S4"}\NormalTok{, }\StringTok{"suppressed"}\NormalTok{, }\StringTok{"Weighted categorical display is intentionally harmonized as Figure S4; no Figure 3 alias is generated."}\NormalTok{, }\StringTok{"deprecated"}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{""}\NormalTok{, }\StringTok{""}
 \NormalTok{) }\SpecialCharTok{|\textgreater{}}
 \NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
@@ -15689,6 +14878,28 @@ TRUE \\
 \NormalTok{  path}
 \NormalTok{\}}
 
+\NormalTok{manuscript\_figure\_notes }\OtherTok{\textless{}{-}} \FunctionTok{list}\NormalTok{(}
+  \StringTok{"Figure 2"} \OtherTok{=}\NormalTok{ key\_results\_caption\_main,}
+  \StringTok{"Figure S4"} \OtherTok{=}\NormalTok{ key\_results\_cat3\_caption\_main,}
+  \StringTok{"Figure S5"} \OtherTok{=}\NormalTok{ key\_results\_caption\_adjusted}
+\NormalTok{)}
+
+\CommentTok{\# helper: render explanatory manuscript notes as Quarto text below figures}
+\CommentTok{\# instead of embedding long text inside the plot canvas.}
+\NormalTok{render\_manuscript\_note }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(label) \{}
+\NormalTok{  note }\OtherTok{\textless{}{-}}\NormalTok{ manuscript\_figure\_notes[[label]]}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.null}\NormalTok{(note) }\SpecialCharTok{||} \SpecialCharTok{!}\FunctionTok{nzchar}\NormalTok{(note)) }\FunctionTok{return}\NormalTok{(}\StringTok{""}\NormalTok{)}
+\NormalTok{  note }\OtherTok{\textless{}{-}} \FunctionTok{paste0}\NormalTok{(}\StringTok{"Note: "}\NormalTok{, note)}
+  \ControlFlowTok{if}\NormalTok{ (knitr}\SpecialCharTok{::}\FunctionTok{is\_latex\_output}\NormalTok{()) \{}
+    \FunctionTok{return}\NormalTok{(}\FunctionTok{paste0}\NormalTok{(}
+      \StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{par}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{vspace\{0.5em\}}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{noindent}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{footnotesize "}\NormalTok{,}
+      \FunctionTok{latex\_safe\_table\_text}\NormalTok{(}\FunctionTok{escape\_latex\_text}\NormalTok{(note)),}
+      \StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{normalsize"}
+\NormalTok{    ))}
+\NormalTok{  \}}
+  \FunctionTok{paste0}\NormalTok{(}\StringTok{"*"}\NormalTok{, note, }\StringTok{"*"}\NormalTok{)}
+\NormalTok{\}}
+
 \CommentTok{\# helper: insert one manifest{-}registered figure into the rendered notebook in}
 \CommentTok{\# official manuscript order, independent of generation chunk order.}
 \NormalTok{render\_manuscript\_figure }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(label, }\AttributeTok{width =} \StringTok{"0.88}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{linewidth"}\NormalTok{) \{}
@@ -15706,13 +14917,14 @@ TRUE \\
       \FunctionTok{sprintf}\NormalTok{(}\StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{small \%s}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{par"}\NormalTok{, latex\_caption),}
       \StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{vspace\{0.5em\}"}\NormalTok{,}
       \FunctionTok{sprintf}\NormalTok{(}\StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{includegraphics[width=\%s,height=0.82}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{textheight,keepaspectratio]\{\%s\}"}\NormalTok{, width, latex\_path),}
+      \FunctionTok{render\_manuscript\_note}\NormalTok{(label),}
       \StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{end\{minipage\}"}\NormalTok{,}
       \StringTok{"}\SpecialCharTok{\textbackslash{}\textbackslash{}}\StringTok{end\{center\}"}
 \NormalTok{    )}
 \NormalTok{    knitr}\SpecialCharTok{::}\FunctionTok{asis\_output}\NormalTok{(}\FunctionTok{paste}\NormalTok{(out, }\AttributeTok{collapse =} \StringTok{"}\SpecialCharTok{\textbackslash{}n}\StringTok{"}\NormalTok{))}
 \NormalTok{  \} }\ControlFlowTok{else}\NormalTok{ \{}
 \NormalTok{    knitr}\SpecialCharTok{::}\FunctionTok{asis\_output}\NormalTok{(}
-      \FunctionTok{paste0}\NormalTok{(}\StringTok{"![]("}\NormalTok{, }\FunctionTok{display\_path}\NormalTok{(fig\_path), }\StringTok{")}\SpecialCharTok{\textbackslash{}n\textbackslash{}n}\StringTok{*"}\NormalTok{, caption\_text, }\StringTok{"*}\SpecialCharTok{\textbackslash{}n}\StringTok{"}\NormalTok{)}
+      \FunctionTok{paste0}\NormalTok{(}\StringTok{"![]("}\NormalTok{, }\FunctionTok{display\_path}\NormalTok{(fig\_path), }\StringTok{")}\SpecialCharTok{\textbackslash{}n\textbackslash{}n}\StringTok{*"}\NormalTok{, caption\_text, }\StringTok{"*}\SpecialCharTok{\textbackslash{}n\textbackslash{}n}\StringTok{"}\NormalTok{, }\FunctionTok{render\_manuscript\_note}\NormalTok{(label), }\StringTok{"}\SpecialCharTok{\textbackslash{}n}\StringTok{"}\NormalTok{)}
 \NormalTok{    )}
 \NormalTok{  \}}
 \NormalTok{\}}
@@ -15736,6 +14948,21 @@ TRUE \\
 \NormalTok{  )}
 \NormalTok{\}}
 
+\NormalTok{render\_manifest\_panel\_table }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(label, panels, file\_stub, }\AttributeTok{digits =} \DecValTok{2}\NormalTok{,}
+                                        \AttributeTok{landscape =} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{csv\_df =} \ConstantTok{NULL}\NormalTok{) \{}
+\NormalTok{  row }\OtherTok{\textless{}{-}} \FunctionTok{manifest\_row}\NormalTok{(label)}
+  \FunctionTok{render\_panel\_table\_pdf}\NormalTok{(}
+\NormalTok{    panels,}
+    \AttributeTok{caption =}\NormalTok{ row}\SpecialCharTok{$}\NormalTok{title\_safe[[}\DecValTok{1}\NormalTok{]],}
+    \AttributeTok{file\_stub =}\NormalTok{ file\_stub,}
+    \AttributeTok{digits =}\NormalTok{ digits,}
+    \AttributeTok{display\_label =}\NormalTok{ label,}
+    \AttributeTok{landscape =}\NormalTok{ landscape,}
+    \AttributeTok{page\_break\_before =} \ConstantTok{TRUE}\NormalTok{,}
+    \AttributeTok{csv\_df =}\NormalTok{ csv\_df}
+\NormalTok{  )}
+\NormalTok{\}}
+
 \NormalTok{render\_validation\_manuscript\_assets }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{() \{}
 \NormalTok{  as\_asis\_text }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(x) \{}
     \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.null}\NormalTok{(x)) }\FunctionTok{return}\NormalTok{(}\StringTok{""}\NormalTok{)}
@@ -15754,13 +14981,24 @@ TRUE \\
       \AttributeTok{max\_cols =} \DecValTok{8}\NormalTok{,}
       \AttributeTok{landscape =} \ConstantTok{TRUE}
 \NormalTok{    ),}
-    \FunctionTok{render\_manifest\_table}\NormalTok{(}
+    \FunctionTok{render\_manifest\_panel\_table}\NormalTok{(}
       \StringTok{"Table 2"}\NormalTok{,}
-\NormalTok{      table\_2\_weighted\_categorical\_outcomes,}
+      \FunctionTok{list}\NormalTok{(}
+        \StringTok{"Odds ratios"} \OtherTok{=}\NormalTok{ table\_2\_weighted\_or\_panel,}
+        \StringTok{"Predicted probabilities"} \OtherTok{=}\NormalTok{ table\_2\_weighted\_probability\_panel}
+\NormalTok{      ),}
       \AttributeTok{file\_stub =} \StringTok{"table\_2\_weighted\_categorical\_outcomes"}\NormalTok{,}
-      \AttributeTok{wide =} \ConstantTok{TRUE}\NormalTok{,}
       \AttributeTok{digits =} \DecValTok{2}\NormalTok{,}
-      \AttributeTok{max\_cols =} \DecValTok{8}\NormalTok{,}
+      \AttributeTok{landscape =} \ConstantTok{TRUE}\NormalTok{,}
+      \AttributeTok{csv\_df =}\NormalTok{ table\_2\_weighted\_categorical\_outcomes}
+\NormalTok{    ),}
+    \FunctionTok{render\_manifest\_table}\NormalTok{(}
+      \StringTok{"Table S1"}\NormalTok{,}
+\NormalTok{      table\_s1\_inclusion\_criteria,}
+      \AttributeTok{file\_stub =} \StringTok{"table\_s1\_inclusion\_criteria"}\NormalTok{,}
+      \AttributeTok{wide =} \ConstantTok{TRUE}\NormalTok{,}
+      \AttributeTok{digits =} \DecValTok{0}\NormalTok{,}
+      \AttributeTok{max\_cols =} \DecValTok{6}\NormalTok{,}
       \AttributeTok{landscape =} \ConstantTok{TRUE}
 \NormalTok{    ),}
     \FunctionTok{render\_manuscript\_figure}\NormalTok{(}\StringTok{"Figure S1"}\NormalTok{),}
@@ -15784,7 +15022,25 @@ TRUE \\
 \NormalTok{    ),}
     \FunctionTok{render\_manuscript\_figure}\NormalTok{(}\StringTok{"Figure S6"}\NormalTok{),}
     \FunctionTok{render\_manuscript\_figure}\NormalTok{(}\StringTok{"Figure S7"}\NormalTok{),}
-    \FunctionTok{render\_manuscript\_figure}\NormalTok{(}\StringTok{"Figure S8"}\NormalTok{)}
+    \FunctionTok{render\_manuscript\_figure}\NormalTok{(}\StringTok{"Figure S8"}\NormalTok{),}
+    \FunctionTok{render\_manifest\_table}\NormalTok{(}
+      \StringTok{"Table S4"}\NormalTok{,}
+\NormalTok{      table\_s4\_missingness\_primary\_analysis,}
+      \AttributeTok{file\_stub =} \StringTok{"table\_s4\_missingness\_primary\_analysis"}\NormalTok{,}
+      \AttributeTok{wide =} \ConstantTok{FALSE}\NormalTok{,}
+      \AttributeTok{digits =} \DecValTok{1}\NormalTok{,}
+      \AttributeTok{max\_cols =} \DecValTok{4}\NormalTok{,}
+      \AttributeTok{landscape =} \ConstantTok{FALSE}
+\NormalTok{    ),}
+    \FunctionTok{render\_manifest\_table}\NormalTok{(}
+      \StringTok{"Table S5"}\NormalTok{,}
+\NormalTok{      table\_s5\_mi\_diagnostic\_summary,}
+      \AttributeTok{file\_stub =} \StringTok{"table\_s5\_mi\_diagnostic\_summary"}\NormalTok{,}
+      \AttributeTok{wide =} \ConstantTok{TRUE}\NormalTok{,}
+      \AttributeTok{digits =} \DecValTok{3}\NormalTok{,}
+      \AttributeTok{max\_cols =} \DecValTok{4}\NormalTok{,}
+      \AttributeTok{landscape =} \ConstantTok{TRUE}
+\NormalTok{    )}
 \NormalTok{  )}
 
 \NormalTok{  block\_text }\OtherTok{\textless{}{-}} \FunctionTok{vapply}\NormalTok{(blocks, as\_asis\_text, }\FunctionTok{character}\NormalTok{(}\DecValTok{1}\NormalTok{L))}
@@ -15875,9 +15131,10 @@ TRUE \\
   \AttributeTok{full.names =} \ConstantTok{TRUE}
 \NormalTok{)}
 
-\NormalTok{has\_external\_s1 }\OtherTok{\textless{}{-}} \FunctionTok{any}\NormalTok{(}
-\NormalTok{  manuscript\_asset\_manifest\_internal}\SpecialCharTok{$}\NormalTok{manuscript\_label\_safe }\SpecialCharTok{==} \StringTok{"Supplementary Table 1"} \SpecialCharTok{\&}
-\NormalTok{    manuscript\_asset\_manifest\_internal}\SpecialCharTok{$}\NormalTok{status }\SpecialCharTok{==} \StringTok{"external/manual"}
+\NormalTok{has\_generated\_s1 }\OtherTok{\textless{}{-}} \FunctionTok{any}\NormalTok{(}
+\NormalTok{  manuscript\_asset\_manifest\_internal}\SpecialCharTok{$}\NormalTok{manuscript\_label\_safe }\SpecialCharTok{==} \StringTok{"Table S1"} \SpecialCharTok{\&}
+\NormalTok{    manuscript\_asset\_manifest\_internal}\SpecialCharTok{$}\NormalTok{status }\SpecialCharTok{==} \StringTok{"generated"} \SpecialCharTok{\&}
+\NormalTok{    manuscript\_asset\_manifest\_internal}\SpecialCharTok{$}\NormalTok{pdf\_display}
 \NormalTok{)}
 
 \NormalTok{forbidden\_duplicate\_files }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\FunctionTok{results\_path}\NormalTok{(}\StringTok{"figs"}\NormalTok{, }\StringTok{"propensity{-}histograms{-}conditional{-}1.png"}\NormalTok{))}
@@ -15887,7 +15144,7 @@ TRUE \\
   \FunctionTok{length}\NormalTok{(missing\_manifest\_files) }\SpecialCharTok{||}
   \SpecialCharTok{!}\NormalTok{supplement\_manifest\_matches }\SpecialCharTok{||}
   \FunctionTok{length}\NormalTok{(figure\_3\_aliases) }\SpecialCharTok{||}
-  \SpecialCharTok{!}\NormalTok{has\_external\_s1 }\SpecialCharTok{||}
+  \SpecialCharTok{!}\NormalTok{has\_generated\_s1 }\SpecialCharTok{||}
   \FunctionTok{length}\NormalTok{(existing\_forbidden\_duplicates)}
 \NormalTok{) \{}
 \NormalTok{  missing\_pretty }\OtherTok{\textless{}{-}} \FunctionTok{vapply}\NormalTok{(missing\_manifest\_files, pretty\_path, }\FunctionTok{character}\NormalTok{(}\DecValTok{1}\NormalTok{L))}
@@ -15898,7 +15155,7 @@ TRUE \\
     \FunctionTok{paste}\NormalTok{(missing\_pretty, }\AttributeTok{collapse =} \StringTok{", "}\NormalTok{),}
     \StringTok{"]; supplement manifest matches ["}\NormalTok{, supplement\_manifest\_matches,}
     \StringTok{"]; Figure 3 aliases ["}\NormalTok{, }\FunctionTok{paste}\NormalTok{(figure3\_pretty, }\AttributeTok{collapse =} \StringTok{", "}\NormalTok{),}
-    \StringTok{"]; Supplementary Table 1 present ["}\NormalTok{, has\_external\_s1,}
+    \StringTok{"]; Table S1 generated ["}\NormalTok{, has\_generated\_s1,}
     \StringTok{"]; forbidden duplicates ["}\NormalTok{, }\FunctionTok{paste}\NormalTok{(duplicate\_pretty, }\AttributeTok{collapse =} \StringTok{", "}\NormalTok{),}
     \StringTok{"]."}
 \NormalTok{  )}
@@ -17334,7 +16591,7 @@ component & status & detail\\
 \midrule
 overall\_build & FAIL & Final validation status derived from artifact checks, glyph audit, duplicate audit, and diagnostics audit.\\
 artifact\_registry & PASS & 0 missing required generated artifact rows.\\
-external\_manual\_assets & PASS\_WITH\_WARNINGS & 1 declared external/manual rows.\\
+external\_manual\_assets & PASS & 0 declared external/manual rows.\\
 glyph\_audit & PASS & 0 unsafe manuscript glyph rows.\\
 duplicate\_audit & PASS & 0 conflicting duplicate/numbering rows.\\
 \addlinespace
@@ -17374,9 +16631,7 @@ draft\_only & figure & draft\_only & suppressed/deprecated & FALSE & 1\\
 main & figure & generated & notebook\_generated & TRUE & 2\\
 main & table & generated & notebook\_generated & TRUE & 2\\
 supplement & figure & generated & notebook\_generated & TRUE & 8\\
-supplement & table & external/manual & external/manual & FALSE & 1\\
-\addlinespace
-supplement & table & generated & notebook\_generated & TRUE & 2\\
+supplement & table & generated & notebook\_generated & TRUE & 5\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -17397,6 +16652,7 @@ supplement & table & generated & notebook\_generated & TRUE & 2\\
 \small Figure 1. Cohort assembly and target population for inverse probability-of-sampling weighting\par
 \vspace{0.5em}
 \includegraphics[width=0.88\linewidth,height=0.82\textheight,keepaspectratio]{Results/figs/figure_1_cohort_assembly_target_population_ipsw.pdf}
+
 \end{minipage}
 \end{center}
 
@@ -17407,6 +16663,7 @@ supplement & table & generated & notebook\_generated & TRUE & 2\\
 \small Figure 2. Primary MI-logistic IPSW-weighted spline associations of pCO2 with clinical outcomes by ABG and VBG\par
 \vspace{0.5em}
 \includegraphics[width=0.88\linewidth,height=0.82\textheight,keepaspectratio]{Results/figs/figure_2_primary_weighted_spline_associations_abg_vbg.pdf}
+\par\vspace{0.5em}\noindent\footnotesize Note: These curves come from the primary MI-logistic IPSW analysis. Odds ratio curves are relative to the test-specific reference CO2 values (ABG 40 mmHg; VBG 45 mmHg). Predicted probability curves are conditional on the reference covariate profile X\_ref within each test-specific cohort.\normalsize
 \end{minipage}
 \end{center}
 
@@ -17420,91 +16677,44 @@ supplement & table & generated & notebook\_generated & TRUE & 2\\
 \centering\begingroup\fontsize{6}{8}\selectfont
 
 \resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{llllllll}
+\begin{tabular}{llllll}
 \toprule
-panel & variable & var\_type & row\_type & var\_label & label & Everyone & Did not get ABG N = 3,264\\
+Characteristic & Everyone & Did not get ABG & Did get ABG & Did not get VBG & Did get VBG\\
 \midrule
-ABG status & age\_at\_encounter & continuous & label & Age & Age & 59.5 ± 17.6; 0.0/5,175.0 missing (0.0\%) & 58.4 ± 17.7; 0.0/3,264.0 missing (0.0\%)\\
-ABG status & curr\_bmi & continuous & label & BMI & BMI & 31.3 ± 8.5; 2,934.0/5,175.0 missing (56.7\%) & 32.6 ± 8.9; 1,821.0/3,264.0 missing (55.8\%)\\
-ABG status & sex\_label & categorical & label & Sex & Sex & NA & NA\\
-ABG status & sex\_label & categorical & level & Sex & Female & 2,591 (50\%) & 1,737 (53\%)\\
-ABG status & sex\_label & categorical & level & Sex & Male & 2,584 (50\%) & 1,527 (47\%)\\
+Age & 59.5 ± 17.6; 0.0/5,175.0 missing (0.0\%) & 58.4 ± 17.7; 0.0/3,264.0 missing (0.0\%) & 61.3 ± 17.2; 0.0/1,911.0 missing (0.0\%) & 59.6 ± 17.6; 0.0/3,730.0 missing (0.0\%) & 59.0 ± 17.7; 0.0/1,445.0 missing (0.0\%)\\
+BMI & 31.3 ± 8.5; 2,934.0/5,175.0 missing (56.7\%) & 32.6 ± 8.9; 1,821.0/3,264.0 missing (55.8\%) & 28.8 ± 7.0; 1,113.0/1,911.0 missing (58.2\%) & 31.9 ± 8.6; 1,939.0/3,730.0 missing (52.0\%) & 28.9 ± 7.5; 995.0/1,445.0 missing (68.9\%)\\
+Sex &  &  &  &  & \\
+Female & 2,591 (50\%) & 1,737 (53\%) & 854 (45\%) & 1,921 (52\%) & 670 (46\%)\\
+Male & 2,584 (50\%) & 1,527 (47\%) & 1,057 (55\%) & 1,809 (48\%) & 775 (54\%)\\
 \addlinespace
-ABG status & race\_ethnicity\_label & categorical & label & Race/Ethnicity & Race/Ethnicity & NA & NA\\
-ABG status & race\_ethnicity\_label & categorical & level & Race/Ethnicity & White & 3,280 (63\%) & 2,009 (62\%)\\
-ABG status & race\_ethnicity\_label & categorical & level & Race/Ethnicity & Black or African American & 884 (17\%) & 601 (18\%)\\
-ABG status & race\_ethnicity\_label & categorical & level & Race/Ethnicity & Hispanic & 334 (6.5\%) & 250 (7.7\%)\\
-ABG status & race\_ethnicity\_label & categorical & level & Race/Ethnicity & Asian & 83 (1.6\%) & 46 (1.4\%)\\
+Race/Ethnicity &  &  &  &  & \\
+White & 3,280 (63\%) & 2,009 (62\%) & 1,271 (67\%) & 2,513 (67\%) & 767 (53\%)\\
+Black or African American & 884 (17\%) & 601 (18\%) & 283 (15\%) & 616 (17\%) & 268 (19\%)\\
+Hispanic & 334 (6.5\%) & 250 (7.7\%) & 84 (4.4\%) & 221 (5.9\%) & 113 (7.8\%)\\
+Asian & 83 (1.6\%) & 46 (1.4\%) & 37 (1.9\%) & 54 (1.4\%) & 29 (2.0\%)\\
 \addlinespace
-ABG status & race\_ethnicity\_label & categorical & level & Race/Ethnicity & American Indian & 36 (0.7\%) & 11 (0.3\%)\\
-ABG status & race\_ethnicity\_label & categorical & level & Race/Ethnicity & Pacific Islander & 10 (0.2\%) & 8 (0.2\%)\\
-ABG status & race\_ethnicity\_label & categorical & level & Race/Ethnicity & Unknown & 548 (11\%) & 339 (10\%)\\
-ABG status & location\_label & categorical & label & Location & Location & NA & NA\\
-ABG status & location\_label & categorical & level & Location & South & 2,431 (47\%) & 1,374 (42\%)\\
+American Indian & 36 (0.7\%) & 11 (0.3\%) & 25 (1.3\%) & 13 (0.3\%) & 23 (1.6\%)\\
+Pacific Islander & 10 (0.2\%) & 8 (0.2\%) & 2 (0.1\%) & 8 (0.2\%) & 2 (0.1\%)\\
+Unknown & 548 (11\%) & 339 (10\%) & 209 (11\%) & 305 (8.2\%) & 243 (17\%)\\
+Location &  &  &  &  & \\
+South & 2,431 (47\%) & 1,374 (42\%) & 1,057 (55\%) & 1,987 (53\%) & 444 (31\%)\\
 \addlinespace
-ABG status & location\_label & categorical & level & Location & Northeast & 1,300 (25\%) & 921 (28\%)\\
-ABG status & location\_label & categorical & level & Location & Midwest & 406 (7.8\%) & 246 (7.5\%)\\
-ABG status & location\_label & categorical & level & Location & West & 1,038 (20\%) & 723 (22\%)\\
-ABG status & osa\_label & dichotomous & label & OSA & OSA & 879 (17\%) & 576 (18\%)\\
-ABG status & asthma\_label & dichotomous & label & Asthma & Asthma & 684 (13\%) & 464 (14\%)\\
+Northeast & 1,300 (25\%) & 921 (28\%) & 379 (20\%) & 703 (19\%) & 597 (41\%)\\
+Midwest & 406 (7.8\%) & 246 (7.5\%) & 160 (8.4\%) & 264 (7.1\%) & 142 (9.8\%)\\
+West & 1,038 (20\%) & 723 (22\%) & 315 (16\%) & 776 (21\%) & 262 (18\%)\\
+OSA & 879 (17\%) & 576 (18\%) & 303 (16\%) & 648 (17\%) & 231 (16\%)\\
+Asthma & 684 (13\%) & 464 (14\%) & 220 (12\%) & 513 (14\%) & 171 (12\%)\\
 \addlinespace
-ABG status & copd\_label & dichotomous & label & COPD & COPD & 1,013 (20\%) & 579 (18\%)\\
-ABG status & chf\_label & dichotomous & label & CHF & CHF & 1,044 (20\%) & 587 (18\%)\\
-ABG status & nmd\_label & dichotomous & label & NMD & NMD & 233 (4.5\%) & 130 (4.0\%)\\
-ABG status & phtn\_label & dichotomous & label & PHTN & PHTN & 434 (8.4\%) & 239 (7.3\%)\\
-ABG status & ckd\_label & dichotomous & label & CKD & CKD & 904 (17\%) & 519 (16\%)\\
+COPD & 1,013 (20\%) & 579 (18\%) & 434 (23\%) & 731 (20\%) & 282 (20\%)\\
+CHF & 1,044 (20\%) & 587 (18\%) & 457 (24\%) & 741 (20\%) & 303 (21\%)\\
+NMD & 233 (4.5\%) & 130 (4.0\%) & 103 (5.4\%) & 175 (4.7\%) & 58 (4.0\%)\\
+PHTN & 434 (8.4\%) & 239 (7.3\%) & 195 (10\%) & 295 (7.9\%) & 139 (9.6\%)\\
+CKD & 904 (17\%) & 519 (16\%) & 385 (20\%) & 628 (17\%) & 276 (19\%)\\
 \addlinespace
-ABG status & diabetes\_label & dichotomous & label & Diabetes & Diabetes & 1,513 (29\%) & 954 (29\%)\\
-ABG status & encounter\_type\_label & categorical & label & Encounter Type & Encounter Type & NA & NA\\
-ABG status & encounter\_type\_label & categorical & level & Encounter Type & Emergency & 1,710 (33\%) & 1,427 (44\%)\\
-ABG status & encounter\_type\_label & categorical & level & Encounter Type & Inpatient & 3,465 (67\%) & 1,837 (56\%)\\
-\bottomrule
-\end{tabular}}
-\endgroup{}
-\end{table}
-
-\begin{table}[!h]
-\centering\begingroup\fontsize{6}{8}\selectfont
-
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{lll}
-\toprule
-Did get ABG N = 1,911 & Did not get VBG N = 3,730 & Did get VBG N = 1,445\\
-\midrule
-61.3 ± 17.2; 0.0/1,911.0 missing (0.0\%) & 59.6 ± 17.6; 0.0/3,730.0 missing (0.0\%) & 59.0 ± 17.7; 0.0/1,445.0 missing (0.0\%)\\
-28.8 ± 7.0; 1,113.0/1,911.0 missing (58.2\%) & 31.9 ± 8.6; 1,939.0/3,730.0 missing (52.0\%) & 28.9 ± 7.5; 995.0/1,445.0 missing (68.9\%)\\
-NA & NA & NA\\
-854 (45\%) & 1,921 (52\%) & 670 (46\%)\\
-1,057 (55\%) & 1,809 (48\%) & 775 (54\%)\\
-\addlinespace
-NA & NA & NA\\
-1,271 (67\%) & 2,513 (67\%) & 767 (53\%)\\
-283 (15\%) & 616 (17\%) & 268 (19\%)\\
-84 (4.4\%) & 221 (5.9\%) & 113 (7.8\%)\\
-37 (1.9\%) & 54 (1.4\%) & 29 (2.0\%)\\
-\addlinespace
-25 (1.3\%) & 13 (0.3\%) & 23 (1.6\%)\\
-2 (0.1\%) & 8 (0.2\%) & 2 (0.1\%)\\
-209 (11\%) & 305 (8.2\%) & 243 (17\%)\\
-NA & NA & NA\\
-1,057 (55\%) & 1,987 (53\%) & 444 (31\%)\\
-\addlinespace
-379 (20\%) & 703 (19\%) & 597 (41\%)\\
-160 (8.4\%) & 264 (7.1\%) & 142 (9.8\%)\\
-315 (16\%) & 776 (21\%) & 262 (18\%)\\
-303 (16\%) & 648 (17\%) & 231 (16\%)\\
-220 (12\%) & 513 (14\%) & 171 (12\%)\\
-\addlinespace
-434 (23\%) & 731 (20\%) & 282 (20\%)\\
-457 (24\%) & 741 (20\%) & 303 (21\%)\\
-103 (5.4\%) & 175 (4.7\%) & 58 (4.0\%)\\
-195 (10\%) & 295 (7.9\%) & 139 (9.6\%)\\
-385 (20\%) & 628 (17\%) & 276 (19\%)\\
-\addlinespace
-559 (29\%) & 1,034 (28\%) & 479 (33\%)\\
-NA & NA & NA\\
-283 (15\%) & 1,247 (33\%) & 463 (32\%)\\
-1,628 (85\%) & 2,483 (67\%) & 982 (68\%)\\
+Diabetes & 1,513 (29\%) & 954 (29\%) & 559 (29\%) & 1,034 (28\%) & 479 (33\%)\\
+Encounter Type &  &  &  &  & \\
+Emergency & 1,710 (33\%) & 1,427 (44\%) & 283 (15\%) & 1,247 (33\%) & 463 (32\%)\\
+Inpatient & 3,465 (67\%) & 1,837 (56\%) & 1,628 (85\%) & 2,483 (67\%) & 982 (68\%)\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -17518,45 +16728,75 @@ NA & NA & NA\\
 
 \begin{center}\textbf{Table 2. MI-pooled, MI-logistic IPSW-weighted 3-level categorical results for ABG and VBG}\end{center}
 
+\medskip\noindent\textbf{Panel A. Odds ratios}\par
+
 \begin{table}[!h]
-\centering\begingroup\fontsize{6}{8}\selectfont
+\centering\begingroup\fontsize{7}{9}\selectfont
 
 \resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{llrrllll}
+\begin{tabular}{llrrll}
 \toprule
-group & outcome & n\_model & events & Low vs normal OR (95\% CI) & High vs normal OR (95\% CI) & Normal probability (95\% CI) & Low probability (95\% CI)\\
+group & outcome & n\_model & events & Low vs normal OR (95\% CI) & High vs normal OR (95\% CI)\\
 \midrule
-ABG & IMV & 1911 & 463 & 1.41 (1.05, 1.90) & 1.26 (0.93, 1.71) & 0.21 (0.17, 0.25) & 0.27 (0.22, 0.33)\\
-ABG & NIV & 1911 & 183 & 1.04 (0.63, 1.72) & 3.05 (1.99, 4.68) & 0.06 (0.04, 0.09) & 0.06 (0.04, 0.10)\\
-ABG & Death (60d) & 1911 & 322 & 1.55 (1.07, 2.25) & 1.50 (1.06, 2.14) & 0.10 (0.08, 0.14) & 0.15 (0.11, 0.21)\\
-ABG & Hypercapnic RF & 1911 & 206 & 1.26 (0.70, 2.26) & 9.21 (5.73, 14.81) & 0.03 (0.02, 0.05) & 0.04 (0.02, 0.07)\\
-VBG & IMV & 1445 & 208 & 1.24 (0.77, 2.00) & 1.63 (1.02, 2.60) & 0.19 (0.13, 0.27) & 0.23 (0.16, 0.32)\\
+ABG & IMV & 1911 & 463 & 1.41 (1.05, 1.90) & 1.26 (0.93, 1.71)\\
+ABG & NIV & 1911 & 183 & 1.04 (0.63, 1.72) & 3.05 (1.99, 4.68)\\
+ABG & Death (60d) & 1911 & 322 & 1.55 (1.07, 2.25) & 1.50 (1.06, 2.14)\\
+ABG & Hypercapnic RF & 1911 & 206 & 1.26 (0.70, 2.26) & 9.21 (5.73, 14.81)\\
+VBG & IMV & 1445 & 208 & 1.24 (0.77, 2.00) & 1.63 (1.02, 2.60)\\
 \addlinespace
-VBG & NIV & 1445 & 100 & 0.76 (0.38, 1.52) & 2.69 (1.47, 4.90) & 0.02 (0.01, 0.05) & 0.02 (0.01, 0.04)\\
-VBG & Death (60d) & 1445 & 200 & 1.10 (0.68, 1.79) & 1.10 (0.70, 1.74) & 0.13 (0.09, 0.19) & 0.14 (0.09, 0.21)\\
-VBG & Hypercapnic RF & 1445 & 133 & 0.68 (0.30, 1.54) & 6.28 (3.50, 11.25) & 0.04 (0.02, 0.08) & 0.03 (0.01, 0.07)\\
+VBG & NIV & 1445 & 100 & 0.76 (0.38, 1.52) & 2.69 (1.47, 4.90)\\
+VBG & Death (60d) & 1445 & 200 & 1.10 (0.68, 1.79) & 1.10 (0.70, 1.74)\\
+VBG & Hypercapnic RF & 1445 & 133 & 0.68 (0.30, 1.54) & 6.28 (3.50, 11.25)\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
 \end{table}
 
+\medskip\noindent\textbf{Panel B. Predicted probabilities}\par
+
+\begin{table}[!h]
+\centering\begingroup\fontsize{7}{9}\selectfont
+
+\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
+\begin{tabular}{lllll}
+\toprule
+group & outcome & Normal probability (95\% CI) & Low probability (95\% CI) & High probability (95\% CI)\\
+\midrule
+ABG & IMV & 0.21 (0.17, 0.25) & 0.27 (0.22, 0.33) & 0.25 (0.20, 0.31)\\
+ABG & NIV & 0.06 (0.04, 0.09) & 0.06 (0.04, 0.10) & 0.17 (0.12, 0.22)\\
+ABG & Death (60d) & 0.10 (0.08, 0.14) & 0.15 (0.11, 0.21) & 0.15 (0.11, 0.20)\\
+ABG & Hypercapnic RF & 0.03 (0.02, 0.05) & 0.04 (0.02, 0.07) & 0.23 (0.17, 0.30)\\
+VBG & IMV & 0.19 (0.13, 0.27) & 0.23 (0.16, 0.32) & 0.28 (0.20, 0.38)\\
+\addlinespace
+VBG & NIV & 0.02 (0.01, 0.05) & 0.02 (0.01, 0.04) & 0.06 (0.03, 0.12)\\
+VBG & Death (60d) & 0.13 (0.09, 0.19) & 0.14 (0.09, 0.21) & 0.14 (0.09, 0.21)\\
+VBG & Hypercapnic RF & 0.04 (0.02, 0.08) & 0.03 (0.01, 0.07) & 0.22 (0.15, 0.32)\\
+\bottomrule
+\end{tabular}}
+\endgroup{}
+\end{table}
+
+\end{landscape}
+
+\clearpage
+
+\begin{landscape}
+
+\begin{center}\textbf{Table S1. Inclusion criteria into the enriched sample}\end{center}
+
 \begin{table}[!h]
 \centering\begingroup\fontsize{6}{8}\selectfont
 
 \resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{l}
+\begin{tabular}{rlllll}
 \toprule
-High probability (95\% CI)\\
+step & criterion & Source field / rule & Excluded, n & Retained, n & notes\\
 \midrule
-0.25 (0.20, 0.31)\\
-0.17 (0.12, 0.22)\\
-0.15 (0.11, 0.20)\\
-0.23 (0.17, 0.30)\\
-0.28 (0.20, 0.38)\\
-\addlinespace
-0.06 (0.03, 0.12)\\
-0.14 (0.09, 0.21)\\
-0.22 (0.15, 0.32)\\
+1 & Source extract & TriNetX-derived 2022 extract & 0 & 833,476 & Initial local source cohort.\\
+2 & ED/inpatient encounters & encounter\_type != ambulatory & 318,190 & 515,286 & Matches Figure 1 cohort-flow restriction.\\
+3 & ABG-tested cohort & has\_abg == 1 & 328,044 & 187,242 & Measured arterial CO2 outcome models.\\
+4 & VBG-tested cohort & has\_vbg == 1 & 365,623 & 149,663 & Measured venous CO2 outcome models.\\
+5 & Target population & ED/inpatient analytic cohort & 0 & 515,286 & Target for IPSW standardization.\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -17571,6 +16811,7 @@ High probability (95\% CI)\\
 \small Figure S1. Covariate balance after MI logistic inverse-probability weighting for ABG and VBG test-ordering models\par
 \vspace{0.5em}
 \includegraphics[width=0.88\linewidth,height=0.82\textheight,keepaspectratio]{Results/figs/figure_s1_covariate_balance_mi_logistic_ipsw.pdf}
+
 \end{minipage}
 \end{center}
 
@@ -17581,6 +16822,7 @@ High probability (95\% CI)\\
 \small Figure S2. Propensity-score overlap for MI logistic ABG and VBG test-ordering models\par
 \vspace{0.5em}
 \includegraphics[width=0.88\linewidth,height=0.82\textheight,keepaspectratio]{Results/figs/figure_s2_propensity_score_overlap_mi_logistic.pdf}
+
 \end{minipage}
 \end{center}
 
@@ -17591,6 +16833,7 @@ High probability (95\% CI)\\
 \small Figure S3. SHAP-style contribution summaries for MI logistic ABG and VBG test-ordering models\par
 \vspace{0.5em}
 \includegraphics[width=0.88\linewidth,height=0.82\textheight,keepaspectratio]{Results/figs/figure_s3_shap_style_contributions_mi_logistic.pdf}
+
 \end{minipage}
 \end{center}
 
@@ -17601,6 +16844,7 @@ High probability (95\% CI)\\
 \small Figure S4. MI-logistic IPSW-weighted categorical associations of pCO2 category with clinical outcomes by ABG and VBG\par
 \vspace{0.5em}
 \includegraphics[width=0.88\linewidth,height=0.82\textheight,keepaspectratio]{Results/figs/figure_s4_weighted_categorical_associations_abg_vbg.pdf}
+\par\vspace{0.5em}\noindent\footnotesize Note: MI-pooled, MI-logistic IPSW-adjusted categorical odds ratios use the normal CO2 category as the reference. Predicted probabilities are pooled on the link scale and are conditional on X\_ref within each test-specific cohort.\normalsize
 \end{minipage}
 \end{center}
 
@@ -17611,6 +16855,7 @@ High probability (95\% CI)\\
 \small Figure S5. Unweighted covariate-adjusted spline associations of pCO2 with clinical outcomes by ABG and VBG\par
 \vspace{0.5em}
 \includegraphics[width=0.88\linewidth,height=0.82\textheight,keepaspectratio]{Results/figs/figure_s5_unweighted_adjusted_spline_abg_vbg.pdf}
+\par\vspace{0.5em}\noindent\footnotesize Note: Odds ratio curves are relative to the test-specific reference CO2 values (ABG 40 mmHg; VBG 45 mmHg). Predicted probability curves are conditional on the reference covariate profile X\_ref within each test-specific cohort.\normalsize
 \end{minipage}
 \end{center}
 
@@ -17624,61 +16869,29 @@ High probability (95\% CI)\\
 \centering\begingroup\fontsize{6}{8}\selectfont
 
 \resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{lllrrr}
+\begin{tabular}{llll}
 \toprule
-group & outcome & contrast & OR & LCL & UCL\\
+group & outcome & contrast & OR (95\% CI)\\
 \midrule
-ABG & IMV & Low vs normal & 1.44 & 1.12 & 1.86\\
-ABG & IMV & High vs normal & 1.28 & 0.99 & 1.65\\
-ABG & NIV & Low vs normal & 1.00 & 0.65 & 1.52\\
-ABG & NIV & High vs normal & 2.26 & 1.60 & 3.21\\
-ABG & Death (60d) & Low vs normal & 1.60 & 1.19 & 2.15\\
+ABG & IMV & Low vs normal & 1.44 (1.12, 1.86)\\
+ABG & IMV & High vs normal & 1.28 (0.99, 1.65)\\
+ABG & NIV & Low vs normal & 1.00 (0.65, 1.52)\\
+ABG & NIV & High vs normal & 2.26 (1.60, 3.21)\\
+ABG & Death (60d) & Low vs normal & 1.60 (1.19, 2.15)\\
 \addlinespace
-ABG & Death (60d) & High vs normal & 1.55 & 1.16 & 2.08\\
-ABG & Hypercapnic RF & Low vs normal & 1.36 & 0.81 & 2.28\\
-ABG & Hypercapnic RF & High vs normal & 8.29 & 5.65 & 12.50\\
-VBG & IMV & Low vs normal & 1.48 & 1.03 & 2.13\\
-VBG & IMV & High vs normal & 1.80 & 1.27 & 2.57\\
+ABG & Death (60d) & High vs normal & 1.55 (1.16, 2.08)\\
+ABG & Hypercapnic RF & Low vs normal & 1.36 (0.81, 2.28)\\
+ABG & Hypercapnic RF & High vs normal & 8.29 (5.65, 12.50)\\
+VBG & IMV & Low vs normal & 1.48 (1.03, 2.13)\\
+VBG & IMV & High vs normal & 1.80 (1.27, 2.57)\\
 \addlinespace
-VBG & NIV & Low vs normal & 1.21 & 0.69 & 2.09\\
-VBG & NIV & High vs normal & 2.61 & 1.63 & 4.23\\
-VBG & Death (60d) & Low vs normal & 1.71 & 1.19 & 2.45\\
-VBG & Death (60d) & High vs normal & 1.58 & 1.10 & 2.29\\
-VBG & Hypercapnic RF & Low vs normal & 0.99 & 0.51 & 1.85\\
+VBG & NIV & Low vs normal & 1.21 (0.69, 2.09)\\
+VBG & NIV & High vs normal & 2.61 (1.63, 4.23)\\
+VBG & Death (60d) & Low vs normal & 1.71 (1.19, 2.45)\\
+VBG & Death (60d) & High vs normal & 1.58 (1.10, 2.29)\\
+VBG & Hypercapnic RF & Low vs normal & 0.99 (0.51, 1.85)\\
 \addlinespace
-VBG & Hypercapnic RF & High vs normal & 7.13 & 4.58 & 11.46\\
-\bottomrule
-\end{tabular}}
-\endgroup{}
-\end{table}
-
-\begin{table}[!h]
-\centering\begingroup\fontsize{6}{8}\selectfont
-
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{l}
-\toprule
-OR (95\% CI)\\
-\midrule
-1.44 (1.12, 1.86)\\
-1.28 (0.99, 1.65)\\
-1.00 (0.65, 1.52)\\
-2.26 (1.60, 3.21)\\
-1.60 (1.19, 2.15)\\
-\addlinespace
-1.55 (1.16, 2.08)\\
-1.36 (0.81, 2.28)\\
-8.29 (5.65, 12.50)\\
-1.48 (1.03, 2.13)\\
-1.80 (1.27, 2.57)\\
-\addlinespace
-1.21 (0.69, 2.09)\\
-2.61 (1.63, 4.23)\\
-1.71 (1.19, 2.45)\\
-1.58 (1.10, 2.29)\\
-0.99 (0.51, 1.85)\\
-\addlinespace
-7.13 (4.58, 11.46)\\
+VBG & Hypercapnic RF & High vs normal & 7.13 (4.58, 11.46)\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -17696,61 +16909,29 @@ OR (95\% CI)\\
 \centering\begingroup\fontsize{6}{8}\selectfont
 
 \resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{lllrrr}
+\begin{tabular}{llll}
 \toprule
-group & outcome & contrast & OR & LCL & UCL\\
+group & outcome & contrast & OR (95\% CI)\\
 \midrule
-ABG & IMV & Low vs normal & 1.40 & 1.06 & 1.86\\
-ABG & IMV & High vs normal & 1.14 & 0.85 & 1.52\\
-ABG & NIV & Low vs normal & 1.04 & 0.65 & 1.69\\
-ABG & NIV & High vs normal & 2.82 & 1.90 & 4.17\\
-ABG & Death (60d) & Low vs normal & 1.52 & 1.08 & 2.16\\
+ABG & IMV & Low vs normal & 1.40 (1.06, 1.86)\\
+ABG & IMV & High vs normal & 1.14 (0.85, 1.52)\\
+ABG & NIV & Low vs normal & 1.04 (0.65, 1.69)\\
+ABG & NIV & High vs normal & 2.82 (1.90, 4.17)\\
+ABG & Death (60d) & Low vs normal & 1.52 (1.08, 2.16)\\
 \addlinespace
-ABG & Death (60d) & High vs normal & 1.46 & 1.05 & 2.02\\
-ABG & Hypercapnic RF & Low vs normal & 1.54 & 0.84 & 2.82\\
-ABG & Hypercapnic RF & High vs normal & 9.39 & 5.99 & 14.73\\
-VBG & IMV & Low vs normal & 1.34 & 0.89 & 2.03\\
-VBG & IMV & High vs normal & 1.58 & 1.06 & 2.37\\
+ABG & Death (60d) & High vs normal & 1.46 (1.05, 2.02)\\
+ABG & Hypercapnic RF & Low vs normal & 1.54 (0.84, 2.82)\\
+ABG & Hypercapnic RF & High vs normal & 9.39 (5.99, 14.73)\\
+VBG & IMV & Low vs normal & 1.34 (0.89, 2.03)\\
+VBG & IMV & High vs normal & 1.58 (1.06, 2.37)\\
 \addlinespace
-VBG & NIV & Low vs normal & 0.88 & 0.47 & 1.67\\
-VBG & NIV & High vs normal & 2.77 & 1.62 & 4.75\\
-VBG & Death (60d) & Low vs normal & 1.38 & 0.91 & 2.10\\
-VBG & Death (60d) & High vs normal & 1.31 & 0.87 & 1.98\\
-VBG & Hypercapnic RF & Low vs normal & 0.76 & 0.37 & 1.56\\
+VBG & NIV & Low vs normal & 0.88 (0.47, 1.67)\\
+VBG & NIV & High vs normal & 2.77 (1.62, 4.75)\\
+VBG & Death (60d) & Low vs normal & 1.38 (0.91, 2.10)\\
+VBG & Death (60d) & High vs normal & 1.31 (0.87, 1.98)\\
+VBG & Hypercapnic RF & Low vs normal & 0.76 (0.37, 1.56)\\
 \addlinespace
-VBG & Hypercapnic RF & High vs normal & 7.58 & 4.54 & 12.67\\
-\bottomrule
-\end{tabular}}
-\endgroup{}
-\end{table}
-
-\begin{table}[!h]
-\centering\begingroup\fontsize{6}{8}\selectfont
-
-\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
-\begin{tabular}{l}
-\toprule
-OR (95\% CI)\\
-\midrule
-1.40 (1.06, 1.86)\\
-1.14 (0.85, 1.52)\\
-1.04 (0.65, 1.69)\\
-2.82 (1.90, 4.17)\\
-1.52 (1.08, 2.16)\\
-\addlinespace
-1.46 (1.05, 2.02)\\
-1.54 (0.84, 2.82)\\
-9.39 (5.99, 14.73)\\
-1.34 (0.89, 2.03)\\
-1.58 (1.06, 2.37)\\
-\addlinespace
-0.88 (0.47, 1.67)\\
-2.77 (1.62, 4.75)\\
-1.38 (0.91, 2.10)\\
-1.31 (0.87, 1.98)\\
-0.76 (0.37, 1.56)\\
-\addlinespace
-7.58 (4.54, 12.67)\\
+VBG & Hypercapnic RF & High vs normal & 7.58 (4.54, 12.67)\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -17765,6 +16946,7 @@ OR (95\% CI)\\
 \small Figure S6. Covariate balance after gradient-boosted propensity weighting for ABG and VBG test-ordering models\par
 \vspace{0.5em}
 \includegraphics[width=0.88\linewidth,height=0.82\textheight,keepaspectratio]{Results/figs/figure_s6_covariate_balance_gbm_weighting.pdf}
+
 \end{minipage}
 \end{center}
 
@@ -17775,6 +16957,7 @@ OR (95\% CI)\\
 \small Figure S7. Propensity-score overlap for gradient-boosted ABG and VBG test-ordering models\par
 \vspace{0.5em}
 \includegraphics[width=0.88\linewidth,height=0.82\textheight,keepaspectratio]{Results/figs/figure_s7_propensity_score_overlap_gbm.pdf}
+
 \end{minipage}
 \end{center}
 
@@ -17785,8 +16968,93 @@ OR (95\% CI)\\
 \small Figure S8. SHAP-style contribution summaries for gradient-boosted ABG and VBG test-ordering models\par
 \vspace{0.5em}
 \includegraphics[width=0.88\linewidth,height=0.82\textheight,keepaspectratio]{Results/figs/figure_s8_shap_style_contributions_gbm.pdf}
+
 \end{minipage}
 \end{center}
+
+\clearpage
+
+\begin{center}\textbf{Table S4. Missingness of baseline covariates used in the primary analysis}\end{center}
+
+\begin{table}[!h]
+\centering\begingroup\fontsize{7}{9}\selectfont
+
+\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
+\begin{tabular}{llll}
+\toprule
+variable & Analysis role & \% missing & Imputed in primary MI\\
+\midrule
+Age & direct adjustment; PS model & 0.0\% & Yes\\
+Sex & direct adjustment; PS model & 0.0\% & Yes\\
+Race/ethnicity & direct adjustment; PS model & 0.0\% & Yes\\
+BMI & PS model & 56.7\% & Yes\\
+COPD & PS model & 0.0\% & Yes\\
+\addlinespace
+Asthma & PS model & 0.0\% & Yes\\
+OSA & PS model & 0.0\% & Yes\\
+CHF & PS model & 0.0\% & Yes\\
+Neuromuscular disease & PS model & 0.0\% & Yes\\
+Pulmonary hypertension & PS model & 0.0\% & Yes\\
+\addlinespace
+Chronic kidney disease & PS model & 0.0\% & Yes\\
+Diabetes & PS model & 0.0\% & Yes\\
+Location & direct adjustment; PS model & 0.0\% & Yes\\
+Encounter type & direct adjustment; PS model & 0.0\% & Yes\\
+Temperature & PS model & 48.3\% & Yes\\
+\addlinespace
+Systolic blood pressure & PS model & 29.8\% & Yes\\
+Diastolic blood pressure & PS model & 30.1\% & Yes\\
+Heart rate & PS model & 36.5\% & Yes\\
+Sodium & PS model & 5.0\% & Yes\\
+Serum creatinine & PS model & 9.3\% & Yes\\
+\addlinespace
+Serum bicarbonate & PS model & 5.4\% & Yes\\
+Serum chloride & PS model & 5.8\% & Yes\\
+Serum lactate & PS model & 60.4\% & Yes\\
+Serum potassium & PS model & 7.8\% & Yes\\
+White blood cell count & PS model & 17.3\% & Yes\\
+\addlinespace
+Platelet count & PS model & 7.7\% & Yes\\
+Serum phosphate & PS model & 52.8\% & Yes\\
+Serum calcium & PS model & 10.0\% & Yes\\
+\bottomrule
+\end{tabular}}
+\endgroup{}
+\end{table}
+
+\clearpage
+
+\begin{landscape}
+
+\begin{center}\textbf{Table S5. Multiple-imputation diagnostic summary}\end{center}
+
+\begin{table}[!h]
+\centering\begingroup\fontsize{6}{8}\selectfont
+
+\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
+\begin{tabular}{llll}
+\toprule
+domain & metric & value & interpretation\\
+\midrule
+Imputation run & Completed imputations & 20 & Primary analysis imputation count used in this render.\\
+Imputation run & Iterations per imputation & 5 & Configured MICE iteration count for this render.\\
+Imputation run & Variables imputed & 16 & Variables with non-empty MICE imputation methods and observed missingness.\\
+Monte Carlo error & Maximum MC error / SE in diagnostic model & 0.177 & Diagnostic model ratio; lower values indicate less simulation noise relative to model SE.\\
+Chain diagnostics & Variables with available chain diagnostics & 16 & Imputed variables with traceable chain-mean diagnostics.\\
+\addlinespace
+Chain diagnostics & Variables flagged for drift & 14 & Variables exceeding drift/slope screening thresholds.\\
+MICE logged events & Total logged events & 110 & Rows reported by mice::loggedEvents across batches.\\
+Captured warnings & Captured warning rows & 0 & Warnings captured by notebook-level diagnostics wrappers.\\
+Outcome fit diagnostics & MI model fits audited & 692 & Outcome-model diagnostic rows captured for MI analyses.\\
+Outcome fit diagnostics & Fits with nonconvergence flags & 0 & Potential convergence problems requiring review if nonzero.\\
+\addlinespace
+Outcome fit diagnostics & Fits with separation/extreme-probability flags & 540 & Known separation/extreme-probability screen; interpret affected estimates cautiously.\\
+\bottomrule
+\end{tabular}}
+\endgroup{}
+\end{table}
+
+\end{landscape}
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -17812,8 +17080,7 @@ OR (95\% CI)\\
 \toprule
 check\_status & severity & allowed\_missing & n\_rows\\
 \midrule
-present & none & FALSE & 56\\
-external\_manual\_declared & info & TRUE & 1\\
+present & none & FALSE & 68\\
 suppressed\_draft\_only & none & TRUE & 1\\
 \bottomrule
 \end{tabular}}
@@ -17905,8 +17172,8 @@ high & Outcome & Results/model\_fit\_diagnostics.csv & sep\_flag TRUE for 540 / 
 \toprule
 run\_id & run\_ts\\
 \midrule
-20260421\_061058 & 2026-04-21 06:10:58.635955\\
-20260421\_061058 & 2026-04-21 06:10:58.635955\\
+20260421\_073405 & 2026-04-21 07:34:05.211923\\
+20260421\_073405 & 2026-04-21 07:34:05.211923\\
 \bottomrule
 \end{tabular}}
 \endgroup{}

@@ -1,12 +1,12 @@
 # Manuscript sync report
 
-- Run ID: 20260421_061058
-- Active validation assets: 15
-- Generated validation assets: 14
-- External/manual assets: 1
+- Run ID: 20260421_073405
+- Active validation assets: 17
+- Generated validation assets: 17
+- External/manual assets: 0
 - Draft-only assets suppressed: 1
 - Missing required generated artifacts: 0
-- Allowed external/manual declarations: 1
+- Allowed external/manual declarations: 0
 - Glyph audit failures: 0
 - Duplicate/numbering conflicts: 0
 
@@ -26,4 +26,6 @@
 - Figure S6: Covariate balance after gradient-boosted propensity weighting for ABG and VBG test-ordering models [figure; generated]
 - Figure S7: Propensity-score overlap for gradient-boosted ABG and VBG test-ordering models [figure; generated]
 - Figure S8: SHAP-style contribution summaries for gradient-boosted ABG and VBG test-ordering models [figure; generated]
-- Supplementary Table 1: Inclusion criteria into the enriched sample [table; external/manual]
+- Table S1: Inclusion criteria into the enriched sample [table; generated]
+- Table S4: Missingness of baseline covariates used in the primary analysis [table; generated]
+- Table S5: Multiple-imputation diagnostic summary [table; generated]

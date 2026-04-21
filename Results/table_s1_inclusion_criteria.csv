@@ -1,0 +1,6 @@
+"step","criterion","Source field / rule","Excluded, n","Retained, n","notes","run_id","run_ts"
+1,"Source extract","TriNetX-derived 2022 extract","0","833,476","Initial local source cohort.","20260421_073405","2026-04-21 07:34:05.211923"
+2,"ED/inpatient encounters","encounter_type != ambulatory","318,190","515,286","Matches Figure 1 cohort-flow restriction.","20260421_073405","2026-04-21 07:34:05.211923"
+3,"ABG-tested cohort","has_abg == 1","328,044","187,242","Measured arterial CO2 outcome models.","20260421_073405","2026-04-21 07:34:05.211923"
+4,"VBG-tested cohort","has_vbg == 1","365,623","149,663","Measured venous CO2 outcome models.","20260421_073405","2026-04-21 07:34:05.211923"
+5,"Target population","ED/inpatient analytic cohort","0","515,286","Target for IPSW standardization.","20260421_073405","2026-04-21 07:34:05.211923"
