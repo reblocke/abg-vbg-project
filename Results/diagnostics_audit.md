@@ -2,11 +2,11 @@
 
 ## Executive Summary
 - Overall status: FAIL
-- Run mode: full; pilot_frac: 1; m: 80; maxit: 20
-- Runtime total (sec): 70418.348
-- MI batch status: batches=280; m_batch=2; failures=0
-- Balance: ABG max|SMD|=0.091; VBG max|SMD|=0.042
-- Separation flags: 328 / 2612
+- Run mode: pilot; pilot_frac: 0.01; m: 20; maxit: 5
+- Runtime total (sec): 58.970
+- MI batch status: batches=70; m_batch=2; failures=0
+- Balance: ABG max|SMD|=0.108; VBG max|SMD|=0.079
+- Separation flags: 540 / 692
 
 ## Artifact Inventory (Found / Missing)
 
@@ -35,39 +35,40 @@
 
 ## Runtime Top Steps
 
-- mi_single_pass: 14593.127 sec
-- mice_batch_26: 4028.354 sec
-- mice_batch_33: 2827.165 sec
-- mice_batch_30: 2431.267 sec
-- mice_batch_23: 2420.444 sec
-- mice_batch_11: 2378.014 sec
-- mice_batch_8: 2271.435 sec
-- mice_batch_38: 2199.348 sec
-- mice_batch_9: 2110.349 sec
-- mice_batch_36: 2055.018 sec
+- mi_single_pass: 44.585 sec
+- mice_batch_1: 1.524 sec
+- mice_batch_10: 1.448 sec
+- mice_batch_2: 1.446 sec
+- mice_batch_9: 1.439 sec
+- mice_batch_8: 1.433 sec
+- mice_batch_3: 1.430 sec
+- mice_batch_7: 1.426 sec
+- mice_batch_5: 1.422 sec
+- mice_batch_6: 1.415 sec
 
 ## MI Health
 
 - Smoke test failed: FALSE
-- Predictor width max mm_cols: 34.000
+- Predictor width max mm_cols: 33.000
 - Chain diagnostics issue: FALSE (numeric_names=FALSE; drift_tail_na_frac=0.000)
 - MI warnings rows: 0
 
 ## Balance
 
-- ABG max |SMD|: 0.091
-- VBG max |SMD|: 0.042
+- ABG max |SMD|: 0.108
+- VBG max |SMD|: 0.079
 
 ## Outcome Fits
 
 Top separation counts (analysis_variant/group/outcome):
-- mi_ipw / ABG / hypercap_resp_failure: 80
-- mi_unweighted / ABG / hypercap_resp_failure: 80
-- mi_ipw / ABG / niv_proc: 80
-- mi_unweighted / ABG / niv_proc: 80
-- ipw / ABG / hypercap_resp_failure:  2
-- ipw / ABG / niv_proc:  2
+- mi_ipw / ABG / death_60d: 40
+- mi_ipw / VBG / death_60d: 40
+- mi_unweighted / VBG / death_60d: 40
+- mi_ipw / ABG / hypercap_resp_failure: 40
+- mi_unweighted / ABG / hypercap_resp_failure: 40
+- mi_ipw / VBG / hypercap_resp_failure: 40
 
 ## Issues (prioritized)
 
-- [high] Outcome: sep_flag TRUE for 328 / 2612 fits (Results/model_fit_diagnostics.csv)
+- [high] Balance: ABG max|SMD|=0.108 (Results/balance_target_imp_summary.csv)
+- [high] Outcome: sep_flag TRUE for 540 / 692 fits (Results/model_fit_diagnostics.csv)
