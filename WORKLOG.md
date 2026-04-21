@@ -997,3 +997,42 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Next steps:
   - If the inline baseline preview tables are retained in the canonical PDF, fix their gtsummary-to-LaTeX rendering path so markdown and CO2 subscripts are rendered instead of printed literally.
   - Separately decide whether the outcome separation audit issue should block manuscript use or be handled as a modeling sensitivity/follow-up.
+
+## 2026-04-21 05:21 MDT
+- Task: Audit the completed PDF against the proposed manuscript display plan.
+- Files changed:
+  - `WORKLOG.md`
+- Commands run:
+  - `pdftotext -layout "Code Drafts/2026-4-20-complete render.pdf" tmp/pdf_audit/display_plan_audit.txt`
+  - `pdfinfo "Code Drafts/2026-4-20-complete render.pdf"`
+  - `pdfimages -list "Code Drafts/2026-4-20-complete render.pdf"`
+  - Page-by-page `pdftotext` search for Figure 1, Figure 2, Table 1, Table 2, Figure S1-S8, Table S2-S3, Supplementary Table 1, Supplementary Table 4/Table S4, and Supplementary Figure 9/Table S5.
+  - Inspected `Results/pdf_asset_presence_scan.csv`, `Results/manuscript_asset_audit.csv`, `Results/manuscript_asset_manifest.csv`, and `Results/artifact_check_missing.csv`.
+- Outcomes:
+  - Latest labeled full-render PDF has `126` pages and `76` embedded images.
+  - Present in the rendered PDF:
+    - Figure 1 page `110`
+    - Figure 2 page `111`
+    - Table 1 page `112`
+    - Table 2 page `113`
+    - Figure S1 page `114`
+    - Figure S2 page `115`
+    - Figure S3 page `116`
+    - Figure S4 page `117`
+    - Figure S5 page `118`
+    - Table S2 page `119`
+    - Table S3 page `120`
+    - Figure S6 page `121`
+    - Figure S7 page `122`
+    - Figure S8 page `123`
+  - Not present as rendered/numbered manuscript displays:
+    - Supplementary Table 1, which the artifact registry declares as external/manual and intentionally not PDF-displayed.
+    - Supplementary Table 4/Table S4 missingness table.
+    - Supplementary Figure 9/Figure S9 or Supplementary Table 5/Table S5 MI diagnostic display.
+  - Related but not manuscript-numbered material is present:
+    - Missingness structure/drivers section on page `45`.
+    - MI convergence and mixing section on page `107`.
+    - MI stability across m section on page `108`.
+- Next steps:
+  - Add notebook-generated Supplementary Table 4 if the missingness table should become part of the canonical supplement.
+  - Decide whether MI diagnostics should be promoted from narrative/diagnostic sections into a numbered Figure S9 or Table S5.
