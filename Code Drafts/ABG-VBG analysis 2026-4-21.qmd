@@ -140,9 +140,10 @@ render_inline_graphic <- function(file,
   knitr::include_graphics(inline_path)
 }
 
-# Canonical PDF path: export all figure/table artifacts and include analysis
-# previews plus manuscript-facing assets in the rendered notebook.
-VALIDATION_INLINE_ANALYSIS_PREVIEWS <- TRUE
+# Canonical PDF path: export all figure/table artifacts, keep executed source
+# visible, and reserve rendered output for manuscript-facing displays plus
+# compact provenance/status summaries. QA/debug figures remain sidecar artifacts.
+VALIDATION_INLINE_ANALYSIS_PREVIEWS <- FALSE
 
 # helper: normalize manuscript-facing text to a plain-ASCII representation so
 # PDF labels/captions do not depend on platform-specific glyph handling.
@@ -392,6 +393,70 @@ render_table_pdf_maybe <- function(df, caption, file_stub,
   invisible(NULL)
 }
 
+# helper: render one numbered manuscript table as multiple explicit panels.
+# This avoids automatic wide-table splitting, which can detach the final column
+# from the table body in LaTeX output.
+render_panel_table_pdf <- function(panels, caption, file_stub,
+                                   digits = 2,
+                                   display_label = NULL,
+                                   landscape = TRUE,
+                                   page_break_before = TRUE,
+                                   csv_df = NULL) {
+  stopifnot(is.list(panels), length(panels) > 0L)
+  panel_names <- names(panels)
+  if (is.null(panel_names) || any(!nzchar(panel_names))) {
+    panel_names <- paste("Panel", LETTERS[seq_along(panels)])
+  }
+  stopifnot(all(vapply(panels, is.data.frame, logical(1L))))
+
+  if (is.null(csv_df)) {
+    csv_df <- dplyr::bind_rows(
+      lapply(seq_along(panels), function(idx) {
+        dplyr::mutate(panels[[idx]], panel = panel_names[[idx]], .before = 1L)
+      })
+    )
+  }
+  write_csv_safely(csv_df, results_path(paste0(file_stub, ".csv")), row_names = FALSE)
+
+  build_kbl <- function(df_part) {
+    kbl <- knitr::kable(
+      df_part,
+      format = "latex",
+      booktabs = TRUE,
+      longtable = FALSE,
+      digits = digits
+    )
+    kbl <- kableExtra::kable_styling(
+      kbl,
+      latex_options = c("hold_position", "scale_down"),
+      font_size = 7,
+      full_width = FALSE,
+      position = "center"
+    )
+    latex_safe_table_text(as.character(kbl))
+  }
+
+  panel_blocks <- unlist(lapply(seq_along(panels), function(idx) {
+    panel_title <- paste0("Panel ", LETTERS[[idx]], ". ", panel_names[[idx]])
+    if (knitr::is_latex_output()) {
+      c(
+        paste0("\\medskip\\noindent\\textbf{", escape_latex_text(latex_safe_table_text(panel_title)), "}\\par"),
+        build_kbl(panels[[idx]])
+      )
+    } else {
+      c(paste0("**", panel_title, "**"), as.character(knitr::kable(panels[[idx]], digits = digits)))
+    }
+  }))
+
+  render_table_blocks(
+    panel_blocks,
+    title = caption,
+    display_label = display_label,
+    landscape = landscape,
+    page_break_before = page_break_before
+  )
+}
+
 # helper: render a standalone table PDF that can be cited outside the notebook.
 # This path is used for manuscript/supplement table artifacts with stable names.
 resolve_latex_command <- function(cmd = "pdflatex") {
@@ -507,6 +572,107 @@ write_standalone_table_pdf <- function(df, caption, file_stub,
   pdf_file <- sub("\\.tex$", ".pdf", tex_file)
   if (!file.exists(pdf_file)) {
     stop("Standalone table PDF render failed for ", file_stub, ": expected PDF not found at ", pdf_file)
+  }
+  out_pdf <- results_path(paste0(file_stub, ".pdf"))
+  fs::file_copy(pdf_file, out_pdf, overwrite = TRUE)
+  invisible(out_pdf)
+}
+
+# helper: write a standalone sidecar PDF for a manuscript table that is rendered
+# as explicit panels in the notebook PDF.
+write_standalone_panel_table_pdf <- function(panels, caption, file_stub,
+                                             digits = 2,
+                                             display_label = NULL,
+                                             landscape = TRUE,
+                                             csv_df = NULL) {
+  stopifnot(is.list(panels), length(panels) > 0L)
+  panel_names <- names(panels)
+  if (is.null(panel_names) || any(!nzchar(panel_names))) {
+    panel_names <- paste("Panel", LETTERS[seq_along(panels)])
+  }
+  stopifnot(all(vapply(panels, is.data.frame, logical(1L))))
+
+  if (is.null(csv_df)) {
+    csv_df <- dplyr::bind_rows(
+      lapply(seq_along(panels), function(idx) {
+        dplyr::mutate(panels[[idx]], panel = panel_names[[idx]], .before = 1L)
+      })
+    )
+  }
+  write_csv_safely(csv_df, results_path(paste0(file_stub, ".csv")), row_names = FALSE)
+
+  build_kbl <- function(df_part) {
+    kbl <- knitr::kable(
+      df_part,
+      format = "latex",
+      booktabs = TRUE,
+      longtable = FALSE,
+      digits = digits
+    )
+    kbl <- kableExtra::kable_styling(
+      kbl,
+      latex_options = c("hold_position", "scale_down"),
+      font_size = 7,
+      full_width = FALSE,
+      position = "center"
+    )
+    latex_safe_table_text(as.character(kbl))
+  }
+
+  table_blocks <- unlist(lapply(seq_along(panels), function(idx) {
+    panel_title <- paste0("Panel ", LETTERS[[idx]], ". ", panel_names[[idx]])
+    c(
+      paste0("\\medskip\\noindent\\textbf{", escape_latex_text(latex_safe_table_text(panel_title)), "}\\par"),
+      build_kbl(panels[[idx]])
+    )
+  }))
+  if (isTRUE(landscape)) {
+    table_blocks <- c("\\begin{landscape}", table_blocks, "\\end{landscape}")
+  }
+
+  tex_doc <- c(
+    "\\documentclass{article}",
+    "\\usepackage[margin=0.75in]{geometry}",
+    "\\usepackage{booktabs}",
+    "\\usepackage{pdflscape}",
+    "\\usepackage{float}",
+    "\\usepackage{graphicx}",
+    "\\begin{document}",
+    table_heading_block(caption, display_label = display_label),
+    table_blocks,
+    "\\end{document}"
+  )
+
+  build_dir <- fs::path(tempdir(), paste0("table_pdf_", file_stub))
+  fs::dir_create(build_dir, recurse = TRUE)
+  tex_file <- fs::path(build_dir, paste0(file_stub, ".tex"))
+  writeLines(tex_doc, tex_file, useBytes = TRUE)
+
+  latex_cmd <- resolve_latex_command("pdflatex")
+  latex_log <- tryCatch(
+    system2(
+      latex_cmd,
+      args = c(
+        "-interaction=nonstopmode",
+        "-halt-on-error",
+        "-output-directory", build_dir,
+        tex_file
+      ),
+      stdout = TRUE,
+      stderr = TRUE
+    ),
+    error = function(e) stop("Standalone panel table PDF render failed for ", file_stub, ": ", conditionMessage(e))
+  )
+  latex_status <- attr(latex_log, "status")
+  if (!is.null(latex_status) && latex_status != 0) {
+    stop(
+      "Standalone panel table PDF render failed for ", file_stub, " via pdflatex. Last log lines: ",
+      paste(utils::tail(latex_log, 20), collapse = " | ")
+    )
+  }
+  pdf_file <- sub("\\.tex$", ".pdf", tex_file)
+  if (!file.exists(pdf_file)) {
+    stop("Standalone panel table PDF render failed for ", file_stub, ": expected PDF not found at ", pdf_file)
   }
   out_pdf <- results_path(paste0(file_stub, ".pdf"))
   fs::file_copy(pdf_file, out_pdf, overwrite = TRUE)
@@ -2742,14 +2908,20 @@ build_key_results_prob_column <- function(prob_df, column_title = "Predicted pro
 build_key_results_figure <- function(or_df, prob_df, figure_title, figure_caption) {
   or_plot <- build_key_results_or_column(or_df, show_row_labels = TRUE)
   prob_plot <- build_key_results_prob_column(prob_df, show_row_labels = FALSE)
+  annotation_args <- list(title = figure_title)
+  if (!is.null(figure_caption) && nzchar(figure_caption)) {
+    annotation_args$caption <- figure_caption
+  }
   (or_plot | prob_plot) +
     patchwork::plot_layout(guides = "collect", widths = c(1, 1)) +
-    patchwork::plot_annotation(
-      title = figure_title,
-      caption = figure_caption,
-      theme = ggplot2::theme(
-        plot.title = ggplot2::element_text(face = "bold", hjust = 0.5),
-        plot.caption = ggplot2::element_text(hjust = 0)
+    do.call(
+      patchwork::plot_annotation,
+      c(
+        annotation_args,
+        list(theme = ggplot2::theme(
+          plot.title = ggplot2::element_text(face = "bold", hjust = 0.5),
+          plot.caption = ggplot2::element_text(hjust = 0)
+        ))
       )
     ) &
     ggplot2::theme(legend.position = "top")
@@ -2954,9 +3126,6 @@ build_supplement_threelevel_table <- function(df, method,
       group = as.character(group),
       outcome = as.character(outcome),
       contrast = as.character(contrast),
-      OR = OR,
-      LCL = LCL,
-      UCL = UCL,
       `OR (95% CI)` = format_or_ci_export(OR, LCL, UCL)
     ) |>
     dplyr::arrange(
@@ -3075,14 +3244,20 @@ build_cat3_prob_column <- function(prob_df, column_title = "Predicted probabilit
 assemble_cat3_key_results_figure <- function(or_df, prob_df, figure_title, figure_caption) {
   or_plot <- build_cat3_or_column(or_df, show_row_labels = TRUE)
   prob_plot <- build_cat3_prob_column(prob_df, show_row_labels = FALSE)
+  annotation_args <- list(title = figure_title)
+  if (!is.null(figure_caption) && nzchar(figure_caption)) {
+    annotation_args$caption <- figure_caption
+  }
   (or_plot | prob_plot) +
     patchwork::plot_layout(guides = "collect", widths = c(1, 1)) +
-    patchwork::plot_annotation(
-      title = figure_title,
-      caption = figure_caption,
-      theme = ggplot2::theme(
-        plot.title = ggplot2::element_text(face = "bold", hjust = 0.5),
-        plot.caption = ggplot2::element_text(hjust = 0)
+    do.call(
+      patchwork::plot_annotation,
+      c(
+        annotation_args,
+        list(theme = ggplot2::theme(
+          plot.title = ggplot2::element_text(face = "bold", hjust = 0.5),
+          plot.caption = ggplot2::element_text(hjust = 0)
+        ))
       )
     ) &
     ggplot2::theme(legend.position = "top")
@@ -3761,11 +3936,12 @@ factor_diag <- lapply(names(subset_data), function(v) {
 })
 factor_diag <- dplyr::bind_rows(factor_diag)
 write_csv_safely(factor_diag, results_path("factor_levels_diagnostic.csv"), row_names = FALSE)
-render_table_pdf(
+render_table_pdf_maybe(
   factor_diag,
   caption = "Factor level diagnostics (all variables)",
   file_stub = "factor_levels_diagnostic",
-  digits = 1
+  digits = 1,
+  show = FALSE
 )
 
 # Factor expansion guard (logs only)
@@ -4503,7 +4679,7 @@ abg_group_cols <- setdiff(names(tbl1_abg_csv), c(table1_key_cols, "panel", "Ever
 vbg_group_cols <- setdiff(names(tbl1_vbg_csv), c(table1_key_cols, "panel", "Everyone"))
 stopifnot(length(abg_group_cols) == 2L, length(vbg_group_cols) == 2L)
 
-tbl1_combined_csv <- tbl1_abg_csv |>
+tbl1_combined_internal <- tbl1_abg_csv |>
   dplyr::select(
     .data$row_id, .data$panel, .data$variable, .data$var_type, .data$row_type,
     .data$var_label, .data$label, .data$Everyone, dplyr::all_of(abg_group_cols)
@@ -4515,8 +4691,24 @@ tbl1_combined_csv <- tbl1_abg_csv |>
   ) |>
   dplyr::select(-.data$row_id)
 
+tbl1_combined_csv <- tbl1_combined_internal |>
+  dplyr::transmute(
+    Characteristic = dplyr::if_else(
+      .data$row_type == "level",
+      paste0("  ", .data$label),
+      .data$label
+    ),
+    Everyone = .data$Everyone,
+    `Did not get ABG` = .data[[abg_group_cols[[1L]]]],
+    `Did get ABG` = .data[[abg_group_cols[[2L]]]],
+    `Did not get VBG` = .data[[vbg_group_cols[[1L]]]],
+    `Did get VBG` = .data[[vbg_group_cols[[2L]]]]
+  ) |>
+  dplyr::mutate(dplyr::across(dplyr::everything(), ~ dplyr::if_else(is.na(.x), "", as.character(.x))))
+
 write_csv_safely(tbl1_abg_csv, results_path("table1_abg_status.csv"), row_names = FALSE)
 write_csv_safely(tbl1_vbg_csv, results_path("table1_vbg_status.csv"), row_names = FALSE)
+write_csv_safely(tbl1_combined_internal, results_path("table1_combined_internal.csv"), row_names = FALSE)
 write_csv_safely(tbl1_combined_csv, results_path("table1_combined.csv"), row_names = FALSE)
 
 write_standalone_table_pdf(
@@ -4525,7 +4717,7 @@ write_standalone_table_pdf(
   file_stub = "table1_combined",
   wide = TRUE,
   digits = 2,
-  max_cols = 8,
+  max_cols = 6,
   landscape = TRUE,
   display_label = "Table 1"
 )
@@ -8616,6 +8808,7 @@ if (length(na_counts)) {
 #| code-block-title: "MI Monte Carlo error diagnostics"
 #| echo: true
 #| message: false
+#| results: "hide"
 
 # Purpose: mi mcerror.
 stopifnot(exists("imp"))
@@ -8805,6 +8998,8 @@ if (length(mc_key_terms)) {
 
 ```{r mi-diagnostics}
 #| include: true
+#| results: "hide"
+#| fig-show: "hide"
 # Purpose: mi diagnostics.
 stopifnot(exists("imp"))
 imp_n <- imp$m
@@ -8940,6 +9135,7 @@ if (length(trace_vars)) {
       ggplot2::facet_wrap(~variable, scales = "free_y") +
       theme_pub(base_size = 10) +
       ggplot2::labs(title = "Mean imputed value by imputation", x = "Imputation", y = "Mean")
+    save_diag_plot(p_trace, results_path("figs", "diag-mi-trace-means.png"), width = 8, height = 5, dpi = 300)
     print(p_trace)
   }
 
@@ -8964,6 +9160,7 @@ if (length(trace_vars)) {
     ggplot2::facet_wrap(~variable, scales = "free") +
     theme_pub(base_size = 10) +
     ggplot2::labs(title = "Observed vs imputed distributions (imp1)", x = NULL, y = "Density")
+  save_diag_plot(p_dens, results_path("figs", "diag-mi-density-imp1.png"), width = 8, height = 5, dpi = 300)
   print(p_dens)
 
   p_box <- ggplot2::ggplot(dens_df, ggplot2::aes(x = status, y = value, fill = status)) +
@@ -8972,6 +9169,7 @@ if (length(trace_vars)) {
     theme_pub(base_size = 10) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 20, hjust = 1)) +
     ggplot2::labs(title = "Observed vs imputed (imp1)", x = NULL, y = NULL)
+  save_diag_plot(p_box, results_path("figs", "diag-mi-box-imp1.png"), width = 8, height = 5, dpi = 300)
   print(p_box)
 }
 
@@ -9042,6 +9240,8 @@ grDevices::dev.off()
 
 ```{r mi-imputation-diagnostics}
 #| include: true
+#| results: "hide"
+#| fig-show: "hide"
 
 # Purpose: mi imputation diagnostics.
 stopifnot(exists("imp"))
@@ -9089,6 +9289,13 @@ if (length(vars_show)) {
         theme_pub() +
         coord_flip()
     }
+    save_diag_plot(
+      p,
+      results_path("figs", paste0("diag-mi-obs-imp-", .make_safe_name(v), ".png")),
+      width = 7,
+      height = 5,
+      dpi = 300
+    )
     print(p)
   }
 
@@ -9155,6 +9362,8 @@ render_table_pdf_maybe(
 
 ```{r mi-missing-audit}
 #| include: true
+#| results: "hide"
+#| fig-show: "hide"
 # --- Lean missingness audit (memory-safe) ---------------------------------
 
 stopifnot(exists("imp"))
@@ -9180,6 +9389,7 @@ p_top <- ggplot(miss_tbl[miss_tbl$variable %in% top_vars, ],
   coord_flip() +
   labs(title = "Top missing variables (after MI)", x = NULL, y = "% missing") +
   theme_pub()
+save_diag_plot(p_top, results_path("figs", "missingness-after-mi-top-vars.png"), width = 8, height = 7, dpi = 300)
 print(p_top)
 
 # 3) Small heatmap on imputed data (rows/cols sampled)
@@ -9190,6 +9400,7 @@ rows_heat <- dplyr::slice_sample(dat_imp, n = R)
 
 p_heat <- naniar::vis_miss(rows_heat[, cols_heat, drop = FALSE]) +
   labs(title = sprintf("Missingness heatmap on imputed data (%d rows × %d cols)", R, length(cols_heat)))
+save_diag_plot(p_heat, results_path("figs", "missingness-after-mi-heatmap.png"), width = 10, height = 7, dpi = 300)
 print(p_heat)
 
 # 4) Optional, but often heavy: UpSet of co-missingness – skip by default.
@@ -11704,7 +11915,7 @@ write_csv_safely(
   row_names = FALSE
 )
 
-table_2_weighted_categorical_outcomes <- table_summary_key_results_cat3 |>
+table_2_weighted_categorical_wide <- table_summary_key_results_cat3 |>
   dplyr::filter(method == "Weighted and adjusted") |>
   dplyr::select(
     group,
@@ -11718,15 +11929,59 @@ table_2_weighted_categorical_outcomes <- table_summary_key_results_cat3 |>
     `High probability (95% CI)`
   )
 
-write_standalone_table_pdf(
-  table_2_weighted_categorical_outcomes,
+table_2_weighted_or_panel <- table_2_weighted_categorical_wide |>
+  dplyr::select(
+    group,
+    outcome,
+    n_model,
+    events,
+    `Low vs normal OR (95% CI)`,
+    `High vs normal OR (95% CI)`
+  )
+
+table_2_weighted_probability_panel <- table_2_weighted_categorical_wide |>
+  dplyr::select(
+    group,
+    outcome,
+    `Normal probability (95% CI)`,
+    `Low probability (95% CI)`,
+    `High probability (95% CI)`
+  )
+
+table_2_weighted_categorical_outcomes <- dplyr::bind_rows(
+  table_2_weighted_or_panel |>
+    tidyr::pivot_longer(
+      cols = dplyr::ends_with("OR (95% CI)"),
+      names_to = "measure",
+      values_to = "estimate"
+    ) |>
+    dplyr::mutate(panel = "Odds ratios", .before = 1L),
+  table_2_weighted_probability_panel |>
+    tidyr::pivot_longer(
+      cols = dplyr::ends_with("probability (95% CI)"),
+      names_to = "measure",
+      values_to = "estimate"
+    ) |>
+    dplyr::mutate(
+      panel = "Predicted probabilities",
+      n_model = NA_integer_,
+      events = NA_integer_,
+      .before = 1L
+    ) |>
+    dplyr::select(.data$panel, .data$group, .data$outcome, .data$n_model, .data$events, .data$measure, .data$estimate)
+)
+
+write_standalone_panel_table_pdf(
+  list(
+    "Odds ratios" = table_2_weighted_or_panel,
+    "Predicted probabilities" = table_2_weighted_probability_panel
+  ),
   caption = "MI-pooled, MI-logistic IPSW-weighted 3-level categorical results for ABG and VBG",
   file_stub = "table_2_weighted_categorical_outcomes",
-  wide = TRUE,
   digits = 2,
-  max_cols = 8,
   landscape = TRUE,
-  display_label = "Table 2"
+  display_label = "Table 2",
+  csv_df = table_2_weighted_categorical_outcomes
 )
 
 table_summary_key_results_cat3_abg <- table_summary_key_results_cat3 |>
@@ -11734,20 +11989,22 @@ table_summary_key_results_cat3_abg <- table_summary_key_results_cat3 |>
 table_summary_key_results_cat3_vbg <- table_summary_key_results_cat3 |>
   dplyr::filter(group == "VBG")
 
-render_table_pdf(
+render_table_pdf_maybe(
   table_summary_key_results_cat3_abg,
   caption = "Categorical key results for the ABG cohort across crude, unweighted adjusted, imputed non-weighted, MI-logistic IPSW-weighted, and GBM IPSW-weighted analyses; probabilities are conditional on X_ref except in the crude track.",
   file_stub = "table_summary_key_results_cat3_abg",
   wide = TRUE,
-  digits = 2
+  digits = 2,
+  show = FALSE
 )
 
-render_table_pdf(
+render_table_pdf_maybe(
   table_summary_key_results_cat3_vbg,
   caption = "Categorical key results for the VBG cohort across crude, unweighted adjusted, imputed non-weighted, MI-logistic IPSW-weighted, and GBM IPSW-weighted analyses; probabilities are conditional on X_ref except in the crude track.",
   file_stub = "table_summary_key_results_cat3_vbg",
   wide = TRUE,
-  digits = 2
+  digits = 2,
+  show = FALSE
 )
 
 legacy_counts_tbl <- dplyr::bind_rows(
@@ -11787,18 +12044,20 @@ table_summary_abg <- table_summary |>
 table_summary_vbg <- table_summary |>
   dplyr::filter(group == "VBG")
 
-render_table_pdf(
+render_table_pdf_maybe(
   table_summary_abg,
   caption = "Adjusted odds ratios (low/high vs normal) across unweighted adjusted, GBM IPSW-weighted, and MI-logistic IPSW-weighted analysis tracks for the ABG cohort; n/events reflect model sample size (median across imputations for MI-based tracks).",
   file_stub = "table_summary_adjusted_threelevel_abg",
-  digits = 2
+  digits = 2,
+  show = FALSE
 )
 
-render_table_pdf(
+render_table_pdf_maybe(
   table_summary_vbg,
   caption = "Adjusted odds ratios (low/high vs normal) across unweighted adjusted, GBM IPSW-weighted, and MI-logistic IPSW-weighted analysis tracks for the VBG cohort; n/events reflect model sample size (median across imputations for MI-based tracks).",
   file_stub = "table_summary_adjusted_threelevel_vbg",
-  digits = 2
+  digits = 2,
+  show = FALSE
 )
 ```
 
@@ -11850,7 +12109,7 @@ key_results_cat3_main_plot <- assemble_cat3_key_results_figure(
   main_cat3_results,
   main_cat3_probs,
   figure_title = "MI-logistic IPSW-weighted categorical associations of pCO2 category with clinical outcomes by ABG and VBG",
-  figure_caption = key_results_cat3_caption_main
+  figure_caption = NULL
 )
 key_results_cat3_gbm_plot <- assemble_cat3_key_results_figure(
   gbm_cat3_results,
@@ -12796,7 +13055,7 @@ key_results_adjusted_plot <- build_key_results_figure(
   key_results_adjusted_or_df,
   key_results_adjusted_prob_df,
   figure_title = "Unweighted covariate-adjusted spline associations of pCO2 with clinical outcomes by ABG and VBG",
-  figure_caption = key_results_caption_adjusted
+  figure_caption = NULL
 )
 key_results_imputed_plot <- build_key_results_figure(
   key_results_imputed_or_df,
@@ -12808,7 +13067,7 @@ key_results_main_mi_ipw_plot <- build_key_results_figure(
   key_results_main_mi_ipw_or_df,
   key_results_main_mi_ipw_prob_df,
   figure_title = "Primary MI-logistic IPSW-weighted spline associations of pCO2 with clinical outcomes by ABG and VBG",
-  figure_caption = key_results_caption_main
+  figure_caption = NULL
 )
 key_results_gbm_weighted_plot <- build_key_results_figure(
   key_results_gbm_weighted_or_df,
@@ -13045,6 +13304,230 @@ key_results_outputs |>
   dplyr::select(-artifact_file)
 ```
 
+```{r manuscript-supplement-tables-additional}
+#| code-block-title: "Additional manuscript-facing supplement tables"
+#| include: true
+#| echo: true
+#| message: false
+#| results: "hide"
+# Purpose: generate Supplementary Tables S1, S4, and S5 from notebook state.
+table_s1_inclusion_criteria <- tibble::tibble(
+  step = seq_len(5L),
+  criterion = c(
+    "Source extract",
+    "ED/inpatient encounters",
+    "ABG-tested cohort",
+    "VBG-tested cohort",
+    "Target population"
+  ),
+  `Source field / rule` = c(
+    "TriNetX-derived 2022 extract",
+    "encounter_type != ambulatory",
+    "has_abg == 1",
+    "has_vbg == 1",
+    "ED/inpatient analytic cohort"
+  ),
+  `Excluded, n` = scales::comma(c(
+    0L,
+    cohort_flow_counts$excluded_ambulatory,
+    cohort_flow_counts$analytic_ed_inpatient - cohort_flow_counts$abg_tested,
+    cohort_flow_counts$analytic_ed_inpatient - cohort_flow_counts$vbg_tested,
+    0L
+  )),
+  `Retained, n` = scales::comma(c(
+    cohort_flow_counts$total_extracted,
+    cohort_flow_counts$analytic_ed_inpatient,
+    cohort_flow_counts$abg_tested,
+    cohort_flow_counts$vbg_tested,
+    cohort_flow_counts$analytic_ed_inpatient
+  )),
+  notes = c(
+    "Initial local source cohort.",
+    "Matches Figure 1 cohort-flow restriction.",
+    "Measured arterial CO2 outcome models.",
+    "Measured venous CO2 outcome models.",
+    "Target for IPSW standardization."
+  )
+)
+
+write_standalone_table_pdf(
+  table_s1_inclusion_criteria,
+  caption = "Inclusion criteria into the enriched sample",
+  file_stub = "table_s1_inclusion_criteria",
+  wide = TRUE,
+  digits = 0,
+  max_cols = 6,
+  landscape = TRUE,
+  display_label = "Table S1"
+)
+
+baseline_role_vars <- intersect(covars_ps, names(subset_data_raw))
+baseline_role_labels <- c(
+  age_at_encounter = "Age",
+  curr_bmi = "BMI",
+  sex = "Sex",
+  race_ethnicity = "Race/ethnicity",
+  location = "Location",
+  encounter_type = "Encounter type",
+  copd = "COPD",
+  asthma = "Asthma",
+  osa = "OSA",
+  chf = "CHF",
+  acute_nmd = "Neuromuscular disease",
+  phtn = "Pulmonary hypertension",
+  ckd = "Chronic kidney disease",
+  dm = "Diabetes",
+  temp_new = "Temperature",
+  sbp = "Systolic blood pressure",
+  dbp = "Diastolic blood pressure",
+  hr = "Heart rate",
+  sodium = "Sodium",
+  serum_cr = "Serum creatinine",
+  serum_hco3 = "Serum bicarbonate",
+  serum_cl = "Serum chloride",
+  serum_lac = "Serum lactate",
+  serum_k = "Serum potassium",
+  wbc = "White blood cell count",
+  plt = "Platelet count",
+  serum_phos = "Serum phosphate",
+  serum_ca = "Serum calcium"
+)
+
+role_for_var <- function(v) {
+  roles <- character()
+  if (v %in% adj_core) roles <- c(roles, "direct adjustment")
+  if (v %in% covars_ps) roles <- c(roles, "PS model")
+  if (!length(roles)) roles <- "auxiliary"
+  paste(unique(roles), collapse = "; ")
+}
+
+missing_lookup <- miss_tbl |>
+  dplyr::select(.data$variable, .data$pct_missing)
+
+table_s4_missingness_primary_analysis <- tibble::tibble(variable = baseline_role_vars) |>
+  dplyr::left_join(missing_lookup, by = "variable") |>
+  dplyr::mutate(
+    variable = dplyr::recode(.data$variable, !!!baseline_role_labels, .default = .data$variable),
+    `Analysis role` = vapply(baseline_role_vars, role_for_var, character(1L)),
+    `% missing` = sprintf("%.1f%%", .data$pct_missing),
+    `Imputed in primary MI` = dplyr::if_else(
+      dplyr::coalesce(meth[baseline_role_vars], "") != "",
+      "Yes",
+      "No"
+    )
+  ) |>
+  dplyr::select(.data$variable, .data$`Analysis role`, .data$`% missing`, .data$`Imputed in primary MI`)
+
+write_standalone_table_pdf(
+  table_s4_missingness_primary_analysis,
+  caption = "Missingness of baseline covariates used in the primary analysis",
+  file_stub = "table_s4_missingness_primary_analysis",
+  wide = FALSE,
+  digits = 1,
+  max_cols = 4,
+  landscape = FALSE,
+  display_label = "Table S4"
+)
+
+diag_df_for_s5 <- mi_outcome_diag
+diag_df_for_s5$sep_warn <- grepl("fitted probabilities numerically 0 or 1",
+                                  diag_df_for_s5$top_warning, fixed = TRUE) |
+  grepl("separat", diag_df_for_s5$top_warning, ignore.case = TRUE)
+diag_df_for_s5$phat_extreme <- (diag_df_for_s5$min_phat < PROB_EPS) |
+  (diag_df_for_s5$max_phat > 1 - PROB_EPS)
+diag_df_for_s5$sep_flag <- dplyr::coalesce(as.logical(diag_df_for_s5$sep_flag), FALSE)
+diag_df_for_s5$nonconv_flag <- dplyr::coalesce(as.logical(diag_df_for_s5$nonconv_flag), FALSE) |
+  dplyr::coalesce(!as.logical(diag_df_for_s5$converged), FALSE)
+
+mi_variants_for_s5 <- intersect(c("mi_ipw", "weighted_imputed"), unique(diag_df_for_s5$analysis_variant))
+if (!length(mi_variants_for_s5)) mi_variants_for_s5 <- unique(diag_df_for_s5$analysis_variant)
+
+issue_summary <- diag_df_for_s5 |>
+  dplyr::filter(analysis_variant %in% mi_variants_for_s5) |>
+  dplyr::group_by(group, outcome, component, analysis_variant) |>
+  dplyr::summarise(
+    n_fits = dplyr::n(),
+    n_nonconv = sum(nonconv_flag %in% TRUE, na.rm = TRUE),
+    n_sep_warn = sum(sep_warn %in% TRUE, na.rm = TRUE),
+    n_phat_extreme = sum(phat_extreme %in% TRUE, na.rm = TRUE),
+    n_sep_flag = sum(sep_flag %in% TRUE, na.rm = TRUE),
+    .groups = "drop"
+  )
+write_csv_safely(issue_summary, results_path("mi_fit_issue_summary.csv"), row_names = FALSE)
+
+safe_max <- function(x) {
+  x <- x[is.finite(x)]
+  if (!length(x)) return(NA_real_)
+  max(x)
+}
+
+table_s5_mi_diagnostic_summary <- tibble::tibble(
+  domain = c(
+    "Imputation run",
+    "Imputation run",
+    "Imputation run",
+    "Monte Carlo error",
+    "Chain diagnostics",
+    "Chain diagnostics",
+    "MICE logged events",
+    "Captured warnings",
+    "Outcome fit diagnostics",
+    "Outcome fit diagnostics",
+    "Outcome fit diagnostics"
+  ),
+  metric = c(
+    "Completed imputations",
+    "Iterations per imputation",
+    "Variables imputed",
+    "Maximum MC error / SE in diagnostic model",
+    "Variables with available chain diagnostics",
+    "Variables flagged for drift",
+    "Total logged events",
+    "Captured warning rows",
+    "MI model fits audited",
+    "Fits with nonconvergence flags",
+    "Fits with separation/extreme-probability flags"
+  ),
+  value = c(
+    as.character(imp$m),
+    as.character(MAXIT_RUN),
+    as.character(length(impute_vars)),
+    ifelse(is.finite(safe_max(mc_tab$mc_err_over_se)), sprintf("%.3f", safe_max(mc_tab$mc_err_over_se)), "Not estimable"),
+    as.character(nrow(chain_diag)),
+    as.character(sum(chain_diag$flag %in% TRUE, na.rm = TRUE)),
+    as.character(sum(log_events_summary$n, na.rm = TRUE)),
+    as.character(nrow(mi_warn_log)),
+    as.character(nrow(diag_df_for_s5)),
+    as.character(sum(diag_df_for_s5$nonconv_flag %in% TRUE, na.rm = TRUE)),
+    as.character(sum(diag_df_for_s5$sep_flag %in% TRUE | diag_df_for_s5$phat_extreme %in% TRUE, na.rm = TRUE))
+  ),
+  interpretation = c(
+    "Primary analysis imputation count used in this render.",
+    "Configured MICE iteration count for this render.",
+    "Variables with non-empty MICE imputation methods and observed missingness.",
+    "Diagnostic model ratio; lower values indicate less simulation noise relative to model SE.",
+    "Imputed variables with traceable chain-mean diagnostics.",
+    "Variables exceeding drift/slope screening thresholds.",
+    "Rows reported by mice::loggedEvents across batches.",
+    "Warnings captured by notebook-level diagnostics wrappers.",
+    "Outcome-model diagnostic rows captured for MI analyses.",
+    "Potential convergence problems requiring review if nonzero.",
+    "Known separation/extreme-probability screen; interpret affected estimates cautiously."
+  )
+)
+
+write_standalone_table_pdf(
+  table_s5_mi_diagnostic_summary,
+  caption = "Multiple-imputation diagnostic summary",
+  file_stub = "table_s5_mi_diagnostic_summary",
+  wide = TRUE,
+  digits = 3,
+  max_cols = 4,
+  landscape = TRUE,
+  display_label = "Table S5"
+)
+```
+
 ```{r supplement-artifact-manifest}
 #| code-block-title: "Manuscript asset manifests"
 #| include: true
@@ -13124,7 +13607,9 @@ manuscript_asset_manifest_internal <- tibble::tribble(
   "Figure S6", "Figure S6", "Covariate balance after gradient-boosted propensity weighting for ABG and VBG test-ordering models", "figure", "supplement", "loveplot-ipw-gbm", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Raw-versus-weighted absolute standardized mean differences; dashed line marks |SMD| = 0.1.", "gbm_sensitivity", "figs", "loveplot-ipw-gbm-abg-vbg", "figs", "figure_s6_covariate_balance_gbm_weighting", "png",
   "Figure S7", "Figure S7", "Propensity-score overlap for gradient-boosted ABG and VBG test-ordering models", "figure", "supplement", "propensity-histograms-conditional", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Tested-versus-untested propensity-score distributions under the GBM sensitivity models.", "gbm_sensitivity", "figs", "propensity-histograms-conditional", "figs", "figure_s7_propensity_score_overlap_gbm", "png",
   "Figure S8", "Figure S8", "SHAP-style contribution summaries for gradient-boosted ABG and VBG test-ordering models", "figure", "supplement", "shap-top10-ipw-gbm-display", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Mean absolute SHAP value summaries; not interpreted as independent predictors.", "gbm_sensitivity", "figs", "shap-top10-ipw-gbm-abg-vbg", "figs", "figure_s8_shap_style_contributions_gbm", "png",
-  "Supplementary Table 1", "Supplementary Table 1", "Inclusion criteria into the enriched sample", "table", "supplement", "", "external/manual", "external/manual", TRUE, "", FALSE, "", "info", "Defined outside the notebook; intentionally not generated here.", "external", "", "", "", "", "",
+  "Table S1", "Table S1", "Inclusion criteria into the enriched sample", "table", "supplement", "manuscript-supplement-tables-additional", "generated", "notebook_generated", TRUE, "csv,pdf", TRUE, "", "fail", "Notebook-generated inclusion/restriction table derived from the same cohort-flow logic as Figure 1.", "inclusion", "", "table_s1_inclusion_criteria", "", "table_s1_inclusion_criteria", "pdf",
+  "Table S4", "Table S4", "Missingness of baseline covariates used in the primary analysis", "table", "supplement", "manuscript-supplement-tables-additional", "generated", "notebook_generated", TRUE, "csv,pdf", TRUE, "", "fail", "Notebook-generated missingness table for baseline covariates used in the primary PS/direct-adjustment analysis.", "missingness", "", "table_s4_missingness_primary_analysis", "", "table_s4_missingness_primary_analysis", "pdf",
+  "Table S5", "Table S5", "Multiple-imputation diagnostic summary", "table", "supplement", "manuscript-supplement-tables-additional", "generated", "notebook_generated", TRUE, "csv,pdf", TRUE, "", "fail", "Compact manuscript-facing summary of MI execution, chain, Monte Carlo error, logged-event, warning, and outcome-fit diagnostics.", "mi_diagnostics", "", "table_s5_mi_diagnostic_summary", "", "table_s5_mi_diagnostic_summary", "pdf",
   "Figure 3", "Figure 3", "Deprecated draft-only reference for weighted categorical results", "figure", "draft_only", "", "draft_only", "suppressed/deprecated", FALSE, "", FALSE, "Figure S4", "suppressed", "Weighted categorical display is intentionally harmonized as Figure S4; no Figure 3 alias is generated.", "deprecated", "", "", "", "", ""
 ) |>
   dplyr::mutate(
@@ -13576,6 +14061,28 @@ manifest_figure_path <- function(label) {
   path
 }
 
+manuscript_figure_notes <- list(
+  "Figure 2" = key_results_caption_main,
+  "Figure S4" = key_results_cat3_caption_main,
+  "Figure S5" = key_results_caption_adjusted
+)
+
+# helper: render explanatory manuscript notes as Quarto text below figures
+# instead of embedding long text inside the plot canvas.
+render_manuscript_note <- function(label) {
+  note <- manuscript_figure_notes[[label]]
+  if (is.null(note) || !nzchar(note)) return("")
+  note <- paste0("Note: ", note)
+  if (knitr::is_latex_output()) {
+    return(paste0(
+      "\\par\\vspace{0.5em}\\noindent\\footnotesize ",
+      latex_safe_table_text(escape_latex_text(note)),
+      "\\normalsize"
+    ))
+  }
+  paste0("*", note, "*")
+}
+
 # helper: insert one manifest-registered figure into the rendered notebook in
 # official manuscript order, independent of generation chunk order.
 render_manuscript_figure <- function(label, width = "0.88\\linewidth") {
@@ -13593,13 +14100,14 @@ render_manuscript_figure <- function(label, width = "0.88\\linewidth") {
       sprintf("\\small %s\\par", latex_caption),
       "\\vspace{0.5em}",
       sprintf("\\includegraphics[width=%s,height=0.82\\textheight,keepaspectratio]{%s}", width, latex_path),
+      render_manuscript_note(label),
       "\\end{minipage}",
       "\\end{center}"
     )
     knitr::asis_output(paste(out, collapse = "\n"))
   } else {
     knitr::asis_output(
-      paste0("![](", display_path(fig_path), ")\n\n*", caption_text, "*\n")
+      paste0("![](", display_path(fig_path), ")\n\n*", caption_text, "*\n\n", render_manuscript_note(label), "\n")
     )
   }
 }
@@ -13623,6 +14131,21 @@ render_manifest_table <- function(label, df, file_stub, wide = FALSE, digits = 2
   )
 }
 
+render_manifest_panel_table <- function(label, panels, file_stub, digits = 2,
+                                        landscape = TRUE, csv_df = NULL) {
+  row <- manifest_row(label)
+  render_panel_table_pdf(
+    panels,
+    caption = row$title_safe[[1]],
+    file_stub = file_stub,
+    digits = digits,
+    display_label = label,
+    landscape = landscape,
+    page_break_before = TRUE,
+    csv_df = csv_df
+  )
+}
+
 render_validation_manuscript_assets <- function() {
   as_asis_text <- function(x) {
     if (is.null(x)) return("")
@@ -13641,13 +14164,24 @@ render_validation_manuscript_assets <- function() {
       max_cols = 8,
       landscape = TRUE
     ),
-    render_manifest_table(
+    render_manifest_panel_table(
       "Table 2",
-      table_2_weighted_categorical_outcomes,
+      list(
+        "Odds ratios" = table_2_weighted_or_panel,
+        "Predicted probabilities" = table_2_weighted_probability_panel
+      ),
       file_stub = "table_2_weighted_categorical_outcomes",
-      wide = TRUE,
       digits = 2,
-      max_cols = 8,
+      landscape = TRUE,
+      csv_df = table_2_weighted_categorical_outcomes
+    ),
+    render_manifest_table(
+      "Table S1",
+      table_s1_inclusion_criteria,
+      file_stub = "table_s1_inclusion_criteria",
+      wide = TRUE,
+      digits = 0,
+      max_cols = 6,
       landscape = TRUE
     ),
     render_manuscript_figure("Figure S1"),
@@ -13671,7 +14205,25 @@ render_validation_manuscript_assets <- function() {
     ),
     render_manuscript_figure("Figure S6"),
     render_manuscript_figure("Figure S7"),
-    render_manuscript_figure("Figure S8")
+    render_manuscript_figure("Figure S8"),
+    render_manifest_table(
+      "Table S4",
+      table_s4_missingness_primary_analysis,
+      file_stub = "table_s4_missingness_primary_analysis",
+      wide = FALSE,
+      digits = 1,
+      max_cols = 4,
+      landscape = FALSE
+    ),
+    render_manifest_table(
+      "Table S5",
+      table_s5_mi_diagnostic_summary,
+      file_stub = "table_s5_mi_diagnostic_summary",
+      wide = TRUE,
+      digits = 3,
+      max_cols = 4,
+      landscape = TRUE
+    )
   )
 
   block_text <- vapply(blocks, as_asis_text, character(1L))
@@ -13765,9 +14317,10 @@ figure_3_aliases <- list.files(
   full.names = TRUE
 )
 
-has_external_s1 <- any(
-  manuscript_asset_manifest_internal$manuscript_label_safe == "Supplementary Table 1" &
-    manuscript_asset_manifest_internal$status == "external/manual"
+has_generated_s1 <- any(
+  manuscript_asset_manifest_internal$manuscript_label_safe == "Table S1" &
+    manuscript_asset_manifest_internal$status == "generated" &
+    manuscript_asset_manifest_internal$pdf_display
 )
 
 forbidden_duplicate_files <- c(results_path("figs", "propensity-histograms-conditional-1.png"))
@@ -13777,7 +14330,7 @@ if (
   length(missing_manifest_files) ||
   !supplement_manifest_matches ||
   length(figure_3_aliases) ||
-  !has_external_s1 ||
+  !has_generated_s1 ||
   length(existing_forbidden_duplicates)
 ) {
   missing_pretty <- vapply(missing_manifest_files, pretty_path, character(1L))
@@ -13788,7 +14341,7 @@ if (
     paste(missing_pretty, collapse = ", "),
     "]; supplement manifest matches [", supplement_manifest_matches,
     "]; Figure 3 aliases [", paste(figure3_pretty, collapse = ", "),
-    "]; Supplementary Table 1 present [", has_external_s1,
+    "]; Table S1 generated [", has_generated_s1,
     "]; forbidden duplicates [", paste(duplicate_pretty, collapse = ", "),
     "]."
   )
