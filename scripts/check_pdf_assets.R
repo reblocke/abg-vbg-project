@@ -167,6 +167,24 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
       detail = required_snippets[[idx]]
     )
   }
+
+  required_source_snippets <- c(
+    "VALIDATION_INLINE_ANALYSIS_PREVIEWS",
+    "ensure_packages_loaded",
+    "print_plot_once",
+    "run_mice_batched",
+    "render_validation_manuscript_assets"
+  )
+  source_found <- vapply(required_source_snippets, grepl, logical(1L), x = pdf_text, fixed = TRUE)
+  for (idx in seq_along(required_source_snippets)) {
+    rows[[length(rows) + 1L]] <- scan_row(
+      paste0("required_source_", idx),
+      if (source_found[[idx]]) "passed" else "failed",
+      observed = if (source_found[[idx]]) "found" else "missing",
+      scanner = "pdftotext",
+      detail = required_source_snippets[[idx]]
+    )
+  }
 }
 
 scan_df <- do.call(rbind, rows)

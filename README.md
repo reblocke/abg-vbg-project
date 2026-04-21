@@ -4,19 +4,20 @@ Retrospective clinical analysis comparing prognostic associations of hypercapnia
 
 Repository: <https://github.com/reblocke/abg-vbg-project>
 
-## Current state (as of April 8, 2026)
+## Current state (as of April 21, 2026)
 
-- Primary analysis notebook: `Code Drafts/ABG-VBG analysis 2026-2-28.qmd`
+- Primary analysis notebook: `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+- Last completed no-code full-render notebook snapshot: `Code Drafts/ABG-VBG analysis 2026-2-28.qmd`
 - Secondary maintained notebook: `Code Drafts/ABG-VBG analysis 2025-12-11.qmd`
-- Reproducible render wrapper: `scripts/render_pdf.sh` (now defaults to the 2026-2-28 notebook)
-- Latest rendered analysis PDF: `Code Drafts/ABG-VBG-analysis-2026-2-28.pdf`
+- Reproducible render wrapper: `scripts/render_pdf.sh` (now defaults to the 2026-4-21 notebook)
+- Latest rendered analysis PDF: `Code Drafts/ABG-VBG-analysis-2026-4-21.pdf`
 - Latest `Results/` snapshot: pilot run `run_id = 20260301_131122`; see `Results/run_metadata.csv`
 - Run settings snapshot for that output set: `Results/run_config.json` (includes machine-specific absolute paths from the render environment)
 - Most recently modified manuscript draft: `Drafts/04-08-25 ABG_VBG_Rough Draft BL.docx` (mtime 2026-04-08)
 
 ## Start here for review
 
-- Code: start with `Code Drafts/ABG-VBG analysis 2026-2-28.qmd`, then compare against `Code Drafts/ABG-VBG analysis 2025-12-11.qmd` if you need continuity with the older December workflow.
+- Code: start with `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`, then compare against `Code Drafts/ABG-VBG analysis 2026-2-28.qmd` for the last completed no-code full render or `Code Drafts/ABG-VBG analysis 2025-12-11.qmd` for the older December workflow.
 - Outputs: use `Results/run_metadata.csv`, `Results/diagnostics_audit.md`, `Results/plot_registry.csv`, `Results/table_summary_adjusted_threelevel.csv`, `Results/Table1.docx`, `Results/Table2.docx`, and `Results/figs/` as the main review surfaces.
 - Validation build outputs: `Results/artifact_provenance_manifest.csv`, `Results/artifact_check_status.csv`, `Results/canonical_asset_registry.csv`, `Results/glyph_audit.csv`, `Results/duplicate_asset_audit.csv`, `Results/diagnostics_audit_summary.csv`, and `Results/diagnostics_audit_issues.csv`.
 - Manuscript: use `Drafts/04-08-25 ABG_VBG_Rough Draft BL.docx` first, then older draft files in `Drafts/` only for revision history.
@@ -49,7 +50,7 @@ Rscript --vanilla scripts/check_dependencies.R
 ```
 
 The wrapper is the only sanctioned validation entrypoint. It writes a timestamped combined stdout/stderr log to `Results/render_logs/` and records timing output from the best available host tool for the render.
-The canonical PDF includes inline analysis preview figures, manuscript-facing assets, and compact essential audits. There is no separate debug render mode.
+The canonical PDF includes shaded R source-code boxes, inline analysis preview figures, manuscript-facing assets, and compact essential audits. There is no separate debug render mode.
 Before each wrapper run, existing MI/debug artifacts are archived under `Results/archive/pre_run_<render_ts>/` so abrupt-stop evidence is preserved without moving the rest of `Results/`.
 
 Machine-local MI resource overrides are available when needed for operational troubleshooting:
@@ -71,7 +72,7 @@ Rscript --vanilla scripts/collect_render_postmortem.R \
   --render-ts 20260416_112907 \
   --results-dir Results \
   --log-path Results/render_logs/render_20260416_112907.log \
-  --pdf-path "Code Drafts/ABG-VBG-analysis-2026-2-28.pdf"
+  --pdf-path "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"
 ```
 
 Standalone batch-40 `mice()` reproduction from the archived batch-39 boundary:
@@ -103,7 +104,7 @@ If you need to reproduce the older December notebook for comparison:
 
 ## Analysis coverage
 
-The primary notebook `Code Drafts/ABG-VBG analysis 2026-2-28.qmd` covers:
+The primary notebook `Code Drafts/ABG-VBG analysis 2026-4-21.qmd` covers:
 
 - Cohort setup and schema/type normalization from TriNetX-derived extracts in `data/`
 - Unweighted ABG/VBG outcome analyses

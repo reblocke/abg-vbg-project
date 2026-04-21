@@ -6,7 +6,7 @@ set -euo pipefail
 # 2) render the main Quarto analysis PDF
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-QMD_DEFAULT="${ROOT_DIR}/Code Drafts/ABG-VBG analysis 2026-2-28.qmd"
+QMD_DEFAULT="${ROOT_DIR}/Code Drafts/ABG-VBG analysis 2026-4-21.qmd"
 if [[ $# -gt 0 && "${1}" != -* ]]; then
   QMD_PATH="$1"
   shift
