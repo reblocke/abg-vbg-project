@@ -4459,7 +4459,7 @@ models}\label{configuration-for-the-ipw-models}
 \toprule
 run\_id & run\_mode & pilot\_frac & mi\_ram\_gb & mi\_ram\_gb\_source & mi\_batch\_threshold\\
 \midrule
-20260421\_073405 & pilot & 0.01 & 16 & auto:Darwin & 5000\\
+20260421\_092434 & pilot & 0.01 & 16 & auto:Darwin & 5000\\
 \bottomrule
 \end{tabular}}
 \endgroup{}
@@ -10377,6 +10377,28 @@ outputs and will stop if they are missing.
 \NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(out)}
 \NormalTok{\}}
 
+\CommentTok{\# helper: keep only model metadata needed for prediction without retaining the}
+\CommentTok{\# fitting function frame through terms/formula environments.}
+\NormalTok{strip\_terms\_environment }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(tt) \{}
+  \FunctionTok{stopifnot}\NormalTok{(}\FunctionTok{inherits}\NormalTok{(tt, }\StringTok{"terms"}\NormalTok{))}
+  \FunctionTok{attr}\NormalTok{(tt, }\StringTok{".Environment"}\NormalTok{) }\OtherTok{\textless{}{-}} \FunctionTok{baseenv}\NormalTok{()}
+  \FunctionTok{stopifnot}\NormalTok{(}\FunctionTok{identical}\NormalTok{(}\FunctionTok{attr}\NormalTok{(tt, }\StringTok{".Environment"}\NormalTok{), }\FunctionTok{baseenv}\NormalTok{()))}
+\NormalTok{  tt}
+\NormalTok{\}}
+
+\NormalTok{compact\_model\_metadata }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(fit) \{}
+\NormalTok{  fit\_terms }\OtherTok{\textless{}{-}} \FunctionTok{strip\_terms\_environment}\NormalTok{(stats}\SpecialCharTok{::}\FunctionTok{delete.response}\NormalTok{(stats}\SpecialCharTok{::}\FunctionTok{terms}\NormalTok{(fit)))}
+\NormalTok{  fit\_frame }\OtherTok{\textless{}{-}}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{model.frame}\NormalTok{(fit)}
+  \FunctionTok{list}\NormalTok{(}
+    \AttributeTok{terms =}\NormalTok{ fit\_terms,}
+    \AttributeTok{xlevels =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{.getXlevels}\NormalTok{(fit\_terms, fit\_frame),}
+    \AttributeTok{contrasts =} \FunctionTok{tryCatch}\NormalTok{(}
+      \FunctionTok{attr}\NormalTok{(stats}\SpecialCharTok{::}\FunctionTok{model.matrix}\NormalTok{(fit), }\StringTok{"contrasts"}\NormalTok{),}
+      \AttributeTok{error =} \ControlFlowTok{function}\NormalTok{(e) }\ConstantTok{NULL}
+\NormalTok{    )}
+\NormalTok{  )}
+\NormalTok{\}}
+
 \CommentTok{\# {-}{-}{-} Helper: fit 3{-}level outcome per imputation {-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}{-}}
 \NormalTok{fit\_cat3\_imp }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(d, weights, outcome\_var, co2\_var, treat\_var,}
 \NormalTok{                         low\_cut, high\_cut, group\_label, imp\_index,}
@@ -10438,10 +10460,13 @@ outputs and will stop if they are missing.
 \NormalTok{  fit }\OtherTok{\textless{}{-}}\NormalTok{ fit\_res}\SpecialCharTok{$}\NormalTok{fit}
 \NormalTok{  fit\_compact }\OtherTok{\textless{}{-}} \ConstantTok{NULL}
   \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(fit) }\SpecialCharTok{\&\&} \FunctionTok{inherits}\NormalTok{(fit, }\StringTok{"svyglm"}\NormalTok{)) \{}
-    \CommentTok{\# Store only coef/vcov to avoid carrying heavy fit objects in memory.}
-\NormalTok{    fit\_compact }\OtherTok{\textless{}{-}} \FunctionTok{list}\NormalTok{(}
-      \AttributeTok{coef =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{coef}\NormalTok{(fit),}
-      \AttributeTok{vcov =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{vcov}\NormalTok{(fit)}
+    \CommentTok{\# Store only lightweight model metadata needed for reusable predictions.}
+\NormalTok{    fit\_compact }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}
+      \FunctionTok{list}\NormalTok{(}
+        \AttributeTok{coef =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{coef}\NormalTok{(fit),}
+        \AttributeTok{vcov =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{vcov}\NormalTok{(fit)}
+\NormalTok{      ),}
+      \FunctionTok{compact\_model\_metadata}\NormalTok{(fit)}
 \NormalTok{    )}
 \NormalTok{  \}}
   \FunctionTok{list}\NormalTok{(}\AttributeTok{fit =}\NormalTok{ fit\_compact, }\AttributeTok{diag =}\NormalTok{ diag, }\AttributeTok{warnings =}\NormalTok{ fit\_res}\SpecialCharTok{$}\NormalTok{warnings)}
@@ -10592,10 +10617,17 @@ outputs and will stop if they are missing.
 \NormalTok{  \}}
 
 \NormalTok{  fit\_compact }\OtherTok{\textless{}{-}} \FunctionTok{list}\NormalTok{(}
-    \CommentTok{\# Compact storage for Rubin pooling.}
+    \CommentTok{\# Compact storage for Rubin pooling and post{-}hoc diagnostic predictions.}
     \AttributeTok{coef =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{coef}\NormalTok{(fit),}
-    \AttributeTok{vcov =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{vcov}\NormalTok{(fit)}
+    \AttributeTok{vcov =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{vcov}\NormalTok{(fit),}
+    \AttributeTok{formula\_text =} \FunctionTok{paste}\NormalTok{(}\FunctionTok{deparse}\NormalTok{(fml, }\AttributeTok{width.cutoff =} \DecValTok{500}\NormalTok{L), }\AttributeTok{collapse =} \StringTok{" "}\NormalTok{),}
+    \AttributeTok{outcome =}\NormalTok{ outcome,}
+    \AttributeTok{co2\_var =}\NormalTok{ co2\_var,}
+    \AttributeTok{adj\_vars =}\NormalTok{ adj\_vars,}
+    \AttributeTok{spline\_df =}\NormalTok{ spline\_df,}
+    \AttributeTok{spline\_basis =}\NormalTok{ spline\_basis}
 \NormalTok{  )}
+\NormalTok{  fit\_compact }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(fit\_compact, }\FunctionTok{compact\_model\_metadata}\NormalTok{(fit))}
 
   \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(grid\_df)) \{}
     \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.null}\NormalTok{(ref\_idx)) \{}
@@ -10978,8 +11010,8 @@ outputs and will stop if they are missing.
 
 \begin{verbatim}
             used   (Mb) gc trigger   (Mb) limit (Mb)  max used   (Mb)
-Ncells   7072742  377.8   12848267  686.2         NA  12848267  686.2
-Vcells 485026471 3700.5 1007639446 7687.7      16384 966766603 7375.9
+Ncells   7074610  377.9   12107968  646.7         NA  12107968  646.7
+Vcells 485064290 3700.8 1007682731 7688.1      16384 966338073 7372.6
 \end{verbatim}
 
 \begin{Shaded}
@@ -16372,6 +16404,1982 @@ log}\label{performance-runtime-log-1}
 \end{Highlighting}
 \end{Shaded}
 
+\section{Analysis of the discordance between predicted probabilities and
+OR for NIV and
+IMV}\label{analysis-of-the-discordance-between-predicted-probabilities-and-or-for-niv-and-imv}
+
+This section is diagnostic and additive. It does not change the primary
+manuscript estimates; instead it reproduces the NIV/IMV probability-OR
+discordance and checks whether it is explained by reference profiles,
+probability scale, residual capture/missingness, support, setting,
+subgroup, or timing structure.
+
+\subsection{Pilot validation and
+scope}\label{pilot-validation-and-scope}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Purpose: additive diagnostics for NIV/IMV probability{-}OR discordance.}
+\NormalTok{discordance\_outcome\_vars }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\StringTok{"imv\_proc"}\NormalTok{, }\StringTok{"niv\_proc"}\NormalTok{)}
+\NormalTok{discordance\_outcome\_labels }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\AttributeTok{imv\_proc =} \StringTok{"IMV"}\NormalTok{, }\AttributeTok{niv\_proc =} \StringTok{"NIV"}\NormalTok{)}
+\NormalTok{discordance\_groups }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\StringTok{"ABG"}\NormalTok{, }\StringTok{"VBG"}\NormalTok{)}
+
+\NormalTok{discordance\_status\_rows }\OtherTok{\textless{}{-}} \FunctionTok{list}\NormalTok{()}
+
+\NormalTok{record\_discordance\_status }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(component, status, reason,}
+                                      \AttributeTok{artifact\_path =} \StringTok{""}\NormalTok{,}
+                                      \AttributeTok{optional =} \ConstantTok{FALSE}\NormalTok{) \{}
+\NormalTok{  discordance\_status\_rows[[}\FunctionTok{length}\NormalTok{(discordance\_status\_rows) }\SpecialCharTok{+} \DecValTok{1}\NormalTok{L]] }\OtherTok{\textless{}\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+    \AttributeTok{component =}\NormalTok{ component,}
+    \AttributeTok{status =}\NormalTok{ status,}
+    \AttributeTok{reason =}\NormalTok{ reason,}
+    \AttributeTok{artifact\_path =}\NormalTok{ artifact\_path,}
+    \AttributeTok{optional =}\NormalTok{ optional,}
+    \AttributeTok{run\_mode =}\NormalTok{ RUN\_MODE,}
+    \AttributeTok{pilot\_frac =}\NormalTok{ PILOT\_FRAC}
+\NormalTok{  )}
+  \FunctionTok{invisible}\NormalTok{(}\ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{\}}
+
+\NormalTok{write\_discordance\_status }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{() \{}
+\NormalTok{  status\_df }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(discordance\_status\_rows)}
+  \FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{    status\_df,}
+    \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_validation\_status.csv"}\NormalTok{),}
+    \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{  )}
+  \FunctionTok{invisible}\NormalTok{(status\_df)}
+\NormalTok{\}}
+
+\NormalTok{safe\_relative\_gap }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(abg\_value, vbg\_value) \{}
+  \FunctionTok{ifelse}\NormalTok{(}\FunctionTok{is.finite}\NormalTok{(vbg\_value) }\SpecialCharTok{\&} \FunctionTok{abs}\NormalTok{(vbg\_value) }\SpecialCharTok{\textgreater{}} \DecValTok{0}\NormalTok{,}
+\NormalTok{         (abg\_value }\SpecialCharTok{{-}}\NormalTok{ vbg\_value) }\SpecialCharTok{/} \FunctionTok{abs}\NormalTok{(vbg\_value),}
+         \ConstantTok{NA\_real\_}\NormalTok{)}
+\NormalTok{\}}
+
+\NormalTok{weighted\_mean\_safe }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(x, }\AttributeTok{w =} \ConstantTok{NULL}\NormalTok{) \{}
+\NormalTok{  x }\OtherTok{\textless{}{-}} \FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{as.numeric}\NormalTok{(x))}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.null}\NormalTok{(w)) \{}
+    \FunctionTok{return}\NormalTok{(}\FunctionTok{mean}\NormalTok{(x, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{))}
+\NormalTok{  \}}
+\NormalTok{  w }\OtherTok{\textless{}{-}} \FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{as.numeric}\NormalTok{(w))}
+\NormalTok{  ok }\OtherTok{\textless{}{-}} \FunctionTok{is.finite}\NormalTok{(x) }\SpecialCharTok{\&} \FunctionTok{is.finite}\NormalTok{(w) }\SpecialCharTok{\&}\NormalTok{ w }\SpecialCharTok{\textgreater{}} \DecValTok{0}
+  \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{any}\NormalTok{(ok)) }\FunctionTok{return}\NormalTok{(}\ConstantTok{NA\_real\_}\NormalTok{)}
+  \FunctionTok{sum}\NormalTok{(w[ok] }\SpecialCharTok{*}\NormalTok{ x[ok]) }\SpecialCharTok{/} \FunctionTok{sum}\NormalTok{(w[ok])}
+\NormalTok{\}}
+
+\NormalTok{weighted\_ess }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(w) \{}
+\NormalTok{  w }\OtherTok{\textless{}{-}} \FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{as.numeric}\NormalTok{(w))}
+\NormalTok{  w }\OtherTok{\textless{}{-}}\NormalTok{ w[}\FunctionTok{is.finite}\NormalTok{(w) }\SpecialCharTok{\&}\NormalTok{ w }\SpecialCharTok{\textgreater{}} \DecValTok{0}\NormalTok{]}
+  \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{length}\NormalTok{(w)) }\FunctionTok{return}\NormalTok{(}\ConstantTok{NA\_real\_}\NormalTok{)}
+  \FunctionTok{sum}\NormalTok{(w)}\SpecialCharTok{\^{}}\DecValTok{2} \SpecialCharTok{/} \FunctionTok{sum}\NormalTok{(w}\SpecialCharTok{\^{}}\DecValTok{2}\NormalTok{)}
+\NormalTok{\}}
+
+\NormalTok{first\_existing\_col }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(candidates, data\_names) \{}
+\NormalTok{  hits }\OtherTok{\textless{}{-}}\NormalTok{ candidates[candidates }\SpecialCharTok{\%in\%}\NormalTok{ data\_names]}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{length}\NormalTok{(hits)) hits[[}\DecValTok{1}\NormalTok{L]] }\ControlFlowTok{else} \ConstantTok{NA\_character\_}
+\NormalTok{\}}
+
+\NormalTok{candidate\_cols }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(data\_names, pattern, }\AttributeTok{exclude =} \FunctionTok{character}\NormalTok{(), }\AttributeTok{max\_n =} \ConstantTok{Inf}\NormalTok{) \{}
+\NormalTok{  out }\OtherTok{\textless{}{-}} \FunctionTok{grep}\NormalTok{(pattern, data\_names, }\AttributeTok{value =} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{ignore.case =} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{perl =} \ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{  out }\OtherTok{\textless{}{-}} \FunctionTok{setdiff}\NormalTok{(out, exclude)}
+  \FunctionTok{unique}\NormalTok{(utils}\SpecialCharTok{::}\FunctionTok{head}\NormalTok{(out, max\_n))}
+\NormalTok{\}}
+
+\NormalTok{compact\_spline\_fit }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(x) \{}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.list}\NormalTok{(x) }\SpecialCharTok{\&\&} \SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(x}\SpecialCharTok{$}\NormalTok{fit) }\SpecialCharTok{\&\&} \FunctionTok{is.list}\NormalTok{(x}\SpecialCharTok{$}\NormalTok{fit) }\SpecialCharTok{\&\&}
+      \SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(x}\SpecialCharTok{$}\NormalTok{fit}\SpecialCharTok{$}\NormalTok{coef) }\SpecialCharTok{\&\&} \SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(x}\SpecialCharTok{$}\NormalTok{fit}\SpecialCharTok{$}\NormalTok{vcov)) \{}
+    \FunctionTok{return}\NormalTok{(x}\SpecialCharTok{$}\NormalTok{fit)}
+\NormalTok{  \}}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.list}\NormalTok{(x) }\SpecialCharTok{\&\&} \SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(x}\SpecialCharTok{$}\NormalTok{coef) }\SpecialCharTok{\&\&} \SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(x}\SpecialCharTok{$}\NormalTok{vcov)) \{}
+    \FunctionTok{return}\NormalTok{(x)}
+\NormalTok{  \}}
+  \ConstantTok{NULL}
+\NormalTok{\}}
+
+\NormalTok{predict\_spline\_prob\_from\_compact }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(fit\_compact, grid\_df,}
+\NormalTok{                                             outcome\_var,}
+\NormalTok{                                             co2\_var,}
+                                             \AttributeTok{adj\_vars =}\NormalTok{ adj\_core) \{}
+  \FunctionTok{stopifnot}\NormalTok{(}\FunctionTok{is.list}\NormalTok{(fit\_compact), }\SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(fit\_compact}\SpecialCharTok{$}\NormalTok{coef), }\SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(fit\_compact}\SpecialCharTok{$}\NormalTok{vcov))}
+  \FunctionTok{stopifnot}\NormalTok{(}\FunctionTok{is.data.frame}\NormalTok{(grid\_df), co2\_var }\SpecialCharTok{\%in\%} \FunctionTok{names}\NormalTok{(grid\_df))}
+
+\NormalTok{  beta }\OtherTok{\textless{}{-}}\NormalTok{ fit\_compact}\SpecialCharTok{$}\NormalTok{coef}
+\NormalTok{  V }\OtherTok{\textless{}{-}}\NormalTok{ fit\_compact}\SpecialCharTok{$}\NormalTok{vcov}
+\NormalTok{  bn }\OtherTok{\textless{}{-}} \FunctionTok{names}\NormalTok{(beta)}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.null}\NormalTok{(bn) }\SpecialCharTok{||} \FunctionTok{any}\NormalTok{(}\SpecialCharTok{!}\FunctionTok{nzchar}\NormalTok{(bn))) \{}
+    \FunctionTok{stop}\NormalTok{(}\StringTok{"predict\_spline\_prob\_from\_compact: coefficient names are required."}\NormalTok{)}
+\NormalTok{  \}}
+
+  \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(fit\_compact}\SpecialCharTok{$}\NormalTok{terms)) \{}
+\NormalTok{    tt }\OtherTok{\textless{}{-}}\NormalTok{ fit\_compact}\SpecialCharTok{$}\NormalTok{terms}
+    \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{identical}\NormalTok{(}\FunctionTok{attr}\NormalTok{(tt, }\StringTok{".Environment"}\NormalTok{), }\FunctionTok{baseenv}\NormalTok{())) \{}
+      \FunctionTok{stop}\NormalTok{(}\StringTok{"predict\_spline\_prob\_from\_compact: compact terms retain a non{-}base environment."}\NormalTok{)}
+\NormalTok{    \}}
+\NormalTok{    mf\_new }\OtherTok{\textless{}{-}}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{model.frame}\NormalTok{(}
+\NormalTok{      tt,}
+      \AttributeTok{data =}\NormalTok{ grid\_df,}
+      \AttributeTok{na.action =}\NormalTok{ stats}\SpecialCharTok{::}\NormalTok{na.pass,}
+      \AttributeTok{xlev =}\NormalTok{ fit\_compact}\SpecialCharTok{$}\NormalTok{xlevels}
+\NormalTok{    )}
+\NormalTok{    mm }\OtherTok{\textless{}{-}}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{model.matrix}\NormalTok{(tt, mf\_new, }\AttributeTok{contrasts.arg =}\NormalTok{ fit\_compact}\SpecialCharTok{$}\NormalTok{contrasts)}
+\NormalTok{  \} }\ControlFlowTok{else}\NormalTok{ \{}
+\NormalTok{    rhs\_terms }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\FunctionTok{sprintf}\NormalTok{(}\StringTok{"splines::ns(\%s, \%d)"}\NormalTok{, co2\_var, SPLINE\_DF), adj\_vars)}
+\NormalTok{    fml }\OtherTok{\textless{}{-}}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{as.formula}\NormalTok{(}\FunctionTok{paste}\NormalTok{(outcome\_var, }\StringTok{"\textasciitilde{}"}\NormalTok{, }\FunctionTok{paste}\NormalTok{(rhs\_terms, }\AttributeTok{collapse =} \StringTok{" + "}\NormalTok{)))}
+\NormalTok{    tt }\OtherTok{\textless{}{-}}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{delete.response}\NormalTok{(stats}\SpecialCharTok{::}\FunctionTok{terms}\NormalTok{(fml))}
+\NormalTok{    mm }\OtherTok{\textless{}{-}}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{model.matrix}\NormalTok{(tt, }\AttributeTok{data =}\NormalTok{ grid\_df)}
+\NormalTok{  \}}
+
+\NormalTok{  missing\_cols }\OtherTok{\textless{}{-}} \FunctionTok{setdiff}\NormalTok{(bn, }\FunctionTok{colnames}\NormalTok{(mm))}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{length}\NormalTok{(missing\_cols)) \{}
+\NormalTok{    mm }\OtherTok{\textless{}{-}} \FunctionTok{cbind}\NormalTok{(}
+\NormalTok{      mm,}
+      \FunctionTok{matrix}\NormalTok{(}
+        \DecValTok{0}\NormalTok{,}
+        \AttributeTok{nrow =} \FunctionTok{nrow}\NormalTok{(mm),}
+        \AttributeTok{ncol =} \FunctionTok{length}\NormalTok{(missing\_cols),}
+        \AttributeTok{dimnames =} \FunctionTok{list}\NormalTok{(}\ConstantTok{NULL}\NormalTok{, missing\_cols)}
+\NormalTok{      )}
+\NormalTok{    )}
+\NormalTok{  \}}
+\NormalTok{  mm }\OtherTok{\textless{}{-}}\NormalTok{ mm[, bn, drop }\OtherTok{=} \ConstantTok{FALSE}\NormalTok{]}
+
+  \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(}\FunctionTok{rownames}\NormalTok{(V)) }\SpecialCharTok{\&\&} \FunctionTok{all}\NormalTok{(bn }\SpecialCharTok{\%in\%} \FunctionTok{rownames}\NormalTok{(V)) }\SpecialCharTok{\&\&} \FunctionTok{all}\NormalTok{(bn }\SpecialCharTok{\%in\%} \FunctionTok{colnames}\NormalTok{(V))) \{}
+\NormalTok{    V }\OtherTok{\textless{}{-}}\NormalTok{ V[bn, bn, drop }\OtherTok{=} \ConstantTok{FALSE}\NormalTok{]}
+\NormalTok{  \}}
+
+\NormalTok{  eta }\OtherTok{\textless{}{-}} \FunctionTok{as.numeric}\NormalTok{(mm }\SpecialCharTok{\%*\%}\NormalTok{ beta)}
+\NormalTok{  mmV }\OtherTok{\textless{}{-}}\NormalTok{ mm }\SpecialCharTok{\%*\%}\NormalTok{ V}
+\NormalTok{  var\_eta }\OtherTok{\textless{}{-}} \FunctionTok{pmax}\NormalTok{(}\FunctionTok{rowSums}\NormalTok{(mmV }\SpecialCharTok{*}\NormalTok{ mm), }\DecValTok{0}\NormalTok{)}
+\NormalTok{  se\_eta }\OtherTok{\textless{}{-}} \FunctionTok{sqrt}\NormalTok{(var\_eta)}
+
+\NormalTok{  tibble}\SpecialCharTok{::}\FunctionTok{as\_tibble}\NormalTok{(grid\_df) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+      \AttributeTok{eta =}\NormalTok{ eta,}
+      \AttributeTok{SE\_eta =}\NormalTok{ se\_eta,}
+      \AttributeTok{var\_eta =}\NormalTok{ var\_eta,}
+      \AttributeTok{p =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{plogis}\NormalTok{(eta),}
+      \AttributeTok{p\_LCL =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{plogis}\NormalTok{(eta }\SpecialCharTok{{-}} \FloatTok{1.96} \SpecialCharTok{*}\NormalTok{ se\_eta),}
+      \AttributeTok{p\_UCL =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{plogis}\NormalTok{(eta }\SpecialCharTok{+} \FloatTok{1.96} \SpecialCharTok{*}\NormalTok{ se\_eta)}
+\NormalTok{    )}
+\NormalTok{\}}
+
+\NormalTok{pool\_spline\_prob\_curve\_from\_compact }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(fit\_list, grid\_df,}
+\NormalTok{                                                outcome\_var,}
+\NormalTok{                                                co2\_var,}
+\NormalTok{                                                co2\_ref,}
+                                                \AttributeTok{min\_ok\_frac =} \FloatTok{0.9}\NormalTok{) \{}
+\NormalTok{  pred\_list }\OtherTok{\textless{}{-}} \FunctionTok{lapply}\NormalTok{(fit\_list, }\ControlFlowTok{function}\NormalTok{(x) \{}
+\NormalTok{    fit\_compact }\OtherTok{\textless{}{-}} \FunctionTok{compact\_spline\_fit}\NormalTok{(x)}
+    \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.null}\NormalTok{(fit\_compact)) }\FunctionTok{return}\NormalTok{(}\ConstantTok{NULL}\NormalTok{)}
+    \FunctionTok{tryCatch}\NormalTok{(}
+      \FunctionTok{predict\_spline\_prob\_from\_compact}\NormalTok{(}
+\NormalTok{        fit\_compact,}
+        \AttributeTok{grid\_df =}\NormalTok{ grid\_df,}
+        \AttributeTok{outcome\_var =}\NormalTok{ outcome\_var,}
+        \AttributeTok{co2\_var =}\NormalTok{ co2\_var}
+\NormalTok{      ),}
+      \AttributeTok{error =} \ControlFlowTok{function}\NormalTok{(e) }\ConstantTok{NULL}
+\NormalTok{    )}
+\NormalTok{  \})}
+
+\NormalTok{  n\_grid }\OtherTok{\textless{}{-}} \FunctionTok{nrow}\NormalTok{(grid\_df)}
+\NormalTok{  ok }\OtherTok{\textless{}{-}} \FunctionTok{vapply}\NormalTok{(pred\_list, }\ControlFlowTok{function}\NormalTok{(x) \{}
+    \FunctionTok{is.data.frame}\NormalTok{(x) }\SpecialCharTok{\&\&}
+      \FunctionTok{nrow}\NormalTok{(x) }\SpecialCharTok{==}\NormalTok{ n\_grid }\SpecialCharTok{\&\&}
+      \FunctionTok{all}\NormalTok{(}\FunctionTok{c}\NormalTok{(}\StringTok{"eta"}\NormalTok{, }\StringTok{"var\_eta"}\NormalTok{) }\SpecialCharTok{\%in\%} \FunctionTok{names}\NormalTok{(x))}
+\NormalTok{  \}, }\FunctionTok{logical}\NormalTok{(}\DecValTok{1}\NormalTok{L))}
+\NormalTok{  m\_tot }\OtherTok{\textless{}{-}} \FunctionTok{length}\NormalTok{(ok)}
+\NormalTok{  m\_ok }\OtherTok{\textless{}{-}} \FunctionTok{sum}\NormalTok{(ok)}
+  \ControlFlowTok{if}\NormalTok{ (m\_ok }\SpecialCharTok{\textless{}} \FunctionTok{ceiling}\NormalTok{(min\_ok\_frac }\SpecialCharTok{*}\NormalTok{ m\_tot)) \{}
+    \FunctionTok{stop}\NormalTok{(}\StringTok{"Too many failed compact spline predictions: m\_ok="}\NormalTok{, m\_ok, }\StringTok{" / m\_total="}\NormalTok{, m\_tot)}
+\NormalTok{  \}}
+
+\NormalTok{  eta\_mat }\OtherTok{\textless{}{-}} \FunctionTok{matrix}\NormalTok{(}\ConstantTok{NA\_real\_}\NormalTok{, }\AttributeTok{nrow =}\NormalTok{ n\_grid, }\AttributeTok{ncol =}\NormalTok{ m\_ok)}
+\NormalTok{  var\_mat }\OtherTok{\textless{}{-}} \FunctionTok{matrix}\NormalTok{(}\ConstantTok{NA\_real\_}\NormalTok{, }\AttributeTok{nrow =}\NormalTok{ n\_grid, }\AttributeTok{ncol =}\NormalTok{ m\_ok)}
+\NormalTok{  ok\_idx }\OtherTok{\textless{}{-}} \FunctionTok{which}\NormalTok{(ok)}
+  \ControlFlowTok{for}\NormalTok{ (j }\ControlFlowTok{in} \FunctionTok{seq\_along}\NormalTok{(ok\_idx)) \{}
+\NormalTok{    pred\_j }\OtherTok{\textless{}{-}}\NormalTok{ pred\_list[[ok\_idx[[j]]]]}
+\NormalTok{    eta\_mat[, j] }\OtherTok{\textless{}{-}}\NormalTok{ pred\_j}\SpecialCharTok{$}\NormalTok{eta}
+\NormalTok{    var\_mat[, j] }\OtherTok{\textless{}{-}}\NormalTok{ pred\_j}\SpecialCharTok{$}\NormalTok{var\_eta}
+\NormalTok{  \}}
+
+\NormalTok{  qbar }\OtherTok{\textless{}{-}} \FunctionTok{rowMeans}\NormalTok{(eta\_mat, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{  ubar }\OtherTok{\textless{}{-}} \FunctionTok{rowMeans}\NormalTok{(var\_mat, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{  bvar }\OtherTok{\textless{}{-}} \FunctionTok{apply}\NormalTok{(eta\_mat, }\DecValTok{1}\NormalTok{, stats}\SpecialCharTok{::}\NormalTok{var, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{  tvar }\OtherTok{\textless{}{-}}\NormalTok{ ubar }\SpecialCharTok{+}\NormalTok{ (}\DecValTok{1} \SpecialCharTok{+} \DecValTok{1} \SpecialCharTok{/}\NormalTok{ m\_ok) }\SpecialCharTok{*}\NormalTok{ bvar}
+\NormalTok{  se\_eta }\OtherTok{\textless{}{-}} \FunctionTok{sqrt}\NormalTok{(}\FunctionTok{pmax}\NormalTok{(tvar, }\DecValTok{0}\NormalTok{))}
+
+\NormalTok{  tibble}\SpecialCharTok{::}\FunctionTok{as\_tibble}\NormalTok{(grid\_df) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+      \AttributeTok{eta =}\NormalTok{ qbar,}
+      \AttributeTok{SE\_eta =}\NormalTok{ se\_eta,}
+      \AttributeTok{var\_eta =}\NormalTok{ tvar,}
+      \AttributeTok{p =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{plogis}\NormalTok{(qbar),}
+      \AttributeTok{p\_LCL =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{plogis}\NormalTok{(qbar }\SpecialCharTok{{-}} \FloatTok{1.96} \SpecialCharTok{*}\NormalTok{ se\_eta),}
+      \AttributeTok{p\_UCL =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{plogis}\NormalTok{(qbar }\SpecialCharTok{+} \FloatTok{1.96} \SpecialCharTok{*}\NormalTok{ se\_eta),}
+      \AttributeTok{co2\_ref =}\NormalTok{ co2\_ref,}
+      \AttributeTok{m\_used =}\NormalTok{ m\_ok,}
+      \AttributeTok{m\_total =}\NormalTok{ m\_tot}
+\NormalTok{    )}
+\NormalTok{\}}
+
+\NormalTok{nearest\_curve\_value }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(curve\_df, co2\_var, target\_value, value\_col) \{}
+  \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{nrow}\NormalTok{(curve\_df) }\SpecialCharTok{||} \SpecialCharTok{!}\NormalTok{(co2\_var }\SpecialCharTok{\%in\%} \FunctionTok{names}\NormalTok{(curve\_df)) }\SpecialCharTok{||} \SpecialCharTok{!}\NormalTok{(value\_col }\SpecialCharTok{\%in\%} \FunctionTok{names}\NormalTok{(curve\_df))) \{}
+    \FunctionTok{return}\NormalTok{(}\ConstantTok{NA\_real\_}\NormalTok{)}
+\NormalTok{  \}}
+\NormalTok{  x }\OtherTok{\textless{}{-}} \FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{as.numeric}\NormalTok{(curve\_df[[co2\_var]]))}
+\NormalTok{  ok }\OtherTok{\textless{}{-}} \FunctionTok{is.finite}\NormalTok{(x)}
+  \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{any}\NormalTok{(ok) }\SpecialCharTok{||} \SpecialCharTok{!}\FunctionTok{is.finite}\NormalTok{(target\_value)) }\FunctionTok{return}\NormalTok{(}\ConstantTok{NA\_real\_}\NormalTok{)}
+\NormalTok{  idx }\OtherTok{\textless{}{-}} \FunctionTok{which}\NormalTok{(ok)[}\FunctionTok{which.min}\NormalTok{(}\FunctionTok{abs}\NormalTok{(x[ok] }\SpecialCharTok{{-}}\NormalTok{ target\_value))]}
+  \FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{as.numeric}\NormalTok{(curve\_df[[value\_col]][[idx]]))}
+\NormalTok{\}}
+
+\NormalTok{co2\_level\_targets }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(group) \{}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) \{}
+    \FunctionTok{return}\NormalTok{(}\FunctionTok{c}\NormalTok{(}\AttributeTok{Low =}\NormalTok{ ABG\_CO2\_LOW, }\AttributeTok{Normal =}\NormalTok{ co2\_ref\_abg\_mi, }\AttributeTok{High =}\NormalTok{ ABG\_CO2\_HIGH))}
+\NormalTok{  \}}
+  \FunctionTok{c}\NormalTok{(}\AttributeTok{Low =}\NormalTok{ VBG\_CO2\_LOW, }\AttributeTok{Normal =}\NormalTok{ co2\_ref\_vbg\_mi, }\AttributeTok{High =}\NormalTok{ VBG\_CO2\_HIGH)}
+\NormalTok{\}}
+
+\NormalTok{cat\_prob\_value }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(group, outcome\_label, category, }\AttributeTok{value\_col =} \StringTok{"p"}\NormalTok{) \{}
+\NormalTok{  group\_i }\OtherTok{\textless{}{-}}\NormalTok{ group}
+\NormalTok{  outcome\_i }\OtherTok{\textless{}{-}}\NormalTok{ outcome\_label}
+\NormalTok{  category\_i }\OtherTok{\textless{}{-}}\NormalTok{ category}
+\NormalTok{  out }\OtherTok{\textless{}{-}}\NormalTok{ main\_cat3\_probs }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(}
+\NormalTok{      .data}\SpecialCharTok{$}\NormalTok{group }\SpecialCharTok{==}\NormalTok{ .env}\SpecialCharTok{$}\NormalTok{group\_i,}
+\NormalTok{      .data}\SpecialCharTok{$}\NormalTok{outcome }\SpecialCharTok{==}\NormalTok{ .env}\SpecialCharTok{$}\NormalTok{outcome\_i,}
+\NormalTok{      .data}\SpecialCharTok{$}\NormalTok{category }\SpecialCharTok{==}\NormalTok{ .env}\SpecialCharTok{$}\NormalTok{category\_i}
+\NormalTok{    ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{slice\_head}\NormalTok{(}\AttributeTok{n =} \DecValTok{1}\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{pull}\NormalTok{(dplyr}\SpecialCharTok{::}\FunctionTok{all\_of}\NormalTok{(value\_col))}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{length}\NormalTok{(out)) }\FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{as.numeric}\NormalTok{(out[[}\DecValTok{1}\NormalTok{L]])) }\ControlFlowTok{else} \ConstantTok{NA\_real\_}
+\NormalTok{\}}
+
+\NormalTok{cat\_or\_value }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(group, outcome\_label, contrast, }\AttributeTok{value\_col =} \StringTok{"OR"}\NormalTok{) \{}
+\NormalTok{  group\_i }\OtherTok{\textless{}{-}}\NormalTok{ group}
+\NormalTok{  outcome\_i }\OtherTok{\textless{}{-}}\NormalTok{ outcome\_label}
+\NormalTok{  contrast\_i }\OtherTok{\textless{}{-}}\NormalTok{ contrast}
+\NormalTok{  out }\OtherTok{\textless{}{-}}\NormalTok{ main\_cat3\_results }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(}
+\NormalTok{      .data}\SpecialCharTok{$}\NormalTok{group }\SpecialCharTok{==}\NormalTok{ .env}\SpecialCharTok{$}\NormalTok{group\_i,}
+\NormalTok{      .data}\SpecialCharTok{$}\NormalTok{outcome }\SpecialCharTok{==}\NormalTok{ .env}\SpecialCharTok{$}\NormalTok{outcome\_i,}
+\NormalTok{      .data}\SpecialCharTok{$}\NormalTok{contrast }\SpecialCharTok{==}\NormalTok{ .env}\SpecialCharTok{$}\NormalTok{contrast\_i}
+\NormalTok{    ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{slice\_head}\NormalTok{(}\AttributeTok{n =} \DecValTok{1}\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{pull}\NormalTok{(dplyr}\SpecialCharTok{::}\FunctionTok{all\_of}\NormalTok{(value\_col))}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{length}\NormalTok{(out)) }\FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{as.numeric}\NormalTok{(out[[}\DecValTok{1}\NormalTok{L]])) }\ControlFlowTok{else} \ConstantTok{NA\_real\_}
+\NormalTok{\}}
+
+\NormalTok{spline\_current\_summary\_one }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(group, outcome\_var) \{}
+\NormalTok{  outcome\_label }\OtherTok{\textless{}{-}}\NormalTok{ discordance\_outcome\_labels[[outcome\_var]]}
+\NormalTok{  co2\_var }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) }\StringTok{"paco2"} \ControlFlowTok{else} \StringTok{"vbg\_co2"}
+\NormalTok{  or\_df }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) abg\_curves }\ControlFlowTok{else}\NormalTok{ vbg\_curves}
+\NormalTok{  prob\_df }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) abg\_prob\_curves }\ControlFlowTok{else}\NormalTok{ vbg\_prob\_curves}
+\NormalTok{  or\_df }\OtherTok{\textless{}{-}}\NormalTok{ or\_df }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{group }\SpecialCharTok{==}\NormalTok{ group, .data}\SpecialCharTok{$}\NormalTok{outcome }\SpecialCharTok{==}\NormalTok{ outcome\_var)}
+\NormalTok{  prob\_df }\OtherTok{\textless{}{-}}\NormalTok{ prob\_df }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{group }\SpecialCharTok{==}\NormalTok{ group, .data}\SpecialCharTok{$}\NormalTok{outcome }\SpecialCharTok{==}\NormalTok{ outcome\_var)}
+\NormalTok{  targets }\OtherTok{\textless{}{-}} \FunctionTok{co2\_level\_targets}\NormalTok{(group)}
+
+\NormalTok{  tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+    \AttributeTok{outcome =}\NormalTok{ outcome\_label,}
+    \AttributeTok{modality =}\NormalTok{ group,}
+    \AttributeTok{analysis\_family =} \StringTok{"MI{-}logistic IPSW"}\NormalTok{,}
+    \AttributeTok{co2\_representation =} \StringTok{"spline"}\NormalTok{,}
+    \AttributeTok{or\_low\_vs\_normal =} \FunctionTok{nearest\_curve\_value}\NormalTok{(or\_df, co2\_var, targets[[}\StringTok{"Low"}\NormalTok{]], }\StringTok{"OR"}\NormalTok{),}
+    \AttributeTok{or\_high\_vs\_normal =} \FunctionTok{nearest\_curve\_value}\NormalTok{(or\_df, co2\_var, targets[[}\StringTok{"High"}\NormalTok{]], }\StringTok{"OR"}\NormalTok{),}
+    \AttributeTok{prob\_normal =} \FunctionTok{nearest\_curve\_value}\NormalTok{(prob\_df, co2\_var, targets[[}\StringTok{"Normal"}\NormalTok{]], }\StringTok{"p"}\NormalTok{),}
+    \AttributeTok{prob\_low =} \FunctionTok{nearest\_curve\_value}\NormalTok{(prob\_df, co2\_var, targets[[}\StringTok{"Low"}\NormalTok{]], }\StringTok{"p"}\NormalTok{),}
+    \AttributeTok{prob\_high =} \FunctionTok{nearest\_curve\_value}\NormalTok{(prob\_df, co2\_var, targets[[}\StringTok{"High"}\NormalTok{]], }\StringTok{"p"}\NormalTok{),}
+    \AttributeTok{notes =} \StringTok{"Current modality{-}specific reference profile."}
+\NormalTok{  )}
+\NormalTok{\}}
+
+\NormalTok{cat\_current\_summary }\OtherTok{\textless{}{-}}\NormalTok{ tidyr}\SpecialCharTok{::}\FunctionTok{crossing}\NormalTok{(}
+  \AttributeTok{outcome\_var =}\NormalTok{ discordance\_outcome\_vars,}
+  \AttributeTok{modality =}\NormalTok{ discordance\_groups}
+\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}\AttributeTok{outcome =} \FunctionTok{unname}\NormalTok{(discordance\_outcome\_labels[outcome\_var])) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{rowwise}\NormalTok{() }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+    \AttributeTok{analysis\_family =} \StringTok{"MI{-}logistic IPSW"}\NormalTok{,}
+    \AttributeTok{co2\_representation =} \StringTok{"cat3"}\NormalTok{,}
+    \AttributeTok{or\_low\_vs\_normal =} \FunctionTok{cat\_or\_value}\NormalTok{(modality, outcome, }\StringTok{"Low vs normal"}\NormalTok{),}
+    \AttributeTok{or\_high\_vs\_normal =} \FunctionTok{cat\_or\_value}\NormalTok{(modality, outcome, }\StringTok{"High vs normal"}\NormalTok{),}
+    \AttributeTok{prob\_normal =} \FunctionTok{cat\_prob\_value}\NormalTok{(modality, outcome, }\StringTok{"Normal"}\NormalTok{),}
+    \AttributeTok{prob\_low =} \FunctionTok{cat\_prob\_value}\NormalTok{(modality, outcome, }\StringTok{"Low"}\NormalTok{),}
+    \AttributeTok{prob\_high =} \FunctionTok{cat\_prob\_value}\NormalTok{(modality, outcome, }\StringTok{"High"}\NormalTok{),}
+    \AttributeTok{notes =} \StringTok{"Current categorical ORs and predicted probabilities."}
+\NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{ungroup}\NormalTok{() }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(}
+\NormalTok{    outcome, modality, analysis\_family, co2\_representation,}
+\NormalTok{    or\_low\_vs\_normal, or\_high\_vs\_normal, prob\_normal, prob\_low, prob\_high, notes}
+\NormalTok{  )}
+
+\NormalTok{spline\_current\_summary }\OtherTok{\textless{}{-}}\NormalTok{ purrr}\SpecialCharTok{::}\FunctionTok{map\_dfr}\NormalTok{(discordance\_groups, }\ControlFlowTok{function}\NormalTok{(group) \{}
+\NormalTok{  purrr}\SpecialCharTok{::}\FunctionTok{map\_dfr}\NormalTok{(discordance\_outcome\_vars, }\ControlFlowTok{function}\NormalTok{(outcome\_var) \{}
+    \FunctionTok{spline\_current\_summary\_one}\NormalTok{(group, outcome\_var)}
+\NormalTok{  \})}
+\NormalTok{\})}
+
+\NormalTok{discordance\_current\_summary }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(}
+\NormalTok{  cat\_current\_summary,}
+\NormalTok{  spline\_current\_summary}
+\NormalTok{)}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_current\_summary,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_current\_summary.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+\FunctionTok{record\_discordance\_status}\NormalTok{(}
+  \StringTok{"current\_discordance"}\NormalTok{,}
+  \StringTok{"completed"}\NormalTok{,}
+  \StringTok{"Current categorical and spline summaries were extracted from primary MI outputs."}\NormalTok{,}
+  \StringTok{"Results/discordance\_current\_summary.csv"}
+\NormalTok{)}
+
+\NormalTok{current\_metric\_long }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(}
+\NormalTok{  discordance\_current\_summary }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{transmute}\NormalTok{(}
+\NormalTok{      outcome,}
+\NormalTok{      co2\_representation,}
+      \AttributeTok{metric\_type =} \StringTok{"OR"}\NormalTok{,}
+      \AttributeTok{level =} \StringTok{"Low vs normal"}\NormalTok{,}
+\NormalTok{      modality,}
+      \AttributeTok{value =}\NormalTok{ or\_low\_vs\_normal}
+\NormalTok{    ),}
+\NormalTok{  discordance\_current\_summary }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{transmute}\NormalTok{(}
+\NormalTok{      outcome,}
+\NormalTok{      co2\_representation,}
+      \AttributeTok{metric\_type =} \StringTok{"OR"}\NormalTok{,}
+      \AttributeTok{level =} \StringTok{"High vs normal"}\NormalTok{,}
+\NormalTok{      modality,}
+      \AttributeTok{value =}\NormalTok{ or\_high\_vs\_normal}
+\NormalTok{    ),}
+\NormalTok{  discordance\_current\_summary }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{transmute}\NormalTok{(}
+\NormalTok{      outcome,}
+\NormalTok{      co2\_representation,}
+      \AttributeTok{metric\_type =} \StringTok{"probability"}\NormalTok{,}
+      \AttributeTok{level =} \StringTok{"Normal"}\NormalTok{,}
+\NormalTok{      modality,}
+      \AttributeTok{value =}\NormalTok{ prob\_normal}
+\NormalTok{    ),}
+\NormalTok{  discordance\_current\_summary }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{transmute}\NormalTok{(}
+\NormalTok{      outcome,}
+\NormalTok{      co2\_representation,}
+      \AttributeTok{metric\_type =} \StringTok{"probability"}\NormalTok{,}
+      \AttributeTok{level =} \StringTok{"Low"}\NormalTok{,}
+\NormalTok{      modality,}
+      \AttributeTok{value =}\NormalTok{ prob\_low}
+\NormalTok{    ),}
+\NormalTok{  discordance\_current\_summary }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{transmute}\NormalTok{(}
+\NormalTok{      outcome,}
+\NormalTok{      co2\_representation,}
+      \AttributeTok{metric\_type =} \StringTok{"probability"}\NormalTok{,}
+      \AttributeTok{level =} \StringTok{"High"}\NormalTok{,}
+\NormalTok{      modality,}
+      \AttributeTok{value =}\NormalTok{ prob\_high}
+\NormalTok{    )}
+\NormalTok{)}
+
+\NormalTok{discordance\_gap\_metrics }\OtherTok{\textless{}{-}}\NormalTok{ current\_metric\_long }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  tidyr}\SpecialCharTok{::}\FunctionTok{pivot\_wider}\NormalTok{(}\AttributeTok{names\_from =}\NormalTok{ modality, }\AttributeTok{values\_from =}\NormalTok{ value) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{transmute}\NormalTok{(}
+\NormalTok{    outcome,}
+\NormalTok{    co2\_representation,}
+\NormalTok{    metric\_type,}
+\NormalTok{    level,}
+    \AttributeTok{abg\_value =}\NormalTok{ ABG,}
+    \AttributeTok{vbg\_value =}\NormalTok{ VBG,}
+    \AttributeTok{absolute\_gap =}\NormalTok{ ABG }\SpecialCharTok{{-}}\NormalTok{ VBG,}
+    \AttributeTok{relative\_gap =} \FunctionTok{safe\_relative\_gap}\NormalTok{(ABG, VBG),}
+    \AttributeTok{comment =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{case\_when}\NormalTok{(}
+\NormalTok{      metric\_type }\SpecialCharTok{==} \StringTok{"OR"} \SpecialCharTok{\textasciitilde{}} \StringTok{"ABG{-}VBG gap on relative odds scale."}\NormalTok{,}
+\NormalTok{      metric\_type }\SpecialCharTok{==} \StringTok{"probability"} \SpecialCharTok{\textasciitilde{}} \StringTok{"ABG{-}VBG gap on absolute probability scale."}\NormalTok{,}
+      \ConstantTok{TRUE} \SpecialCharTok{\textasciitilde{}} \StringTok{"ABG{-}VBG gap."}
+\NormalTok{    )}
+\NormalTok{  )}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_gap\_metrics,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_gap\_metrics.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+\FunctionTok{record\_discordance\_status}\NormalTok{(}
+  \StringTok{"gap\_metrics"}\NormalTok{,}
+  \StringTok{"completed"}\NormalTok{,}
+  \StringTok{"ABG{-}VBG gaps were computed for OR and probability summaries."}\NormalTok{,}
+  \StringTok{"Results/discordance\_gap\_metrics.csv"}
+\NormalTok{)}
+
+\DocumentationTok{\#\# Reproduction of the current discordance}
+\FunctionTok{render\_table\_pdf}\NormalTok{(}
+\NormalTok{  discordance\_current\_summary }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+\NormalTok{      dplyr}\SpecialCharTok{::}\FunctionTok{across}\NormalTok{(}
+        \FunctionTok{c}\NormalTok{(or\_low\_vs\_normal, or\_high\_vs\_normal, prob\_normal, prob\_low, prob\_high),}
+        \SpecialCharTok{\textasciitilde{}} \FunctionTok{round}\NormalTok{(.x, }\DecValTok{3}\NormalTok{)}
+\NormalTok{      )}
+\NormalTok{    ),}
+  \AttributeTok{caption =} \StringTok{"Current NIV/IMV OR and predicted{-}probability summaries"}\NormalTok{,}
+  \AttributeTok{file\_stub =} \StringTok{"discordance\_current\_summary\_display"}\NormalTok{,}
+  \AttributeTok{wide =} \ConstantTok{TRUE}\NormalTok{,}
+  \AttributeTok{digits =} \DecValTok{3}\NormalTok{,}
+  \AttributeTok{max\_cols =} \DecValTok{6}\NormalTok{,}
+  \AttributeTok{landscape =} \ConstantTok{TRUE}
+\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{landscape}
+
+\begin{center}\textbf{Current NIV/IMV OR and predicted-probability summaries}\end{center}
+
+\begin{table}[!h]
+\centering\begingroup\fontsize{6}{8}\selectfont
+
+\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
+\begin{tabular}{llllrr}
+\toprule
+outcome & modality & analysis\_family & co2\_representation & or\_low\_vs\_normal & or\_high\_vs\_normal\\
+\midrule
+IMV & ABG & MI-logistic IPSW & cat3 & 1.413 & 1.261\\
+IMV & VBG & MI-logistic IPSW & cat3 & 1.240 & 1.631\\
+NIV & ABG & MI-logistic IPSW & cat3 & 1.042 & 3.049\\
+NIV & VBG & MI-logistic IPSW & cat3 & 0.760 & 2.689\\
+IMV & ABG & MI-logistic IPSW & spline & 1.320 & 1.000\\
+\addlinespace
+NIV & ABG & MI-logistic IPSW & spline & 1.046 & 1.371\\
+IMV & VBG & MI-logistic IPSW & spline & 1.033 & 1.089\\
+NIV & VBG & MI-logistic IPSW & spline & 0.966 & 1.475\\
+\bottomrule
+\end{tabular}}
+\endgroup{}
+\end{table}
+
+\begin{table}[!h]
+\centering\begingroup\fontsize{6}{8}\selectfont
+
+\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
+\begin{tabular}{rrrl}
+\toprule
+prob\_normal & prob\_low & prob\_high & notes\\
+\midrule
+0.207 & 0.269 & 0.248 & Current categorical ORs and predicted probabilities.\\
+0.193 & 0.228 & 0.280 & Current categorical ORs and predicted probabilities.\\
+0.062 & 0.064 & 0.167 & Current categorical ORs and predicted probabilities.\\
+0.024 & 0.018 & 0.062 & Current categorical ORs and predicted probabilities.\\
+0.200 & 0.248 & 0.200 & Current modality-specific reference profile.\\
+\addlinespace
+0.063 & 0.066 & 0.084 & Current modality-specific reference profile.\\
+0.203 & 0.208 & 0.217 & Current modality-specific reference profile.\\
+0.018 & 0.017 & 0.026 & Current modality-specific reference profile.\\
+\bottomrule
+\end{tabular}}
+\endgroup{}
+\end{table}
+
+\end{landscape}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\DocumentationTok{\#\# Common{-}reference and marginal{-}standardization checks}
+\NormalTok{common\_ref\_source }\OtherTok{\textless{}{-}}\NormalTok{ subset\_data }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(}
+\NormalTok{    (.data}\SpecialCharTok{$}\NormalTok{has\_abg }\SpecialCharTok{==} \DecValTok{1} \SpecialCharTok{\&} \FunctionTok{is.finite}\NormalTok{(}\FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{as.numeric}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{paco2)))) }\SpecialCharTok{|}
+\NormalTok{      (.data}\SpecialCharTok{$}\NormalTok{has\_vbg }\SpecialCharTok{==} \DecValTok{1} \SpecialCharTok{\&} \FunctionTok{is.finite}\NormalTok{(}\FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{as.numeric}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{vbg\_co2))))}
+\NormalTok{  )}
+\ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{nrow}\NormalTok{(common\_ref\_source)) common\_ref\_source }\OtherTok{\textless{}{-}}\NormalTok{ subset\_data}
+\NormalTok{x\_ref\_common }\OtherTok{\textless{}{-}} \FunctionTok{make\_ref\_profile}\NormalTok{(common\_ref\_source, adj\_core)}
+
+\NormalTok{grid\_abg\_common\_info }\OtherTok{\textless{}{-}} \FunctionTok{make\_co2\_grid\_ref}\NormalTok{(}
+  \StringTok{"paco2"}\NormalTok{,}
+\NormalTok{  grid\_abg\_mi}\SpecialCharTok{$}\NormalTok{paco2,}
+\NormalTok{  x\_ref\_common,}
+\NormalTok{  co2\_ref\_abg\_mi}
+\NormalTok{)}
+\NormalTok{grid\_vbg\_common\_info }\OtherTok{\textless{}{-}} \FunctionTok{make\_co2\_grid\_ref}\NormalTok{(}
+  \StringTok{"vbg\_co2"}\NormalTok{,}
+\NormalTok{  grid\_vbg\_mi}\SpecialCharTok{$}\NormalTok{vbg\_co2,}
+\NormalTok{  x\_ref\_common,}
+\NormalTok{  co2\_ref\_vbg\_mi}
+\NormalTok{)}
+
+\NormalTok{common\_ref\_curve\_one }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(group, outcome\_var) \{}
+\NormalTok{  fit\_list }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) spline\_fits\_abg[[outcome\_var]] }\ControlFlowTok{else}\NormalTok{ spline\_fits\_vbg[[outcome\_var]]}
+\NormalTok{  grid\_info }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) grid\_abg\_common\_info }\ControlFlowTok{else}\NormalTok{ grid\_vbg\_common\_info}
+\NormalTok{  co2\_var }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) }\StringTok{"paco2"} \ControlFlowTok{else} \StringTok{"vbg\_co2"}
+\NormalTok{  co2\_ref }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) co2\_ref\_abg\_mi }\ControlFlowTok{else}\NormalTok{ co2\_ref\_vbg\_mi}
+  \FunctionTok{pool\_spline\_prob\_curve\_from\_compact}\NormalTok{(}
+\NormalTok{    fit\_list,}
+    \AttributeTok{grid\_df =}\NormalTok{ grid\_info}\SpecialCharTok{$}\NormalTok{grid,}
+    \AttributeTok{outcome\_var =}\NormalTok{ outcome\_var,}
+    \AttributeTok{co2\_var =}\NormalTok{ co2\_var,}
+    \AttributeTok{co2\_ref =}\NormalTok{ co2\_ref}
+\NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+      \AttributeTok{outcome =}\NormalTok{ discordance\_outcome\_labels[[outcome\_var]],}
+      \AttributeTok{outcome\_var =}\NormalTok{ outcome\_var,}
+      \AttributeTok{group =}\NormalTok{ group,}
+      \AttributeTok{strategy =} \StringTok{"common\_reference"}\NormalTok{,}
+      \AttributeTok{co2\_scale =}\NormalTok{ co2\_var,}
+      \AttributeTok{co2\_value =}\NormalTok{ .data[[co2\_var]]}
+\NormalTok{    )}
+\NormalTok{\}}
+
+\NormalTok{discordance\_xref\_common\_prob\_curves }\OtherTok{\textless{}{-}}\NormalTok{ purrr}\SpecialCharTok{::}\FunctionTok{map\_dfr}\NormalTok{(discordance\_groups, }\ControlFlowTok{function}\NormalTok{(group) \{}
+\NormalTok{  purrr}\SpecialCharTok{::}\FunctionTok{map\_dfr}\NormalTok{(discordance\_outcome\_vars, }\ControlFlowTok{function}\NormalTok{(outcome\_var) \{}
+    \FunctionTok{common\_ref\_curve\_one}\NormalTok{(group, outcome\_var)}
+\NormalTok{  \})}
+\NormalTok{\})}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_xref\_common\_prob\_curves,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_xref\_common\_prob\_curves.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+
+\NormalTok{standardization\_sample\_cap }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (IS\_PILOT) }\DecValTok{1000}\NormalTok{L }\ControlFlowTok{else} \DecValTok{20000}\NormalTok{L}
+\NormalTok{min\_marginal\_ok\_frac }\OtherTok{\textless{}{-}} \FloatTok{0.9}
+\NormalTok{min\_marginal\_required }\OtherTok{\textless{}{-}} \FunctionTok{ceiling}\NormalTok{(min\_marginal\_ok\_frac }\SpecialCharTok{*}\NormalTok{ imp\_n)}
+\NormalTok{standardization\_source\_rows }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(d, imp\_index) \{}
+\NormalTok{  d }\OtherTok{\textless{}{-}}\NormalTok{ d[, }\FunctionTok{intersect}\NormalTok{(}\FunctionTok{c}\NormalTok{(adj\_core, }\StringTok{"has\_abg"}\NormalTok{, }\StringTok{"has\_vbg"}\NormalTok{), }\FunctionTok{names}\NormalTok{(d)), drop }\OtherTok{=} \ConstantTok{FALSE}\NormalTok{]}
+\NormalTok{  d }\OtherTok{\textless{}{-}}\NormalTok{ d[stats}\SpecialCharTok{::}\FunctionTok{complete.cases}\NormalTok{(d[, adj\_core, }\AttributeTok{drop =} \ConstantTok{FALSE}\NormalTok{]), , drop }\OtherTok{=} \ConstantTok{FALSE}\NormalTok{]}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{nrow}\NormalTok{(d) }\SpecialCharTok{\textless{}=}\NormalTok{ standardization\_sample\_cap) }\FunctionTok{return}\NormalTok{(d)}
+  \FunctionTok{set.seed}\NormalTok{(}\DecValTok{7100}\NormalTok{L }\SpecialCharTok{+}\NormalTok{ imp\_index)}
+\NormalTok{  d[}\FunctionTok{sample.int}\NormalTok{(}\FunctionTok{nrow}\NormalTok{(d), standardization\_sample\_cap), , drop }\OtherTok{=} \ConstantTok{FALSE}\NormalTok{]}
+\NormalTok{\}}
+
+\NormalTok{marginal\_predict\_compact }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(fit\_compact, source\_df, co2\_var,}
+\NormalTok{                                     co2\_values, outcome\_var) \{}
+\NormalTok{  purrr}\SpecialCharTok{::}\FunctionTok{map\_dfr}\NormalTok{(co2\_values, }\ControlFlowTok{function}\NormalTok{(co2\_value) \{}
+\NormalTok{    nd }\OtherTok{\textless{}{-}}\NormalTok{ source\_df}
+\NormalTok{    nd[[co2\_var]] }\OtherTok{\textless{}{-}}\NormalTok{ co2\_value}
+\NormalTok{    pred }\OtherTok{\textless{}{-}} \FunctionTok{predict\_spline\_prob\_from\_compact}\NormalTok{(}
+\NormalTok{      fit\_compact,}
+      \AttributeTok{grid\_df =}\NormalTok{ nd,}
+      \AttributeTok{outcome\_var =}\NormalTok{ outcome\_var,}
+      \AttributeTok{co2\_var =}\NormalTok{ co2\_var}
+\NormalTok{    )}
+\NormalTok{    tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+      \AttributeTok{co2\_value =}\NormalTok{ co2\_value,}
+      \AttributeTok{p\_imp =} \FunctionTok{mean}\NormalTok{(pred}\SpecialCharTok{$}\NormalTok{p, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+      \AttributeTok{n\_standardized =} \FunctionTok{nrow}\NormalTok{(nd)}
+\NormalTok{    )}
+\NormalTok{  \})}
+\NormalTok{\}}
+
+\NormalTok{marginal\_rows }\OtherTok{\textless{}{-}} \FunctionTok{list}\NormalTok{()}
+\NormalTok{marginal\_status\_rows }\OtherTok{\textless{}{-}} \FunctionTok{list}\NormalTok{()}
+
+\NormalTok{record\_marginal\_status }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(imp\_index, group, outcome\_var, co2\_var,}
+\NormalTok{                                   status, }\AttributeTok{error\_message =} \StringTok{""}\NormalTok{,}
+                                   \AttributeTok{n\_standardized =} \ConstantTok{NA\_integer\_}\NormalTok{,}
+                                   \AttributeTok{n\_grid =} \ConstantTok{NA\_integer\_}\NormalTok{) \{}
+\NormalTok{  marginal\_status\_rows[[}\FunctionTok{length}\NormalTok{(marginal\_status\_rows) }\SpecialCharTok{+} \DecValTok{1}\NormalTok{L]] }\OtherTok{\textless{}\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+    \AttributeTok{imp =}\NormalTok{ imp\_index,}
+    \AttributeTok{group =}\NormalTok{ group,}
+    \AttributeTok{outcome =}\NormalTok{ discordance\_outcome\_labels[[outcome\_var]],}
+    \AttributeTok{outcome\_var =}\NormalTok{ outcome\_var,}
+    \AttributeTok{co2\_scale =}\NormalTok{ co2\_var,}
+    \AttributeTok{status =}\NormalTok{ status,}
+    \AttributeTok{error\_message =}\NormalTok{ error\_message,}
+    \AttributeTok{n\_standardized =} \FunctionTok{as.integer}\NormalTok{(n\_standardized),}
+    \AttributeTok{n\_grid =} \FunctionTok{as.integer}\NormalTok{(n\_grid)}
+\NormalTok{  )}
+  \FunctionTok{invisible}\NormalTok{(}\ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{\}}
+
+\ControlFlowTok{for}\NormalTok{ (imp\_index }\ControlFlowTok{in} \FunctionTok{seq\_len}\NormalTok{(imp\_n)) \{}
+\NormalTok{  d\_imp }\OtherTok{\textless{}{-}} \FunctionTok{get\_imp}\NormalTok{(imp\_index)}
+\NormalTok{  source\_imp }\OtherTok{\textless{}{-}} \FunctionTok{standardization\_source\_rows}\NormalTok{(d\_imp, imp\_index)}
+  \ControlFlowTok{for}\NormalTok{ (group }\ControlFlowTok{in}\NormalTok{ discordance\_groups) \{}
+\NormalTok{    co2\_var }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) }\StringTok{"paco2"} \ControlFlowTok{else} \StringTok{"vbg\_co2"}
+\NormalTok{    co2\_values }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) grid\_abg\_mi}\SpecialCharTok{$}\NormalTok{paco2 }\ControlFlowTok{else}\NormalTok{ grid\_vbg\_mi}\SpecialCharTok{$}\NormalTok{vbg\_co2}
+\NormalTok{    fit\_bank }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) spline\_fits\_abg }\ControlFlowTok{else}\NormalTok{ spline\_fits\_vbg}
+    \ControlFlowTok{for}\NormalTok{ (outcome\_var }\ControlFlowTok{in}\NormalTok{ discordance\_outcome\_vars) \{}
+\NormalTok{      fit\_compact }\OtherTok{\textless{}{-}} \FunctionTok{compact\_spline\_fit}\NormalTok{(fit\_bank[[outcome\_var]][[imp\_index]])}
+      \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.null}\NormalTok{(fit\_compact)) \{}
+        \FunctionTok{record\_marginal\_status}\NormalTok{(}
+\NormalTok{          imp\_index,}
+\NormalTok{          group,}
+\NormalTok{          outcome\_var,}
+\NormalTok{          co2\_var,}
+          \AttributeTok{status =} \StringTok{"skipped\_no\_compact\_fit"}\NormalTok{,}
+          \AttributeTok{error\_message =} \StringTok{"compact spline fit unavailable"}\NormalTok{,}
+          \AttributeTok{n\_standardized =} \FunctionTok{nrow}\NormalTok{(source\_imp),}
+          \AttributeTok{n\_grid =} \FunctionTok{length}\NormalTok{(co2\_values)}
+\NormalTok{        )}
+        \ControlFlowTok{next}
+\NormalTok{      \}}
+\NormalTok{      pred\_try }\OtherTok{\textless{}{-}} \FunctionTok{tryCatch}\NormalTok{(}
+        \FunctionTok{list}\NormalTok{(}
+          \AttributeTok{value =} \FunctionTok{marginal\_predict\_compact}\NormalTok{(}
+\NormalTok{            fit\_compact,}
+            \AttributeTok{source\_df =}\NormalTok{ source\_imp,}
+            \AttributeTok{co2\_var =}\NormalTok{ co2\_var,}
+            \AttributeTok{co2\_values =}\NormalTok{ co2\_values,}
+            \AttributeTok{outcome\_var =}\NormalTok{ outcome\_var}
+\NormalTok{          ),}
+          \AttributeTok{error =} \ConstantTok{NULL}
+\NormalTok{        ),}
+        \AttributeTok{error =} \ControlFlowTok{function}\NormalTok{(e) }\FunctionTok{list}\NormalTok{(}\AttributeTok{value =} \ConstantTok{NULL}\NormalTok{, }\AttributeTok{error =} \FunctionTok{conditionMessage}\NormalTok{(e))}
+\NormalTok{      )}
+      \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{is.null}\NormalTok{(pred\_try}\SpecialCharTok{$}\NormalTok{error) }\SpecialCharTok{||} \FunctionTok{is.null}\NormalTok{(pred\_try}\SpecialCharTok{$}\NormalTok{value) }\SpecialCharTok{||} \SpecialCharTok{!}\FunctionTok{nrow}\NormalTok{(pred\_try}\SpecialCharTok{$}\NormalTok{value)) \{}
+\NormalTok{        error\_message }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.null}\NormalTok{(pred\_try}\SpecialCharTok{$}\NormalTok{error)) \{}
+          \StringTok{"prediction returned no rows"}
+\NormalTok{        \} }\ControlFlowTok{else}\NormalTok{ \{}
+\NormalTok{          pred\_try}\SpecialCharTok{$}\NormalTok{error}
+\NormalTok{        \}}
+        \FunctionTok{record\_marginal\_status}\NormalTok{(}
+\NormalTok{          imp\_index,}
+\NormalTok{          group,}
+\NormalTok{          outcome\_var,}
+\NormalTok{          co2\_var,}
+          \AttributeTok{status =} \StringTok{"failed\_prediction"}\NormalTok{,}
+          \AttributeTok{error\_message =}\NormalTok{ error\_message,}
+          \AttributeTok{n\_standardized =} \FunctionTok{nrow}\NormalTok{(source\_imp),}
+          \AttributeTok{n\_grid =} \FunctionTok{length}\NormalTok{(co2\_values)}
+\NormalTok{        )}
+        \ControlFlowTok{next}
+\NormalTok{      \}}
+\NormalTok{      pred\_imp }\OtherTok{\textless{}{-}}\NormalTok{ pred\_try}\SpecialCharTok{$}\NormalTok{value}
+      \FunctionTok{record\_marginal\_status}\NormalTok{(}
+\NormalTok{        imp\_index,}
+\NormalTok{        group,}
+\NormalTok{        outcome\_var,}
+\NormalTok{        co2\_var,}
+        \AttributeTok{status =} \StringTok{"completed"}\NormalTok{,}
+        \AttributeTok{n\_standardized =} \FunctionTok{nrow}\NormalTok{(source\_imp),}
+        \AttributeTok{n\_grid =} \FunctionTok{nrow}\NormalTok{(pred\_imp)}
+\NormalTok{      )}
+\NormalTok{      marginal\_rows[[}\FunctionTok{length}\NormalTok{(marginal\_rows) }\SpecialCharTok{+} \DecValTok{1}\NormalTok{L]] }\OtherTok{\textless{}{-}}\NormalTok{ pred\_imp }\SpecialCharTok{|\textgreater{}}
+\NormalTok{        dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+          \AttributeTok{imp =}\NormalTok{ imp\_index,}
+          \AttributeTok{outcome =}\NormalTok{ discordance\_outcome\_labels[[outcome\_var]],}
+          \AttributeTok{outcome\_var =}\NormalTok{ outcome\_var,}
+          \AttributeTok{group =}\NormalTok{ group,}
+          \AttributeTok{co2\_scale =}\NormalTok{ co2\_var,}
+          \AttributeTok{strategy =} \StringTok{"marginal\_standardized"}
+\NormalTok{        )}
+\NormalTok{    \}}
+\NormalTok{  \}}
+  \FunctionTok{rm}\NormalTok{(d\_imp, source\_imp)}
+  \FunctionTok{invisible}\NormalTok{(}\FunctionTok{gc}\NormalTok{(}\ConstantTok{FALSE}\NormalTok{))}
+\NormalTok{\}}
+
+\NormalTok{marginal\_status\_raw }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(marginal\_status\_rows)}
+\NormalTok{required\_marginal\_combos }\OtherTok{\textless{}{-}}\NormalTok{ tidyr}\SpecialCharTok{::}\FunctionTok{crossing}\NormalTok{(}
+  \AttributeTok{group =}\NormalTok{ discordance\_groups,}
+  \AttributeTok{outcome\_var =}\NormalTok{ discordance\_outcome\_vars}
+\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+    \AttributeTok{outcome =} \FunctionTok{unname}\NormalTok{(discordance\_outcome\_labels[outcome\_var]),}
+    \AttributeTok{m\_total =}\NormalTok{ imp\_n,}
+    \AttributeTok{min\_required =}\NormalTok{ min\_marginal\_required}
+\NormalTok{  )}
+\NormalTok{marginal\_completion\_summary }\OtherTok{\textless{}{-}}\NormalTok{ marginal\_status\_raw }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(group, outcome\_var, outcome) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{summarise}\NormalTok{(}
+    \AttributeTok{m\_used =} \FunctionTok{sum}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{status }\SpecialCharTok{==} \StringTok{"completed"}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{m\_failed =} \FunctionTok{sum}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{status }\SpecialCharTok{==} \StringTok{"failed\_prediction"}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{m\_skipped\_no\_compact\_fit =} \FunctionTok{sum}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{status }\SpecialCharTok{==} \StringTok{"skipped\_no\_compact\_fit"}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{m\_attempted =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{n}\NormalTok{(),}
+    \AttributeTok{first\_error =}\NormalTok{ \{}
+\NormalTok{      errors }\OtherTok{\textless{}{-}}\NormalTok{ .data}\SpecialCharTok{$}\NormalTok{error\_message[}\FunctionTok{nzchar}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{error\_message)]}
+      \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{length}\NormalTok{(errors)) errors[[}\DecValTok{1}\NormalTok{L]] }\ControlFlowTok{else} \StringTok{""}
+\NormalTok{    \},}
+    \AttributeTok{.groups =} \StringTok{"drop"}
+\NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{right\_join}\NormalTok{(}
+\NormalTok{    required\_marginal\_combos,}
+    \AttributeTok{by =} \FunctionTok{c}\NormalTok{(}\StringTok{"group"}\NormalTok{, }\StringTok{"outcome\_var"}\NormalTok{, }\StringTok{"outcome"}\NormalTok{)}
+\NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{across}\NormalTok{(}
+      \FunctionTok{c}\NormalTok{(m\_used, m\_failed, m\_skipped\_no\_compact\_fit, m\_attempted),}
+      \SpecialCharTok{\textasciitilde{}}\NormalTok{ tidyr}\SpecialCharTok{::}\FunctionTok{replace\_na}\NormalTok{(.x, }\DecValTok{0}\NormalTok{L)}
+\NormalTok{    ),}
+    \AttributeTok{first\_error =}\NormalTok{ tidyr}\SpecialCharTok{::}\FunctionTok{replace\_na}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{first\_error, }\StringTok{""}\NormalTok{),}
+    \AttributeTok{passed\_threshold =}\NormalTok{ .data}\SpecialCharTok{$}\NormalTok{m\_used }\SpecialCharTok{\textgreater{}=}\NormalTok{ .data}\SpecialCharTok{$}\NormalTok{min\_required}
+\NormalTok{  )}
+\NormalTok{marginal\_status\_df }\OtherTok{\textless{}{-}}\NormalTok{ marginal\_status\_raw }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{left\_join}\NormalTok{(}
+\NormalTok{    marginal\_completion\_summary }\SpecialCharTok{|\textgreater{}}
+\NormalTok{      dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(}
+\NormalTok{        group, outcome\_var, m\_used, m\_total, min\_required,}
+\NormalTok{        passed\_threshold}
+\NormalTok{      ),}
+    \AttributeTok{by =} \FunctionTok{c}\NormalTok{(}\StringTok{"group"}\NormalTok{, }\StringTok{"outcome\_var"}\NormalTok{)}
+\NormalTok{  )}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  marginal\_status\_df,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_marginal\_standardization\_status.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+
+\NormalTok{marginal\_threshold\_failures }\OtherTok{\textless{}{-}}\NormalTok{ marginal\_completion\_summary }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(}\SpecialCharTok{!}\NormalTok{.data}\SpecialCharTok{$}\NormalTok{passed\_threshold)}
+\ControlFlowTok{if}\NormalTok{ (}\FunctionTok{nrow}\NormalTok{(marginal\_threshold\_failures)) \{}
+  \FunctionTok{record\_discordance\_status}\NormalTok{(}
+    \StringTok{"marginal\_standardization"}\NormalTok{,}
+    \StringTok{"failed"}\NormalTok{,}
+    \FunctionTok{paste0}\NormalTok{(}
+      \StringTok{"Marginal standardization did not meet min\_marginal\_ok\_frac = "}\NormalTok{,}
+\NormalTok{      min\_marginal\_ok\_frac,}
+      \StringTok{" for: "}\NormalTok{,}
+      \FunctionTok{paste}\NormalTok{(}
+        \FunctionTok{paste0}\NormalTok{(}
+\NormalTok{          marginal\_threshold\_failures}\SpecialCharTok{$}\NormalTok{group,}
+          \StringTok{"/"}\NormalTok{,}
+\NormalTok{          marginal\_threshold\_failures}\SpecialCharTok{$}\NormalTok{outcome,}
+          \StringTok{" ("}\NormalTok{,}
+\NormalTok{          marginal\_threshold\_failures}\SpecialCharTok{$}\NormalTok{m\_used,}
+          \StringTok{"/"}\NormalTok{,}
+\NormalTok{          marginal\_threshold\_failures}\SpecialCharTok{$}\NormalTok{m\_total,}
+          \StringTok{")"}
+\NormalTok{        ),}
+        \AttributeTok{collapse =} \StringTok{"; "}
+\NormalTok{      )}
+\NormalTok{    ),}
+    \StringTok{"Results/discordance\_marginal\_standardization\_status.csv"}
+\NormalTok{  )}
+  \FunctionTok{write\_discordance\_status}\NormalTok{()}
+  \FunctionTok{stop}\NormalTok{(}
+    \StringTok{"Discordance marginal standardization failed the completion threshold: "}\NormalTok{,}
+    \FunctionTok{paste}\NormalTok{(}
+      \FunctionTok{paste0}\NormalTok{(}
+\NormalTok{        marginal\_threshold\_failures}\SpecialCharTok{$}\NormalTok{group,}
+        \StringTok{"/"}\NormalTok{,}
+\NormalTok{        marginal\_threshold\_failures}\SpecialCharTok{$}\NormalTok{outcome,}
+        \StringTok{"="}\NormalTok{,}
+\NormalTok{        marginal\_threshold\_failures}\SpecialCharTok{$}\NormalTok{m\_used,}
+        \StringTok{"/"}\NormalTok{,}
+\NormalTok{        marginal\_threshold\_failures}\SpecialCharTok{$}\NormalTok{m\_total}
+\NormalTok{      ),}
+      \AttributeTok{collapse =} \StringTok{", "}
+\NormalTok{    )}
+\NormalTok{  )}
+\NormalTok{\}}
+\FunctionTok{record\_discordance\_status}\NormalTok{(}
+  \StringTok{"marginal\_standardization"}\NormalTok{,}
+  \StringTok{"completed"}\NormalTok{,}
+  \FunctionTok{paste0}\NormalTok{(}
+    \StringTok{"Marginal standardization met min\_marginal\_ok\_frac = "}\NormalTok{,}
+\NormalTok{    min\_marginal\_ok\_frac,}
+    \StringTok{" for all NIV/IMV group/outcome combinations."}
+\NormalTok{  ),}
+  \StringTok{"Results/discordance\_marginal\_standardization\_status.csv"}
+\NormalTok{)}
+
+\NormalTok{marginal\_imp\_curves }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(marginal\_rows)}
+\ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{nrow}\NormalTok{(marginal\_imp\_curves)) \{}
+  \FunctionTok{stop}\NormalTok{(}\StringTok{"Discordance marginal standardization produced no predictions."}\NormalTok{)}
+\NormalTok{\}}
+
+\NormalTok{discordance\_marginal\_standardized\_prob\_curves }\OtherTok{\textless{}{-}}\NormalTok{ marginal\_imp\_curves }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(outcome, outcome\_var, group, co2\_scale, strategy, co2\_value) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{summarise}\NormalTok{(}
+    \AttributeTok{p =} \FunctionTok{mean}\NormalTok{(p\_imp, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{p\_LCL =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{quantile}\NormalTok{(p\_imp, }\FloatTok{0.025}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{names =} \ConstantTok{FALSE}\NormalTok{),}
+    \AttributeTok{p\_UCL =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{quantile}\NormalTok{(p\_imp, }\FloatTok{0.975}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{names =} \ConstantTok{FALSE}\NormalTok{),}
+    \AttributeTok{m\_used =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{n\_distinct}\NormalTok{(imp),}
+    \AttributeTok{n\_standardized =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(n\_standardized, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{standardization\_sample\_cap =}\NormalTok{ standardization\_sample\_cap,}
+    \AttributeTok{.groups =} \StringTok{"drop"}
+\NormalTok{  )}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_marginal\_standardized\_prob\_curves,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_marginal\_standardized\_prob\_curves.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+
+\NormalTok{current\_spline\_prob\_curves\_for\_plot }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(}
+\NormalTok{  abg\_prob\_curves }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{outcome }\SpecialCharTok{\%in\%}\NormalTok{ discordance\_outcome\_vars) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+      \AttributeTok{outcome\_var =}\NormalTok{ .data}\SpecialCharTok{$}\NormalTok{outcome,}
+      \AttributeTok{outcome =} \FunctionTok{unname}\NormalTok{(discordance\_outcome\_labels[.data}\SpecialCharTok{$}\NormalTok{outcome]),}
+      \AttributeTok{strategy =} \StringTok{"current\_modality\_reference"}\NormalTok{,}
+      \AttributeTok{co2\_scale =} \StringTok{"paco2"}\NormalTok{,}
+      \AttributeTok{co2\_value =}\NormalTok{ .data}\SpecialCharTok{$}\NormalTok{paco2}
+\NormalTok{    ),}
+\NormalTok{  vbg\_prob\_curves }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{outcome }\SpecialCharTok{\%in\%}\NormalTok{ discordance\_outcome\_vars) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+      \AttributeTok{outcome\_var =}\NormalTok{ .data}\SpecialCharTok{$}\NormalTok{outcome,}
+      \AttributeTok{outcome =} \FunctionTok{unname}\NormalTok{(discordance\_outcome\_labels[.data}\SpecialCharTok{$}\NormalTok{outcome]),}
+      \AttributeTok{strategy =} \StringTok{"current\_modality\_reference"}\NormalTok{,}
+      \AttributeTok{co2\_scale =} \StringTok{"vbg\_co2"}\NormalTok{,}
+      \AttributeTok{co2\_value =}\NormalTok{ .data}\SpecialCharTok{$}\NormalTok{vbg\_co2}
+\NormalTok{    )}
+\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(outcome, outcome\_var, group, strategy, co2\_scale, co2\_value, p, p\_LCL, p\_UCL)}
+
+\NormalTok{standardization\_curves\_for\_plot }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(}
+\NormalTok{  current\_spline\_prob\_curves\_for\_plot,}
+\NormalTok{  discordance\_xref\_common\_prob\_curves }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(outcome, outcome\_var, group, strategy, co2\_scale, co2\_value, p, p\_LCL, p\_UCL),}
+\NormalTok{  discordance\_marginal\_standardized\_prob\_curves }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(outcome, outcome\_var, group, strategy, co2\_scale, co2\_value, p, p\_LCL, p\_UCL)}
+\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+    \AttributeTok{strategy =} \FunctionTok{factor}\NormalTok{(}
+\NormalTok{      strategy,}
+      \AttributeTok{levels =} \FunctionTok{c}\NormalTok{(}\StringTok{"current\_modality\_reference"}\NormalTok{, }\StringTok{"common\_reference"}\NormalTok{, }\StringTok{"marginal\_standardized"}\NormalTok{),}
+      \AttributeTok{labels =} \FunctionTok{c}\NormalTok{(}\StringTok{"Current reference"}\NormalTok{, }\StringTok{"Common reference"}\NormalTok{, }\StringTok{"Marginal standardized"}\NormalTok{)}
+\NormalTok{    )}
+\NormalTok{  )}
+
+\NormalTok{representative\_prob }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(curves, strategy\_name, group, outcome\_var, level) \{}
+\NormalTok{  strategy\_i }\OtherTok{\textless{}{-}}\NormalTok{ strategy\_name}
+\NormalTok{  group\_i }\OtherTok{\textless{}{-}}\NormalTok{ group}
+\NormalTok{  outcome\_i }\OtherTok{\textless{}{-}}\NormalTok{ outcome\_var}
+\NormalTok{  co2\_var }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) }\StringTok{"paco2"} \ControlFlowTok{else} \StringTok{"vbg\_co2"}
+\NormalTok{  target }\OtherTok{\textless{}{-}} \FunctionTok{co2\_level\_targets}\NormalTok{(group)[[level]]}
+\NormalTok{  df }\OtherTok{\textless{}{-}}\NormalTok{ curves }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(}
+      \FunctionTok{as.character}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{strategy) }\SpecialCharTok{==}\NormalTok{ .env}\SpecialCharTok{$}\NormalTok{strategy\_i,}
+\NormalTok{      .data}\SpecialCharTok{$}\NormalTok{group }\SpecialCharTok{==}\NormalTok{ .env}\SpecialCharTok{$}\NormalTok{group\_i,}
+\NormalTok{      .data}\SpecialCharTok{$}\NormalTok{outcome\_var }\SpecialCharTok{==}\NormalTok{ .env}\SpecialCharTok{$}\NormalTok{outcome\_i}
+\NormalTok{    )}
+  \FunctionTok{nearest\_curve\_value}\NormalTok{(df, }\StringTok{"co2\_value"}\NormalTok{, target, }\StringTok{"p"}\NormalTok{)}
+\NormalTok{\}}
+
+\NormalTok{standardization\_summary\_rows }\OtherTok{\textless{}{-}}\NormalTok{ tidyr}\SpecialCharTok{::}\FunctionTok{crossing}\NormalTok{(}
+  \AttributeTok{outcome\_var =}\NormalTok{ discordance\_outcome\_vars,}
+  \AttributeTok{co2\_level =} \FunctionTok{c}\NormalTok{(}\StringTok{"Low"}\NormalTok{, }\StringTok{"Normal"}\NormalTok{, }\StringTok{"High"}\NormalTok{)}
+\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}\AttributeTok{outcome =} \FunctionTok{unname}\NormalTok{(discordance\_outcome\_labels[outcome\_var])) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{rowwise}\NormalTok{() }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+    \AttributeTok{gap\_current\_ref =} \FunctionTok{representative\_prob}\NormalTok{(}
+\NormalTok{      standardization\_curves\_for\_plot,}
+      \StringTok{"Current reference"}\NormalTok{,}
+      \StringTok{"ABG"}\NormalTok{,}
+\NormalTok{      outcome\_var,}
+\NormalTok{      co2\_level}
+\NormalTok{    ) }\SpecialCharTok{{-}} \FunctionTok{representative\_prob}\NormalTok{(}
+\NormalTok{      standardization\_curves\_for\_plot,}
+      \StringTok{"Current reference"}\NormalTok{,}
+      \StringTok{"VBG"}\NormalTok{,}
+\NormalTok{      outcome\_var,}
+\NormalTok{      co2\_level}
+\NormalTok{    ),}
+    \AttributeTok{gap\_common\_ref =} \FunctionTok{representative\_prob}\NormalTok{(}
+\NormalTok{      standardization\_curves\_for\_plot,}
+      \StringTok{"Common reference"}\NormalTok{,}
+      \StringTok{"ABG"}\NormalTok{,}
+\NormalTok{      outcome\_var,}
+\NormalTok{      co2\_level}
+\NormalTok{    ) }\SpecialCharTok{{-}} \FunctionTok{representative\_prob}\NormalTok{(}
+\NormalTok{      standardization\_curves\_for\_plot,}
+      \StringTok{"Common reference"}\NormalTok{,}
+      \StringTok{"VBG"}\NormalTok{,}
+\NormalTok{      outcome\_var,}
+\NormalTok{      co2\_level}
+\NormalTok{    ),}
+    \AttributeTok{gap\_marginal\_standardized =} \FunctionTok{representative\_prob}\NormalTok{(}
+\NormalTok{      standardization\_curves\_for\_plot,}
+      \StringTok{"Marginal standardized"}\NormalTok{,}
+      \StringTok{"ABG"}\NormalTok{,}
+\NormalTok{      outcome\_var,}
+\NormalTok{      co2\_level}
+\NormalTok{    ) }\SpecialCharTok{{-}} \FunctionTok{representative\_prob}\NormalTok{(}
+\NormalTok{      standardization\_curves\_for\_plot,}
+      \StringTok{"Marginal standardized"}\NormalTok{,}
+      \StringTok{"VBG"}\NormalTok{,}
+\NormalTok{      outcome\_var,}
+\NormalTok{      co2\_level}
+\NormalTok{    ),}
+    \AttributeTok{standardization\_sample\_cap =}\NormalTok{ standardization\_sample\_cap,}
+    \AttributeTok{interpretation =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{case\_when}\NormalTok{(}
+      \FunctionTok{is.finite}\NormalTok{(gap\_current\_ref) }\SpecialCharTok{\&}
+        \FunctionTok{is.finite}\NormalTok{(gap\_common\_ref) }\SpecialCharTok{\&}
+        \FunctionTok{abs}\NormalTok{(gap\_common\_ref) }\SpecialCharTok{\textless{}=} \FloatTok{0.75} \SpecialCharTok{*} \FunctionTok{abs}\NormalTok{(gap\_current\_ref) }\SpecialCharTok{\textasciitilde{}} \StringTok{"Common reference shrinks the current probability gap."}\NormalTok{,}
+      \FunctionTok{is.finite}\NormalTok{(gap\_current\_ref) }\SpecialCharTok{\&}
+        \FunctionTok{is.finite}\NormalTok{(gap\_marginal\_standardized) }\SpecialCharTok{\&}
+        \FunctionTok{abs}\NormalTok{(gap\_marginal\_standardized) }\SpecialCharTok{\textless{}=} \FloatTok{0.75} \SpecialCharTok{*} \FunctionTok{abs}\NormalTok{(gap\_current\_ref) }\SpecialCharTok{\textasciitilde{}} \StringTok{"Marginal standardization shrinks the current probability gap."}\NormalTok{,}
+      \ConstantTok{TRUE} \SpecialCharTok{\textasciitilde{}} \StringTok{"Standardization did not materially shrink the current probability gap."}
+\NormalTok{    )}
+\NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{ungroup}\NormalTok{() }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{left\_join}\NormalTok{(}
+\NormalTok{    marginal\_completion\_summary }\SpecialCharTok{|\textgreater{}}
+\NormalTok{      dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(outcome\_var, outcome) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{      dplyr}\SpecialCharTok{::}\FunctionTok{summarise}\NormalTok{(}
+        \AttributeTok{m\_used =} \FunctionTok{min}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{m\_used, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+        \AttributeTok{m\_total =} \FunctionTok{max}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{m\_total, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+        \AttributeTok{min\_required =} \FunctionTok{max}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{min\_required, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+        \AttributeTok{.groups =} \StringTok{"drop"}
+\NormalTok{      ),}
+    \AttributeTok{by =} \FunctionTok{c}\NormalTok{(}\StringTok{"outcome\_var"}\NormalTok{, }\StringTok{"outcome"}\NormalTok{)}
+\NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(}
+\NormalTok{    outcome, co2\_level, gap\_current\_ref, gap\_common\_ref,}
+\NormalTok{    gap\_marginal\_standardized, standardization\_sample\_cap,}
+\NormalTok{    m\_used, m\_total, min\_required, interpretation}
+\NormalTok{  )}
+
+\NormalTok{discordance\_standardization\_summary }\OtherTok{\textless{}{-}}\NormalTok{ standardization\_summary\_rows}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_standardization\_summary,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_standardization\_summary.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+\FunctionTok{record\_discordance\_status}\NormalTok{(}
+  \StringTok{"standardization"}\NormalTok{,}
+  \StringTok{"completed"}\NormalTok{,}
+  \FunctionTok{paste0}\NormalTok{(}
+    \StringTok{"Common{-}reference and marginal{-}standardized curves computed; marginal cap = "}\NormalTok{,}
+\NormalTok{    standardization\_sample\_cap,}
+    \StringTok{"; min\_marginal\_ok\_frac = "}\NormalTok{,}
+\NormalTok{    min\_marginal\_ok\_frac,}
+    \StringTok{"."}
+\NormalTok{  ),}
+  \StringTok{"Results/discordance\_xref\_common\_prob\_curves.csv; Results/discordance\_marginal\_standardized\_prob\_curves.csv; Results/discordance\_standardization\_summary.csv; Results/discordance\_marginal\_standardization\_status.csv"}
+\NormalTok{)}
+
+\NormalTok{discordance\_probability\_standardization\_plot }\OtherTok{\textless{}{-}}\NormalTok{ standardization\_curves\_for\_plot }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{ggplot}\NormalTok{(ggplot2}\SpecialCharTok{::}\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ co2\_value, }\AttributeTok{y =}\NormalTok{ p, }\AttributeTok{color =}\NormalTok{ strategy, }\AttributeTok{linetype =}\NormalTok{ strategy)) }\SpecialCharTok{+}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{geom\_line}\NormalTok{(}\AttributeTok{linewidth =} \FloatTok{0.55}\NormalTok{) }\SpecialCharTok{+}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{facet\_grid}\NormalTok{(outcome }\SpecialCharTok{\textasciitilde{}}\NormalTok{ group, }\AttributeTok{scales =} \StringTok{"free\_x"}\NormalTok{) }\SpecialCharTok{+}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{scale\_y\_continuous}\NormalTok{(}\AttributeTok{labels =}\NormalTok{ scales}\SpecialCharTok{::}\FunctionTok{percent\_format}\NormalTok{(}\AttributeTok{accuracy =} \DecValTok{1}\NormalTok{)) }\SpecialCharTok{+}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{labs}\NormalTok{(}
+    \AttributeTok{title =} \StringTok{"NIV/IMV predicted probabilities under alternative standardization"}\NormalTok{,}
+    \AttributeTok{x =} \StringTok{"CO2 value (mmHg; modality{-}specific scale)"}\NormalTok{,}
+    \AttributeTok{y =} \StringTok{"Predicted probability"}\NormalTok{,}
+    \AttributeTok{color =} \StringTok{"Prediction target"}\NormalTok{,}
+    \AttributeTok{linetype =} \StringTok{"Prediction target"}
+\NormalTok{  ) }\SpecialCharTok{+}
+  \FunctionTok{theme\_pub}\NormalTok{(}\AttributeTok{base\_size =} \DecValTok{9}\NormalTok{)}
+
+\NormalTok{discordance\_standardization\_png }\OtherTok{\textless{}{-}} \FunctionTok{results\_path}\NormalTok{(}
+  \StringTok{"figs"}\NormalTok{,}
+  \StringTok{"discordance\_probability\_standardization\_niv\_imv.png"}
+\NormalTok{)}
+\NormalTok{discordance\_standardization\_pdf }\OtherTok{\textless{}{-}} \FunctionTok{results\_path}\NormalTok{(}
+  \StringTok{"figs"}\NormalTok{,}
+  \StringTok{"discordance\_probability\_standardization\_niv\_imv.pdf"}
+\NormalTok{)}
+\FunctionTok{save\_diag\_plot}\NormalTok{(discordance\_probability\_standardization\_plot, discordance\_standardization\_png, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \FloatTok{5.6}\NormalTok{)}
+\FunctionTok{save\_diag\_plot}\NormalTok{(discordance\_probability\_standardization\_plot, discordance\_standardization\_pdf, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \FloatTok{5.6}\NormalTok{)}
+\FunctionTok{register\_plot\_file}\NormalTok{(}\StringTok{"discordance\_probability\_standardization\_niv\_imv"}\NormalTok{, discordance\_standardization\_png)}
+\end{Highlighting}
+\end{Shaded}
+
+{[}1{]} TRUE
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{render\_inline\_graphic}\NormalTok{(discordance\_standardization\_png)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{center}
+\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/discordance_probability_standardization_niv_imv.png}
+\end{center}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\DocumentationTok{\#\# Noncollapsibility and scale checks}
+\NormalTok{discordance\_scale\_summary }\OtherTok{\textless{}{-}}\NormalTok{ tidyr}\SpecialCharTok{::}\FunctionTok{crossing}\NormalTok{(}
+  \AttributeTok{outcome\_var =}\NormalTok{ discordance\_outcome\_vars,}
+  \AttributeTok{contrast =} \FunctionTok{c}\NormalTok{(}\StringTok{"Low vs normal"}\NormalTok{, }\StringTok{"High vs normal"}\NormalTok{)}
+\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+    \AttributeTok{outcome =} \FunctionTok{unname}\NormalTok{(discordance\_outcome\_labels[outcome\_var]),}
+    \AttributeTok{category =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{if\_else}\NormalTok{(contrast }\SpecialCharTok{==} \StringTok{"Low vs normal"}\NormalTok{, }\StringTok{"Low"}\NormalTok{, }\StringTok{"High"}\NormalTok{)}
+\NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{rowwise}\NormalTok{() }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+    \AttributeTok{abg\_or =} \FunctionTok{cat\_or\_value}\NormalTok{(}\StringTok{"ABG"}\NormalTok{, outcome, contrast),}
+    \AttributeTok{vbg\_or =} \FunctionTok{cat\_or\_value}\NormalTok{(}\StringTok{"VBG"}\NormalTok{, outcome, contrast),}
+    \AttributeTok{abg\_prob =} \FunctionTok{cat\_prob\_value}\NormalTok{(}\StringTok{"ABG"}\NormalTok{, outcome, category),}
+    \AttributeTok{vbg\_prob =} \FunctionTok{cat\_prob\_value}\NormalTok{(}\StringTok{"VBG"}\NormalTok{, outcome, category),}
+    \AttributeTok{abg\_prob\_ref =} \FunctionTok{cat\_prob\_value}\NormalTok{(}\StringTok{"ABG"}\NormalTok{, outcome, }\StringTok{"Normal"}\NormalTok{),}
+    \AttributeTok{vbg\_prob\_ref =} \FunctionTok{cat\_prob\_value}\NormalTok{(}\StringTok{"VBG"}\NormalTok{, outcome, }\StringTok{"Normal"}\NormalTok{),}
+    \AttributeTok{abg\_rd =}\NormalTok{ abg\_prob }\SpecialCharTok{{-}}\NormalTok{ abg\_prob\_ref,}
+    \AttributeTok{vbg\_rd =}\NormalTok{ vbg\_prob }\SpecialCharTok{{-}}\NormalTok{ vbg\_prob\_ref,}
+    \AttributeTok{abg\_rr =} \FunctionTok{ifelse}\NormalTok{(}\FunctionTok{is.finite}\NormalTok{(abg\_prob\_ref) }\SpecialCharTok{\&}\NormalTok{ abg\_prob\_ref }\SpecialCharTok{\textgreater{}} \DecValTok{0}\NormalTok{, abg\_prob }\SpecialCharTok{/}\NormalTok{ abg\_prob\_ref, }\ConstantTok{NA\_real\_}\NormalTok{),}
+    \AttributeTok{vbg\_rr =} \FunctionTok{ifelse}\NormalTok{(}\FunctionTok{is.finite}\NormalTok{(vbg\_prob\_ref) }\SpecialCharTok{\&}\NormalTok{ vbg\_prob\_ref }\SpecialCharTok{\textgreater{}} \DecValTok{0}\NormalTok{, vbg\_prob }\SpecialCharTok{/}\NormalTok{ vbg\_prob\_ref, }\ConstantTok{NA\_real\_}\NormalTok{),}
+    \AttributeTok{comment =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{case\_when}\NormalTok{(}
+      \FunctionTok{is.finite}\NormalTok{(abg\_or) }\SpecialCharTok{\&} \FunctionTok{is.finite}\NormalTok{(vbg\_or) }\SpecialCharTok{\&}
+        \FunctionTok{abs}\NormalTok{(}\FunctionTok{log}\NormalTok{(abg\_or) }\SpecialCharTok{{-}} \FunctionTok{log}\NormalTok{(vbg\_or)) }\SpecialCharTok{\textless{}} \FunctionTok{abs}\NormalTok{(abg\_rd }\SpecialCharTok{{-}}\NormalTok{ vbg\_rd) }\SpecialCharTok{\textasciitilde{}}
+        \StringTok{"Relative odds are closer than absolute risk differences."}\NormalTok{,}
+      \ConstantTok{TRUE} \SpecialCharTok{\textasciitilde{}} \StringTok{"Scale check does not show clearly closer ORs."}
+\NormalTok{    )}
+\NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{ungroup}\NormalTok{() }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(}
+\NormalTok{    outcome, contrast, abg\_or, vbg\_or, abg\_prob, vbg\_prob,}
+\NormalTok{    abg\_rd, vbg\_rd, abg\_rr, vbg\_rr, comment}
+\NormalTok{  )}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_scale\_summary,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_scale\_summary.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+\FunctionTok{record\_discordance\_status}\NormalTok{(}
+  \StringTok{"scale\_noncollapsibility"}\NormalTok{,}
+  \StringTok{"completed"}\NormalTok{,}
+  \StringTok{"OR, risk{-}difference, risk{-}ratio, and predicted{-}probability scale summaries were computed."}\NormalTok{,}
+  \StringTok{"Results/discordance\_scale\_summary.csv"}
+\NormalTok{)}
+
+\DocumentationTok{\#\# Missingness and procedure{-}capture diagnostics}
+\NormalTok{outcome\_source\_fields }\OtherTok{\textless{}{-}} \FunctionTok{unique}\NormalTok{(}\FunctionTok{c}\NormalTok{(}
+  \StringTok{"imv\_proc"}\NormalTok{,}
+  \StringTok{"niv\_proc"}\NormalTok{,}
+  \FunctionTok{candidate\_cols}\NormalTok{(}
+    \FunctionTok{names}\NormalTok{(subset\_data\_raw),}
+    \StringTok{"(imv|niv).*(date|time|timestamp|source|code|proc|procedure)"}\NormalTok{,}
+    \AttributeTok{exclude =} \FunctionTok{character}\NormalTok{(),}
+    \AttributeTok{max\_n =} \DecValTok{30}
+\NormalTok{  )}
+\NormalTok{))}
+\NormalTok{outcome\_source\_fields }\OtherTok{\textless{}{-}}\NormalTok{ outcome\_source\_fields[outcome\_source\_fields }\SpecialCharTok{\%in\%} \FunctionTok{names}\NormalTok{(subset\_data\_raw)]}
+
+\ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{length}\NormalTok{(outcome\_source\_fields)) \{}
+\NormalTok{  discordance\_missingness\_outcome\_fields }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+    \AttributeTok{field =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{component\_status =} \StringTok{"skipped"}\NormalTok{,}
+    \AttributeTok{reason =} \StringTok{"unavailable\_field"}
+\NormalTok{  )}
+  \FunctionTok{record\_discordance\_status}\NormalTok{(}
+    \StringTok{"outcome\_field\_missingness"}\NormalTok{,}
+    \StringTok{"skipped"}\NormalTok{,}
+    \StringTok{"No NIV/IMV procedure source fields were available."}\NormalTok{,}
+    \StringTok{"Results/discordance\_missingness\_outcome\_fields.csv"}\NormalTok{,}
+    \AttributeTok{optional =} \ConstantTok{TRUE}
+\NormalTok{  )}
+\NormalTok{\} }\ControlFlowTok{else}\NormalTok{ \{}
+\NormalTok{  discordance\_missingness\_outcome\_fields }\OtherTok{\textless{}{-}}\NormalTok{ purrr}\SpecialCharTok{::}\FunctionTok{map\_dfr}\NormalTok{(outcome\_source\_fields, }\ControlFlowTok{function}\NormalTok{(field) \{}
+\NormalTok{    x }\OtherTok{\textless{}{-}}\NormalTok{ subset\_data\_raw[[field]]}
+\NormalTok{    tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+      \AttributeTok{field =}\NormalTok{ field,}
+      \AttributeTok{missing\_overall =} \FunctionTok{mean}\NormalTok{(}\FunctionTok{is.na}\NormalTok{(x)),}
+      \AttributeTok{missing\_abg\_tested =} \FunctionTok{mean}\NormalTok{(}\FunctionTok{is.na}\NormalTok{(x[subset\_data}\SpecialCharTok{$}\NormalTok{has\_abg }\SpecialCharTok{==} \DecValTok{1}\NormalTok{])),}
+      \AttributeTok{missing\_vbg\_tested =} \FunctionTok{mean}\NormalTok{(}\FunctionTok{is.na}\NormalTok{(x[subset\_data}\SpecialCharTok{$}\NormalTok{has\_vbg }\SpecialCharTok{==} \DecValTok{1}\NormalTok{])),}
+      \AttributeTok{n\_overall =} \FunctionTok{length}\NormalTok{(x),}
+      \AttributeTok{n\_abg\_tested =} \FunctionTok{sum}\NormalTok{(subset\_data}\SpecialCharTok{$}\NormalTok{has\_abg }\SpecialCharTok{==} \DecValTok{1}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+      \AttributeTok{n\_vbg\_tested =} \FunctionTok{sum}\NormalTok{(subset\_data}\SpecialCharTok{$}\NormalTok{has\_vbg }\SpecialCharTok{==} \DecValTok{1}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+      \AttributeTok{component\_status =} \StringTok{"completed"}\NormalTok{,}
+      \AttributeTok{reason =} \StringTok{"available\_field"}
+\NormalTok{    )}
+\NormalTok{  \})}
+  \FunctionTok{record\_discordance\_status}\NormalTok{(}
+    \StringTok{"outcome\_field\_missingness"}\NormalTok{,}
+    \StringTok{"completed"}\NormalTok{,}
+    \StringTok{"NIV/IMV outcome{-}source field missingness was summarized."}\NormalTok{,}
+    \StringTok{"Results/discordance\_missingness\_outcome\_fields.csv"}
+\NormalTok{  )}
+\NormalTok{\}}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_missingness\_outcome\_fields,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_missingness\_outcome\_fields.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+
+\NormalTok{proxy\_fields }\OtherTok{\textless{}{-}} \FunctionTok{unique}\NormalTok{(}\FunctionTok{c}\NormalTok{(}
+  \StringTok{"imv\_proc"}\NormalTok{,}
+  \StringTok{"niv\_proc"}\NormalTok{,}
+  \FunctionTok{candidate\_cols}\NormalTok{(}
+    \FunctionTok{names}\NormalTok{(subset\_data),}
+    \StringTok{"(procedure|proc|cpt|icd|code|dx|charge|document|claim)"}\NormalTok{,}
+    \AttributeTok{exclude =} \FunctionTok{c}\NormalTok{(}\StringTok{"has\_abg"}\NormalTok{, }\StringTok{"has\_vbg"}\NormalTok{),}
+    \AttributeTok{max\_n =} \DecValTok{20}
+\NormalTok{  )}
+\NormalTok{))}
+\NormalTok{proxy\_fields }\OtherTok{\textless{}{-}}\NormalTok{ proxy\_fields[proxy\_fields }\SpecialCharTok{\%in\%} \FunctionTok{names}\NormalTok{(subset\_data)]}
+
+\NormalTok{capture\_rows }\OtherTok{\textless{}{-}} \FunctionTok{list}\NormalTok{()}
+\ControlFlowTok{for}\NormalTok{ (imp\_index }\ControlFlowTok{in} \FunctionTok{seq\_len}\NormalTok{(imp\_n)) \{}
+\NormalTok{  d\_imp }\OtherTok{\textless{}{-}} \FunctionTok{get\_imp}\NormalTok{(imp\_index)}
+  \ControlFlowTok{for}\NormalTok{ (group }\ControlFlowTok{in}\NormalTok{ discordance\_groups) \{}
+\NormalTok{    treat\_var }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) }\StringTok{"has\_abg"} \ControlFlowTok{else} \StringTok{"has\_vbg"}
+\NormalTok{    weights\_i }\OtherTok{\textless{}{-}} \FunctionTok{get\_mi\_weight}\NormalTok{(group, imp\_index)}
+\NormalTok{    tested }\OtherTok{\textless{}{-}}\NormalTok{ d\_imp[[treat\_var]] }\SpecialCharTok{==} \DecValTok{1}
+    \ControlFlowTok{for}\NormalTok{ (field }\ControlFlowTok{in}\NormalTok{ proxy\_fields) \{}
+\NormalTok{      x }\OtherTok{\textless{}{-}}\NormalTok{ d\_imp[[field]]}
+      \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.factor}\NormalTok{(x) }\SpecialCharTok{||} \FunctionTok{is.character}\NormalTok{(x)) \{}
+\NormalTok{        proxy\_value }\OtherTok{\textless{}{-}} \FunctionTok{as.integer}\NormalTok{(}\SpecialCharTok{!}\FunctionTok{is.na}\NormalTok{(x) }\SpecialCharTok{\&} \FunctionTok{nzchar}\NormalTok{(}\FunctionTok{trimws}\NormalTok{(}\FunctionTok{as.character}\NormalTok{(x))))}
+\NormalTok{      \} }\ControlFlowTok{else}\NormalTok{ \{}
+\NormalTok{        proxy\_value }\OtherTok{\textless{}{-}} \FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{as.numeric}\NormalTok{(x))}
+\NormalTok{      \}}
+\NormalTok{      capture\_rows[[}\FunctionTok{length}\NormalTok{(capture\_rows) }\SpecialCharTok{+} \DecValTok{1}\NormalTok{L]] }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+        \AttributeTok{imp =}\NormalTok{ imp\_index,}
+        \AttributeTok{group =}\NormalTok{ group,}
+        \AttributeTok{proxy\_field =}\NormalTok{ field,}
+        \AttributeTok{proxy\_type =} \FunctionTok{ifelse}\NormalTok{(field }\SpecialCharTok{\%in\%} \FunctionTok{c}\NormalTok{(}\StringTok{"imv\_proc"}\NormalTok{, }\StringTok{"niv\_proc"}\NormalTok{), }\StringTok{"binary\_outcome"}\NormalTok{, }\StringTok{"coding\_density\_proxy"}\NormalTok{),}
+        \AttributeTok{unweighted\_mean\_tested =} \FunctionTok{mean}\NormalTok{(proxy\_value[tested], }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+        \AttributeTok{weighted\_mean\_tested =} \FunctionTok{weighted\_mean\_safe}\NormalTok{(proxy\_value[tested], weights\_i[tested]),}
+        \AttributeTok{missing\_fraction\_tested =} \FunctionTok{mean}\NormalTok{(}\FunctionTok{is.na}\NormalTok{(proxy\_value[tested])),}
+        \AttributeTok{n\_tested =} \FunctionTok{sum}\NormalTok{(tested, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{      )}
+\NormalTok{    \}}
+\NormalTok{  \}}
+  \FunctionTok{rm}\NormalTok{(d\_imp)}
+  \FunctionTok{invisible}\NormalTok{(}\FunctionTok{gc}\NormalTok{(}\ConstantTok{FALSE}\NormalTok{))}
+\NormalTok{\}}
+
+\NormalTok{discordance\_procedure\_capture\_proxies }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(capture\_rows) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(group, proxy\_field, proxy\_type) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{summarise}\NormalTok{(}
+    \AttributeTok{unweighted\_mean\_tested =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(unweighted\_mean\_tested, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{weighted\_mean\_tested =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(weighted\_mean\_tested, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{missing\_fraction\_tested =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(missing\_fraction\_tested, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{n\_tested =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(n\_tested, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{m\_used =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{n\_distinct}\NormalTok{(imp),}
+    \AttributeTok{.groups =} \StringTok{"drop"}
+\NormalTok{  )}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_procedure\_capture\_proxies,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_procedure\_capture\_proxies.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+
+\NormalTok{missing\_indicator\_vars }\OtherTok{\textless{}{-}}\NormalTok{ covars\_ps[covars\_ps }\SpecialCharTok{\%in\%} \FunctionTok{names}\NormalTok{(subset\_data\_raw)]}
+\NormalTok{missing\_indicator\_vars }\OtherTok{\textless{}{-}}\NormalTok{ missing\_indicator\_vars[}
+  \FunctionTok{vapply}\NormalTok{(missing\_indicator\_vars, }\ControlFlowTok{function}\NormalTok{(v) }\FunctionTok{any}\NormalTok{(}\FunctionTok{is.na}\NormalTok{(subset\_data\_raw[[v]])), }\FunctionTok{logical}\NormalTok{(}\DecValTok{1}\NormalTok{L))}
+\NormalTok{]}
+
+\ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{length}\NormalTok{(missing\_indicator\_vars)) \{}
+\NormalTok{  discordance\_missing\_indicator\_balance }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+    \AttributeTok{variable =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{group =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{smd\_pre =} \ConstantTok{NA\_real\_}\NormalTok{,}
+    \AttributeTok{smd\_post =} \ConstantTok{NA\_real\_}\NormalTok{,}
+    \AttributeTok{component\_status =} \StringTok{"skipped"}\NormalTok{,}
+    \AttributeTok{reason =} \StringTok{"no\_missing\_baseline\_indicators"}
+\NormalTok{  )}
+\NormalTok{\} }\ControlFlowTok{else}\NormalTok{ \{}
+\NormalTok{  miss\_bal\_rows }\OtherTok{\textless{}{-}} \FunctionTok{list}\NormalTok{()}
+\NormalTok{  target\_missing }\OtherTok{\textless{}{-}} \FunctionTok{lapply}\NormalTok{(missing\_indicator\_vars, }\ControlFlowTok{function}\NormalTok{(v) }\FunctionTok{as.integer}\NormalTok{(}\FunctionTok{is.na}\NormalTok{(subset\_data\_raw[[v]])))}
+  \FunctionTok{names}\NormalTok{(target\_missing) }\OtherTok{\textless{}{-}}\NormalTok{ missing\_indicator\_vars}
+  \ControlFlowTok{for}\NormalTok{ (imp\_index }\ControlFlowTok{in} \FunctionTok{seq\_len}\NormalTok{(imp\_n)) \{}
+    \ControlFlowTok{for}\NormalTok{ (group }\ControlFlowTok{in}\NormalTok{ discordance\_groups) \{}
+\NormalTok{      treat\_var }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) }\StringTok{"has\_abg"} \ControlFlowTok{else} \StringTok{"has\_vbg"}
+\NormalTok{      treat }\OtherTok{\textless{}{-}}\NormalTok{ subset\_data[[treat\_var]] }\SpecialCharTok{==} \DecValTok{1}
+\NormalTok{      weights\_i }\OtherTok{\textless{}{-}} \FunctionTok{get\_mi\_weight}\NormalTok{(group, imp\_index)}
+      \ControlFlowTok{for}\NormalTok{ (v }\ControlFlowTok{in}\NormalTok{ missing\_indicator\_vars) \{}
+\NormalTok{        x }\OtherTok{\textless{}{-}}\NormalTok{ target\_missing[[v]]}
+\NormalTok{        target\_p }\OtherTok{\textless{}{-}} \FunctionTok{mean}\NormalTok{(x, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{        target\_sd }\OtherTok{\textless{}{-}} \FunctionTok{sqrt}\NormalTok{(target\_p }\SpecialCharTok{*}\NormalTok{ (}\DecValTok{1} \SpecialCharTok{{-}}\NormalTok{ target\_p))}
+\NormalTok{        pre }\OtherTok{\textless{}{-}} \FunctionTok{mean}\NormalTok{(x[treat], }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{        post }\OtherTok{\textless{}{-}} \FunctionTok{weighted\_mean\_safe}\NormalTok{(x[treat], weights\_i[treat])}
+\NormalTok{        miss\_bal\_rows[[}\FunctionTok{length}\NormalTok{(miss\_bal\_rows) }\SpecialCharTok{+} \DecValTok{1}\NormalTok{L]] }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+          \AttributeTok{imp =}\NormalTok{ imp\_index,}
+          \AttributeTok{variable =}\NormalTok{ v,}
+          \AttributeTok{group =}\NormalTok{ group,}
+          \AttributeTok{missing\_target =}\NormalTok{ target\_p,}
+          \AttributeTok{missing\_tested =}\NormalTok{ pre,}
+          \AttributeTok{missing\_weighted =}\NormalTok{ post,}
+          \AttributeTok{smd\_pre =} \FunctionTok{ifelse}\NormalTok{(}\FunctionTok{is.finite}\NormalTok{(target\_sd) }\SpecialCharTok{\&}\NormalTok{ target\_sd }\SpecialCharTok{\textgreater{}} \DecValTok{0}\NormalTok{, (pre }\SpecialCharTok{{-}}\NormalTok{ target\_p) }\SpecialCharTok{/}\NormalTok{ target\_sd, }\ConstantTok{NA\_real\_}\NormalTok{),}
+          \AttributeTok{smd\_post =} \FunctionTok{ifelse}\NormalTok{(}\FunctionTok{is.finite}\NormalTok{(target\_sd) }\SpecialCharTok{\&}\NormalTok{ target\_sd }\SpecialCharTok{\textgreater{}} \DecValTok{0}\NormalTok{, (post }\SpecialCharTok{{-}}\NormalTok{ target\_p) }\SpecialCharTok{/}\NormalTok{ target\_sd, }\ConstantTok{NA\_real\_}\NormalTok{)}
+\NormalTok{        )}
+\NormalTok{      \}}
+\NormalTok{    \}}
+\NormalTok{  \}}
+\NormalTok{  discordance\_missing\_indicator\_balance }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(miss\_bal\_rows) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(variable, group) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{summarise}\NormalTok{(}
+      \AttributeTok{missing\_target =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(missing\_target, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+      \AttributeTok{missing\_tested =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(missing\_tested, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+      \AttributeTok{missing\_weighted =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(missing\_weighted, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+      \AttributeTok{smd\_pre =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(smd\_pre, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+      \AttributeTok{smd\_post =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(smd\_post, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+      \AttributeTok{.groups =} \StringTok{"drop"}
+\NormalTok{    ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}\AttributeTok{component\_status =} \StringTok{"completed"}\NormalTok{, }\AttributeTok{reason =} \StringTok{"baseline\_missingness\_indicators\_available"}\NormalTok{)}
+\NormalTok{\}}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_missing\_indicator\_balance,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_missing\_indicator\_balance.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+
+\NormalTok{capture\_wide }\OtherTok{\textless{}{-}}\NormalTok{ discordance\_procedure\_capture\_proxies }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(group, proxy\_field, weighted\_mean\_tested) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  tidyr}\SpecialCharTok{::}\FunctionTok{pivot\_wider}\NormalTok{(}\AttributeTok{names\_from =}\NormalTok{ group, }\AttributeTok{values\_from =}\NormalTok{ weighted\_mean\_tested)}
+
+\NormalTok{missingness\_capture\_summary }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+  \AttributeTok{component =} \FunctionTok{c}\NormalTok{(}\StringTok{"outcome\_source\_missingness"}\NormalTok{, }\StringTok{"procedure\_capture\_proxy"}\NormalTok{, }\StringTok{"baseline\_missing\_indicator\_balance"}\NormalTok{),}
+  \AttributeTok{max\_abs\_abg\_vbg\_difference =} \FunctionTok{c}\NormalTok{(}
+    \FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{max}\NormalTok{(}\FunctionTok{abs}\NormalTok{(}
+\NormalTok{      discordance\_missingness\_outcome\_fields}\SpecialCharTok{$}\NormalTok{missing\_abg\_tested }\SpecialCharTok{{-}}
+\NormalTok{        discordance\_missingness\_outcome\_fields}\SpecialCharTok{$}\NormalTok{missing\_vbg\_tested}
+\NormalTok{    ), }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)),}
+    \FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{max}\NormalTok{(}\FunctionTok{abs}\NormalTok{(capture\_wide}\SpecialCharTok{$}\NormalTok{ABG }\SpecialCharTok{{-}}\NormalTok{ capture\_wide}\SpecialCharTok{$}\NormalTok{VBG), }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)),}
+    \FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{max}\NormalTok{(}\FunctionTok{abs}\NormalTok{(discordance\_missing\_indicator\_balance}\SpecialCharTok{$}\NormalTok{smd\_post), }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{))}
+\NormalTok{  ),}
+  \AttributeTok{interpretation =} \FunctionTok{c}\NormalTok{(}
+    \StringTok{"Difference in missingness among detected NIV/IMV source fields."}\NormalTok{,}
+    \StringTok{"Difference in weighted tested{-}cohort proxy means."}\NormalTok{,}
+    \StringTok{"Largest post{-}weighting SMD among baseline missingness indicators."}
+\NormalTok{  )}
+\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+    \AttributeTok{max\_abs\_abg\_vbg\_difference =} \FunctionTok{ifelse}\NormalTok{(}\FunctionTok{is.infinite}\NormalTok{(max\_abs\_abg\_vbg\_difference), }\ConstantTok{NA\_real\_}\NormalTok{, max\_abs\_abg\_vbg\_difference)}
+\NormalTok{  )}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  missingness\_capture\_summary,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_missingness\_capture\_summary.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+\FunctionTok{record\_discordance\_status}\NormalTok{(}
+  \StringTok{"missingness\_capture"}\NormalTok{,}
+  \StringTok{"completed"}\NormalTok{,}
+  \StringTok{"Procedure{-}source missingness, capture proxies, and baseline missingness indicator balance were summarized."}\NormalTok{,}
+  \StringTok{"Results/discordance\_missingness\_outcome\_fields.csv; Results/discordance\_procedure\_capture\_proxies.csv; Results/discordance\_missing\_indicator\_balance.csv; Results/discordance\_missingness\_capture\_summary.csv"}
+\NormalTok{)}
+
+\DocumentationTok{\#\# Support, tail, and positivity diagnostics}
+\NormalTok{make\_quantile\_bin }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(x) \{}
+\NormalTok{  probs }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\DecValTok{0}\NormalTok{, }\FloatTok{0.02}\NormalTok{, }\FloatTok{0.25}\NormalTok{, }\FloatTok{0.75}\NormalTok{, }\FloatTok{0.98}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{  cuts }\OtherTok{\textless{}{-}} \FunctionTok{unique}\NormalTok{(stats}\SpecialCharTok{::}\FunctionTok{quantile}\NormalTok{(x, }\AttributeTok{probs =}\NormalTok{ probs, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{names =} \ConstantTok{FALSE}\NormalTok{))}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{length}\NormalTok{(cuts) }\SpecialCharTok{\textless{}} \DecValTok{3}\NormalTok{L) }\FunctionTok{return}\NormalTok{(}\FunctionTok{factor}\NormalTok{(}\FunctionTok{rep}\NormalTok{(}\ConstantTok{NA\_character\_}\NormalTok{, }\FunctionTok{length}\NormalTok{(x))))}
+  \FunctionTok{cut}\NormalTok{(x, }\AttributeTok{breaks =}\NormalTok{ cuts, }\AttributeTok{include.lowest =} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{ordered\_result =} \ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{\}}
+
+\NormalTok{tail\_support\_rows }\OtherTok{\textless{}{-}} \FunctionTok{list}\NormalTok{()}
+\ControlFlowTok{for}\NormalTok{ (imp\_index }\ControlFlowTok{in} \FunctionTok{seq\_len}\NormalTok{(imp\_n)) \{}
+\NormalTok{  d\_imp }\OtherTok{\textless{}{-}} \FunctionTok{get\_imp}\NormalTok{(imp\_index)}
+  \ControlFlowTok{for}\NormalTok{ (group }\ControlFlowTok{in}\NormalTok{ discordance\_groups) \{}
+\NormalTok{    co2\_var }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) }\StringTok{"paco2"} \ControlFlowTok{else} \StringTok{"vbg\_co2"}
+\NormalTok{    treat\_var }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) }\StringTok{"has\_abg"} \ControlFlowTok{else} \StringTok{"has\_vbg"}
+\NormalTok{    low\_cut }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) ABG\_CO2\_LOW }\ControlFlowTok{else}\NormalTok{ VBG\_CO2\_LOW}
+\NormalTok{    high\_cut }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) ABG\_CO2\_HIGH }\ControlFlowTok{else}\NormalTok{ VBG\_CO2\_HIGH}
+\NormalTok{    weights\_i }\OtherTok{\textless{}{-}} \FunctionTok{get\_mi\_weight}\NormalTok{(group, imp\_index)}
+\NormalTok{    tested }\OtherTok{\textless{}{-}}\NormalTok{ d\_imp[[treat\_var]] }\SpecialCharTok{==} \DecValTok{1} \SpecialCharTok{\&} \FunctionTok{is.finite}\NormalTok{(}\FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{as.numeric}\NormalTok{(d\_imp[[co2\_var]])))}
+\NormalTok{    co2\_x }\OtherTok{\textless{}{-}} \FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{as.numeric}\NormalTok{(d\_imp[[co2\_var]]))}
+\NormalTok{    clinical\_bin }\OtherTok{\textless{}{-}} \FunctionTok{make\_co2\_cat3}\NormalTok{(co2\_x, low\_cut, high\_cut)}
+\NormalTok{    clinical\_bin }\OtherTok{\textless{}{-}} \FunctionTok{factor}\NormalTok{(clinical\_bin, }\AttributeTok{levels =} \FunctionTok{c}\NormalTok{(}\StringTok{"Low"}\NormalTok{, }\StringTok{"Normal"}\NormalTok{, }\StringTok{"High"}\NormalTok{), }\AttributeTok{ordered =} \ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{    quantile\_bin }\OtherTok{\textless{}{-}} \FunctionTok{rep}\NormalTok{(}\ConstantTok{NA}\NormalTok{, }\FunctionTok{nrow}\NormalTok{(d\_imp))}
+\NormalTok{    quantile\_bin[tested] }\OtherTok{\textless{}{-}} \FunctionTok{as.character}\NormalTok{(}\FunctionTok{make\_quantile\_bin}\NormalTok{(co2\_x[tested]))}
+\NormalTok{    bin\_df }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(}
+\NormalTok{      tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}\AttributeTok{bin\_type =} \StringTok{"clinical\_cat3"}\NormalTok{, }\AttributeTok{bin =} \FunctionTok{as.character}\NormalTok{(clinical\_bin)),}
+\NormalTok{      tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}\AttributeTok{bin\_type =} \StringTok{"quantile\_support"}\NormalTok{, }\AttributeTok{bin =} \FunctionTok{as.character}\NormalTok{(quantile\_bin))}
+\NormalTok{    ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{      dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}\AttributeTok{row\_id =} \FunctionTok{rep}\NormalTok{(}\FunctionTok{seq\_len}\NormalTok{(}\FunctionTok{nrow}\NormalTok{(d\_imp)), }\AttributeTok{times =} \DecValTok{2}\NormalTok{L))}
+
+    \ControlFlowTok{for}\NormalTok{ (outcome\_var }\ControlFlowTok{in}\NormalTok{ discordance\_outcome\_vars) \{}
+\NormalTok{      y }\OtherTok{\textless{}{-}} \FunctionTok{to01}\NormalTok{(d\_imp[[outcome\_var]])}
+      \ControlFlowTok{for}\NormalTok{ (bin\_type\_i }\ControlFlowTok{in} \FunctionTok{unique}\NormalTok{(bin\_df}\SpecialCharTok{$}\NormalTok{bin\_type)) \{}
+\NormalTok{        rows\_i }\OtherTok{\textless{}{-}}\NormalTok{ bin\_df }\SpecialCharTok{|\textgreater{}}
+\NormalTok{          dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{bin\_type }\SpecialCharTok{==}\NormalTok{ bin\_type\_i) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{          dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+            \AttributeTok{tested =}\NormalTok{ tested[row\_id],}
+            \AttributeTok{y =}\NormalTok{ y[row\_id],}
+            \AttributeTok{w =}\NormalTok{ weights\_i[row\_id],}
+            \AttributeTok{co2 =}\NormalTok{ co2\_x[row\_id]}
+\NormalTok{          ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{          dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{tested, }\SpecialCharTok{!}\FunctionTok{is.na}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{bin))}
+        \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{nrow}\NormalTok{(rows\_i)) }\ControlFlowTok{next}
+\NormalTok{        tail\_support\_rows[[}\FunctionTok{length}\NormalTok{(tail\_support\_rows) }\SpecialCharTok{+} \DecValTok{1}\NormalTok{L]] }\OtherTok{\textless{}{-}}\NormalTok{ rows\_i }\SpecialCharTok{|\textgreater{}}
+\NormalTok{          dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(bin\_type, bin) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{          dplyr}\SpecialCharTok{::}\FunctionTok{summarise}\NormalTok{(}
+            \AttributeTok{n\_unweighted =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{n}\NormalTok{(),}
+            \AttributeTok{co2\_min =} \FunctionTok{min}\NormalTok{(co2, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+            \AttributeTok{co2\_max =} \FunctionTok{max}\NormalTok{(co2, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+            \AttributeTok{weighted\_n =} \FunctionTok{sum}\NormalTok{(w, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+            \AttributeTok{weighted\_events =} \FunctionTok{sum}\NormalTok{(w }\SpecialCharTok{*}\NormalTok{ y, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+            \AttributeTok{weighted\_event\_rate =} \FunctionTok{ifelse}\NormalTok{(weighted\_n }\SpecialCharTok{\textgreater{}} \DecValTok{0}\NormalTok{, weighted\_events }\SpecialCharTok{/}\NormalTok{ weighted\_n, }\ConstantTok{NA\_real\_}\NormalTok{),}
+            \AttributeTok{ess =} \FunctionTok{weighted\_ess}\NormalTok{(w),}
+            \AttributeTok{.groups =} \StringTok{"drop"}
+\NormalTok{          ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{          dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+            \AttributeTok{imp =}\NormalTok{ imp\_index,}
+            \AttributeTok{group =}\NormalTok{ group,}
+            \AttributeTok{outcome =}\NormalTok{ discordance\_outcome\_labels[[outcome\_var]],}
+            \AttributeTok{outcome\_var =}\NormalTok{ outcome\_var}
+\NormalTok{          )}
+\NormalTok{      \}}
+\NormalTok{    \}}
+\NormalTok{  \}}
+  \FunctionTok{rm}\NormalTok{(d\_imp)}
+  \FunctionTok{invisible}\NormalTok{(}\FunctionTok{gc}\NormalTok{(}\ConstantTok{FALSE}\NormalTok{))}
+\NormalTok{\}}
+
+\NormalTok{discordance\_tail\_support\_by\_bin }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(tail\_support\_rows) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(group, outcome, outcome\_var, bin\_type, bin) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{summarise}\NormalTok{(}
+    \AttributeTok{n\_unweighted =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(n\_unweighted, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{co2\_min =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(co2\_min, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{co2\_max =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(co2\_max, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{weighted\_n =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(weighted\_n, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{weighted\_events =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(weighted\_events, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{weighted\_event\_rate =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(weighted\_event\_rate, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{ess =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(ess, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{m\_used =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{n\_distinct}\NormalTok{(imp),}
+    \AttributeTok{.groups =} \StringTok{"drop"}
+\NormalTok{  )}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_tail\_support\_by\_bin,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_tail\_support\_by\_bin.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+
+\NormalTok{discordance\_tail\_support\_summary }\OtherTok{\textless{}{-}}\NormalTok{ discordance\_tail\_support\_by\_bin }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(group, outcome, bin\_type) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{summarise}\NormalTok{(}
+    \AttributeTok{min\_ess =} \FunctionTok{min}\NormalTok{(ess, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{min\_weighted\_events =} \FunctionTok{min}\NormalTok{(weighted\_events, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{max\_weighted\_event\_rate =} \FunctionTok{max}\NormalTok{(weighted\_event\_rate, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{n\_bins =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{n}\NormalTok{(),}
+    \AttributeTok{support\_flag =} \FunctionTok{any}\NormalTok{(ess }\SpecialCharTok{\textless{}} \DecValTok{100} \SpecialCharTok{|}\NormalTok{ weighted\_events }\SpecialCharTok{\textless{}} \DecValTok{10}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{.groups =} \StringTok{"drop"}
+\NormalTok{  )}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_tail\_support\_summary,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_tail\_support\_summary.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+\FunctionTok{record\_discordance\_status}\NormalTok{(}
+  \StringTok{"tail\_support"}\NormalTok{,}
+  \StringTok{"completed"}\NormalTok{,}
+  \StringTok{"Weighted support, events, event rates, and ESS were summarized by clinical and quantile CO2 bins."}\NormalTok{,}
+  \StringTok{"Results/discordance\_tail\_support\_summary.csv; Results/discordance\_tail\_support\_by\_bin.csv"}
+\NormalTok{)}
+
+\NormalTok{tail\_clinical }\OtherTok{\textless{}{-}}\NormalTok{ discordance\_tail\_support\_by\_bin }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{bin\_type }\SpecialCharTok{==} \StringTok{"clinical\_cat3"}\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}\AttributeTok{bin =} \FunctionTok{factor}\NormalTok{(bin, }\AttributeTok{levels =} \FunctionTok{c}\NormalTok{(}\StringTok{"Low"}\NormalTok{, }\StringTok{"Normal"}\NormalTok{, }\StringTok{"High"}\NormalTok{)))}
+
+\NormalTok{tail\_rate\_plot }\OtherTok{\textless{}{-}}\NormalTok{ tail\_clinical }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{ggplot}\NormalTok{(ggplot2}\SpecialCharTok{::}\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ bin, }\AttributeTok{y =}\NormalTok{ weighted\_event\_rate, }\AttributeTok{color =}\NormalTok{ group, }\AttributeTok{group =}\NormalTok{ group)) }\SpecialCharTok{+}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{geom\_line}\NormalTok{(}\AttributeTok{linewidth =} \FloatTok{0.5}\NormalTok{) }\SpecialCharTok{+}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{geom\_point}\NormalTok{(}\AttributeTok{size =} \FloatTok{1.8}\NormalTok{) }\SpecialCharTok{+}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{facet\_wrap}\NormalTok{(}\SpecialCharTok{\textasciitilde{}}\NormalTok{ outcome, }\AttributeTok{nrow =} \DecValTok{1}\NormalTok{) }\SpecialCharTok{+}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{scale\_y\_continuous}\NormalTok{(}\AttributeTok{labels =}\NormalTok{ scales}\SpecialCharTok{::}\FunctionTok{percent\_format}\NormalTok{(}\AttributeTok{accuracy =} \DecValTok{1}\NormalTok{)) }\SpecialCharTok{+}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{labs}\NormalTok{(}\AttributeTok{x =} \StringTok{"Clinical CO2 category"}\NormalTok{, }\AttributeTok{y =} \StringTok{"Weighted event rate"}\NormalTok{, }\AttributeTok{color =} \StringTok{"Modality"}\NormalTok{) }\SpecialCharTok{+}
+  \FunctionTok{theme\_pub}\NormalTok{(}\AttributeTok{base\_size =} \DecValTok{9}\NormalTok{)}
+
+\NormalTok{tail\_ess\_plot }\OtherTok{\textless{}{-}}\NormalTok{ tail\_clinical }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{ggplot}\NormalTok{(ggplot2}\SpecialCharTok{::}\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ bin, }\AttributeTok{y =}\NormalTok{ ess, }\AttributeTok{fill =}\NormalTok{ group)) }\SpecialCharTok{+}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{geom\_col}\NormalTok{(}\AttributeTok{position =}\NormalTok{ ggplot2}\SpecialCharTok{::}\FunctionTok{position\_dodge}\NormalTok{(}\AttributeTok{width =} \FloatTok{0.7}\NormalTok{), }\AttributeTok{width =} \FloatTok{0.65}\NormalTok{) }\SpecialCharTok{+}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{facet\_wrap}\NormalTok{(}\SpecialCharTok{\textasciitilde{}}\NormalTok{ outcome, }\AttributeTok{nrow =} \DecValTok{1}\NormalTok{) }\SpecialCharTok{+}
+\NormalTok{  ggplot2}\SpecialCharTok{::}\FunctionTok{labs}\NormalTok{(}\AttributeTok{x =} \StringTok{"Clinical CO2 category"}\NormalTok{, }\AttributeTok{y =} \StringTok{"Weighted ESS"}\NormalTok{, }\AttributeTok{fill =} \StringTok{"Modality"}\NormalTok{) }\SpecialCharTok{+}
+  \FunctionTok{theme\_pub}\NormalTok{(}\AttributeTok{base\_size =} \DecValTok{9}\NormalTok{)}
+
+\NormalTok{discordance\_tail\_support\_plot }\OtherTok{\textless{}{-}}\NormalTok{ tail\_rate\_plot }\SpecialCharTok{/}\NormalTok{ tail\_ess\_plot }\SpecialCharTok{+}
+\NormalTok{  patchwork}\SpecialCharTok{::}\FunctionTok{plot\_annotation}\NormalTok{(}\AttributeTok{title =} \StringTok{"Tail support and event rates for NIV/IMV"}\NormalTok{)}
+\NormalTok{discordance\_tail\_png }\OtherTok{\textless{}{-}} \FunctionTok{results\_path}\NormalTok{(}\StringTok{"figs"}\NormalTok{, }\StringTok{"discordance\_tail\_support\_niv\_imv.png"}\NormalTok{)}
+\NormalTok{discordance\_tail\_pdf }\OtherTok{\textless{}{-}} \FunctionTok{results\_path}\NormalTok{(}\StringTok{"figs"}\NormalTok{, }\StringTok{"discordance\_tail\_support\_niv\_imv.pdf"}\NormalTok{)}
+\FunctionTok{save\_diag\_plot}\NormalTok{(discordance\_tail\_support\_plot, discordance\_tail\_png, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \FloatTok{6.2}\NormalTok{)}
+\FunctionTok{save\_diag\_plot}\NormalTok{(discordance\_tail\_support\_plot, discordance\_tail\_pdf, }\AttributeTok{width =} \FloatTok{8.5}\NormalTok{, }\AttributeTok{height =} \FloatTok{6.2}\NormalTok{)}
+\FunctionTok{register\_plot\_file}\NormalTok{(}\StringTok{"discordance\_tail\_support\_niv\_imv"}\NormalTok{, discordance\_tail\_png)}
+\end{Highlighting}
+\end{Shaded}
+
+{[}1{]} TRUE
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{render\_inline\_graphic}\NormalTok{(discordance\_tail\_png)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{center}
+\includegraphics[width=0.94\linewidth,height=0.72\textheight,keepaspectratio]{Results/figs/discordance_tail_support_niv_imv.png}
+\end{center}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\DocumentationTok{\#\# Setting and subgroup sensitivity analyses}
+\NormalTok{site\_candidates }\OtherTok{\textless{}{-}} \FunctionTok{candidate\_cols}\NormalTok{(}
+  \FunctionTok{names}\NormalTok{(subset\_data),}
+  \StringTok{"(\^{}site$|facility|hospital|health\_system|institution)"}\NormalTok{,}
+  \AttributeTok{exclude =} \FunctionTok{c}\NormalTok{(}\StringTok{"location"}\NormalTok{),}
+  \AttributeTok{max\_n =} \DecValTok{10}
+\NormalTok{)}
+\NormalTok{site\_field }\OtherTok{\textless{}{-}} \ConstantTok{NA\_character\_}
+\ControlFlowTok{if}\NormalTok{ (}\FunctionTok{length}\NormalTok{(site\_candidates)) \{}
+\NormalTok{  site\_levels }\OtherTok{\textless{}{-}} \FunctionTok{vapply}\NormalTok{(site\_candidates, }\ControlFlowTok{function}\NormalTok{(v) dplyr}\SpecialCharTok{::}\FunctionTok{n\_distinct}\NormalTok{(subset\_data[[v]], }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{), }\FunctionTok{integer}\NormalTok{(}\DecValTok{1}\NormalTok{L))}
+\NormalTok{  feasible }\OtherTok{\textless{}{-}}\NormalTok{ site\_candidates[site\_levels }\SpecialCharTok{\textgreater{}=} \DecValTok{2}\NormalTok{L }\SpecialCharTok{\&}\NormalTok{ site\_levels }\SpecialCharTok{\textless{}=} \DecValTok{50}\NormalTok{L]}
+  \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{length}\NormalTok{(feasible)) site\_field }\OtherTok{\textless{}{-}}\NormalTok{ feasible[[}\DecValTok{1}\NormalTok{L]]}
+\NormalTok{\}}
+\NormalTok{setting\_vars }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\StringTok{"encounter\_type"}\NormalTok{, }\StringTok{"location"}\NormalTok{, site\_field)}
+\NormalTok{setting\_vars }\OtherTok{\textless{}{-}}\NormalTok{ setting\_vars[}\SpecialCharTok{!}\FunctionTok{is.na}\NormalTok{(setting\_vars) }\SpecialCharTok{\&}\NormalTok{ setting\_vars }\SpecialCharTok{\%in\%} \FunctionTok{names}\NormalTok{(subset\_data)]}
+
+\NormalTok{setting\_rows }\OtherTok{\textless{}{-}} \FunctionTok{list}\NormalTok{()}
+\ControlFlowTok{for}\NormalTok{ (imp\_index }\ControlFlowTok{in} \FunctionTok{seq\_len}\NormalTok{(imp\_n)) \{}
+\NormalTok{  d\_imp }\OtherTok{\textless{}{-}} \FunctionTok{get\_imp}\NormalTok{(imp\_index)}
+  \ControlFlowTok{for}\NormalTok{ (group }\ControlFlowTok{in}\NormalTok{ discordance\_groups) \{}
+\NormalTok{    treat\_var }\OtherTok{\textless{}{-}} \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(group, }\StringTok{"ABG"}\NormalTok{)) }\StringTok{"has\_abg"} \ControlFlowTok{else} \StringTok{"has\_vbg"}
+\NormalTok{    weights\_i }\OtherTok{\textless{}{-}} \FunctionTok{get\_mi\_weight}\NormalTok{(group, imp\_index)}
+\NormalTok{    tested }\OtherTok{\textless{}{-}}\NormalTok{ d\_imp[[treat\_var]] }\SpecialCharTok{==} \DecValTok{1}
+    \ControlFlowTok{for}\NormalTok{ (setting\_var }\ControlFlowTok{in}\NormalTok{ setting\_vars) \{}
+      \ControlFlowTok{for}\NormalTok{ (outcome\_var }\ControlFlowTok{in}\NormalTok{ discordance\_outcome\_vars) \{}
+\NormalTok{        setting\_rows[[}\FunctionTok{length}\NormalTok{(setting\_rows) }\SpecialCharTok{+} \DecValTok{1}\NormalTok{L]] }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+          \AttributeTok{setting\_level =} \FunctionTok{as.character}\NormalTok{(d\_imp[[setting\_var]]),}
+          \AttributeTok{y =} \FunctionTok{to01}\NormalTok{(d\_imp[[outcome\_var]]),}
+          \AttributeTok{w =}\NormalTok{ weights\_i,}
+          \AttributeTok{tested =}\NormalTok{ tested}
+\NormalTok{        ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{          dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{tested, }\SpecialCharTok{!}\FunctionTok{is.na}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{setting\_level), }\FunctionTok{nzchar}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{setting\_level)) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{          dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(setting\_level) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{          dplyr}\SpecialCharTok{::}\FunctionTok{summarise}\NormalTok{(}
+            \AttributeTok{n\_unweighted =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{n}\NormalTok{(),}
+            \AttributeTok{weighted\_n =} \FunctionTok{sum}\NormalTok{(w, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+            \AttributeTok{weighted\_event\_rate =} \FunctionTok{weighted\_mean\_safe}\NormalTok{(y, w),}
+            \AttributeTok{ess =} \FunctionTok{weighted\_ess}\NormalTok{(w),}
+            \AttributeTok{.groups =} \StringTok{"drop"}
+\NormalTok{          ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{          dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+            \AttributeTok{imp =}\NormalTok{ imp\_index,}
+            \AttributeTok{group =}\NormalTok{ group,}
+            \AttributeTok{outcome =}\NormalTok{ discordance\_outcome\_labels[[outcome\_var]],}
+            \AttributeTok{setting\_var =}\NormalTok{ setting\_var}
+\NormalTok{          )}
+\NormalTok{      \}}
+\NormalTok{    \}}
+\NormalTok{  \}}
+  \FunctionTok{rm}\NormalTok{(d\_imp)}
+  \FunctionTok{invisible}\NormalTok{(}\FunctionTok{gc}\NormalTok{(}\ConstantTok{FALSE}\NormalTok{))}
+\NormalTok{\}}
+
+\NormalTok{discordance\_setting\_sensitivity }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(setting\_rows) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(setting\_var, setting\_level, group, outcome) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{summarise}\NormalTok{(}
+    \AttributeTok{n\_unweighted =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(n\_unweighted, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{weighted\_n =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(weighted\_n, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{weighted\_event\_rate =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(weighted\_event\_rate, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{ess =}\NormalTok{ stats}\SpecialCharTok{::}\FunctionTok{median}\NormalTok{(ess, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+    \AttributeTok{m\_used =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{n\_distinct}\NormalTok{(imp),}
+    \AttributeTok{.groups =} \StringTok{"drop"}
+\NormalTok{  )}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_setting\_sensitivity,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_setting\_sensitivity.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+\NormalTok{discordance\_setting\_rate\_ranges }\OtherTok{\textless{}{-}}\NormalTok{ discordance\_setting\_sensitivity }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(setting\_var, outcome, group) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{summarise}\NormalTok{(}
+    \AttributeTok{n\_setting\_levels =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{n}\NormalTok{(),}
+    \AttributeTok{min\_weighted\_event\_rate =} \FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{min}\NormalTok{(weighted\_event\_rate, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)),}
+    \AttributeTok{max\_weighted\_event\_rate =} \FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{max}\NormalTok{(weighted\_event\_rate, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)),}
+    \AttributeTok{rate\_range =}\NormalTok{ max\_weighted\_event\_rate }\SpecialCharTok{{-}}\NormalTok{ min\_weighted\_event\_rate,}
+    \AttributeTok{.groups =} \StringTok{"drop"}
+\NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{across}\NormalTok{(}
+      \FunctionTok{c}\NormalTok{(min\_weighted\_event\_rate, max\_weighted\_event\_rate, rate\_range),}
+      \SpecialCharTok{\textasciitilde{}} \FunctionTok{ifelse}\NormalTok{(}\FunctionTok{is.infinite}\NormalTok{(.x), }\ConstantTok{NA\_real\_}\NormalTok{, .x)}
+\NormalTok{    )}
+\NormalTok{  )}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_setting\_rate\_ranges,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_setting\_rate\_ranges.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+\FunctionTok{record\_discordance\_status}\NormalTok{(}
+  \StringTok{"setting\_sensitivity"}\NormalTok{,}
+  \StringTok{"completed"}\NormalTok{,}
+  \FunctionTok{ifelse}\NormalTok{(}
+    \FunctionTok{is.na}\NormalTok{(site\_field),}
+    \StringTok{"Encounter{-}type and location sensitivity completed; no separate feasible site field was found."}\NormalTok{,}
+    \FunctionTok{paste0}\NormalTok{(}\StringTok{"Encounter{-}type, location, and site{-}like field sensitivity completed using "}\NormalTok{, site\_field, }\StringTok{"."}\NormalTok{)}
+\NormalTok{  ),}
+  \StringTok{"Results/discordance\_setting\_sensitivity.csv; Results/discordance\_setting\_rate\_ranges.csv"}
+\NormalTok{)}
+\ControlFlowTok{if}\NormalTok{ (}\FunctionTok{is.na}\NormalTok{(site\_field)) \{}
+  \FunctionTok{record\_discordance\_status}\NormalTok{(}
+    \StringTok{"site\_specific\_sensitivity"}\NormalTok{,}
+    \StringTok{"skipped"}\NormalTok{,}
+    \StringTok{"No separate site/facility identifier with 2{-}50 levels was found."}\NormalTok{,}
+    \StringTok{"Results/discordance\_setting\_sensitivity.csv"}\NormalTok{,}
+    \AttributeTok{optional =} \ConstantTok{TRUE}
+\NormalTok{  )}
+\NormalTok{\}}
+
+\NormalTok{dual\_rows }\OtherTok{\textless{}{-}} \FunctionTok{list}\NormalTok{()}
+\NormalTok{dual\_tested }\OtherTok{\textless{}{-}}\NormalTok{ subset\_data}\SpecialCharTok{$}\NormalTok{has\_abg }\SpecialCharTok{==} \DecValTok{1} \SpecialCharTok{\&}\NormalTok{ subset\_data}\SpecialCharTok{$}\NormalTok{has\_vbg }\SpecialCharTok{==} \DecValTok{1}
+\ControlFlowTok{if}\NormalTok{ (}\FunctionTok{sum}\NormalTok{(dual\_tested, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{) }\SpecialCharTok{\textgreater{}} \DecValTok{0}\NormalTok{L) \{}
+  \ControlFlowTok{for}\NormalTok{ (outcome\_var }\ControlFlowTok{in}\NormalTok{ discordance\_outcome\_vars) \{}
+\NormalTok{    y }\OtherTok{\textless{}{-}} \FunctionTok{to01}\NormalTok{(subset\_data[[outcome\_var]])}
+\NormalTok{    dual\_rows[[}\FunctionTok{length}\NormalTok{(dual\_rows) }\SpecialCharTok{+} \DecValTok{1}\NormalTok{L]] }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+      \AttributeTok{modality =} \StringTok{"ABG"}\NormalTok{,}
+      \AttributeTok{co2\_category =} \FunctionTok{as.character}\NormalTok{(}\FunctionTok{make\_co2\_cat3}\NormalTok{(subset\_data}\SpecialCharTok{$}\NormalTok{paco2, ABG\_CO2\_LOW, ABG\_CO2\_HIGH)),}
+      \AttributeTok{outcome =}\NormalTok{ discordance\_outcome\_labels[[outcome\_var]],}
+      \AttributeTok{y =}\NormalTok{ y,}
+      \AttributeTok{dual\_tested =}\NormalTok{ dual\_tested}
+\NormalTok{    )}
+\NormalTok{    dual\_rows[[}\FunctionTok{length}\NormalTok{(dual\_rows) }\SpecialCharTok{+} \DecValTok{1}\NormalTok{L]] }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+      \AttributeTok{modality =} \StringTok{"VBG"}\NormalTok{,}
+      \AttributeTok{co2\_category =} \FunctionTok{as.character}\NormalTok{(}\FunctionTok{make\_co2\_cat3}\NormalTok{(subset\_data}\SpecialCharTok{$}\NormalTok{vbg\_co2, VBG\_CO2\_LOW, VBG\_CO2\_HIGH)),}
+      \AttributeTok{outcome =}\NormalTok{ discordance\_outcome\_labels[[outcome\_var]],}
+      \AttributeTok{y =}\NormalTok{ y,}
+      \AttributeTok{dual\_tested =}\NormalTok{ dual\_tested}
+\NormalTok{    )}
+\NormalTok{  \}}
+\NormalTok{  discordance\_dual\_tested\_sensitivity }\OtherTok{\textless{}{-}}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(dual\_rows) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{dual\_tested, }\SpecialCharTok{!}\FunctionTok{is.na}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{co2\_category)) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(outcome, modality, co2\_category) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{summarise}\NormalTok{(}
+      \AttributeTok{n =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{n}\NormalTok{(),}
+      \AttributeTok{events =} \FunctionTok{sum}\NormalTok{(y }\SpecialCharTok{==} \DecValTok{1}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+      \AttributeTok{event\_rate =} \FunctionTok{mean}\NormalTok{(y }\SpecialCharTok{==} \DecValTok{1}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+      \AttributeTok{.groups =} \StringTok{"drop"}
+\NormalTok{    )}
+  \FunctionTok{record\_discordance\_status}\NormalTok{(}
+    \StringTok{"dual\_tested\_sensitivity"}\NormalTok{,}
+    \StringTok{"completed"}\NormalTok{,}
+    \StringTok{"Dual{-}tested encounter event rates by ABG/VBG CO2 category were summarized."}\NormalTok{,}
+    \StringTok{"Results/discordance\_dual\_tested\_sensitivity.csv"}
+\NormalTok{  )}
+\NormalTok{\} }\ControlFlowTok{else}\NormalTok{ \{}
+\NormalTok{  discordance\_dual\_tested\_sensitivity }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+    \AttributeTok{outcome =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{modality =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{co2\_category =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{n =} \DecValTok{0}\NormalTok{L,}
+    \AttributeTok{events =} \DecValTok{0}\NormalTok{L,}
+    \AttributeTok{event\_rate =} \ConstantTok{NA\_real\_}\NormalTok{,}
+    \AttributeTok{component\_status =} \StringTok{"skipped"}\NormalTok{,}
+    \AttributeTok{reason =} \StringTok{"no\_dual\_tested\_encounters"}
+\NormalTok{  )}
+  \FunctionTok{record\_discordance\_status}\NormalTok{(}
+    \StringTok{"dual\_tested\_sensitivity"}\NormalTok{,}
+    \StringTok{"skipped"}\NormalTok{,}
+    \StringTok{"No dual{-}tested encounters were available in this render subset."}\NormalTok{,}
+    \StringTok{"Results/discordance\_dual\_tested\_sensitivity.csv"}\NormalTok{,}
+    \AttributeTok{optional =} \ConstantTok{TRUE}
+\NormalTok{  )}
+\NormalTok{\}}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_dual\_tested\_sensitivity,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_dual\_tested\_sensitivity.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+
+\NormalTok{patient\_field }\OtherTok{\textless{}{-}} \FunctionTok{first\_existing\_col}\NormalTok{(}
+  \FunctionTok{c}\NormalTok{(}\StringTok{"patient\_id"}\NormalTok{, }\StringTok{"person\_id"}\NormalTok{, }\StringTok{"pat\_id"}\NormalTok{, }\StringTok{"empi"}\NormalTok{, }\StringTok{"mrn"}\NormalTok{, }\StringTok{"member\_id"}\NormalTok{),}
+  \FunctionTok{names}\NormalTok{(subset\_data)}
+\NormalTok{)}
+\NormalTok{encounter\_date\_field }\OtherTok{\textless{}{-}} \FunctionTok{first\_existing\_col}\NormalTok{(}
+  \FunctionTok{c}\NormalTok{(}\StringTok{"encounter\_date"}\NormalTok{, }\StringTok{"encounter\_datetime"}\NormalTok{, }\StringTok{"encounter\_time"}\NormalTok{, }\StringTok{"enc\_date"}\NormalTok{),}
+  \FunctionTok{names}\NormalTok{(subset\_data)}
+\NormalTok{)}
+
+\ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{is.na}\NormalTok{(patient\_field)) \{}
+\NormalTok{  first\_df }\OtherTok{\textless{}{-}}\NormalTok{ subset\_data}
+  \ControlFlowTok{if}\NormalTok{ (}\SpecialCharTok{!}\FunctionTok{is.na}\NormalTok{(encounter\_date\_field)) \{}
+\NormalTok{    first\_df}\SpecialCharTok{$}\NormalTok{.encounter\_order }\OtherTok{\textless{}{-}} \FunctionTok{suppressWarnings}\NormalTok{(}\FunctionTok{as.POSIXct}\NormalTok{(first\_df[[encounter\_date\_field]]))}
+\NormalTok{  \} }\ControlFlowTok{else}\NormalTok{ \{}
+\NormalTok{    first\_df}\SpecialCharTok{$}\NormalTok{.encounter\_order }\OtherTok{\textless{}{-}} \FunctionTok{seq\_len}\NormalTok{(}\FunctionTok{nrow}\NormalTok{(first\_df))}
+\NormalTok{  \}}
+\NormalTok{  first\_df }\OtherTok{\textless{}{-}}\NormalTok{ first\_df }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{arrange}\NormalTok{(.data[[patient\_field]], .data}\SpecialCharTok{$}\NormalTok{.encounter\_order) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{group\_by}\NormalTok{(.data[[patient\_field]]) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{slice\_head}\NormalTok{(}\AttributeTok{n =} \DecValTok{1}\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{ungroup}\NormalTok{()}
+\NormalTok{  discordance\_first\_encounter\_sensitivity }\OtherTok{\textless{}{-}}\NormalTok{ tidyr}\SpecialCharTok{::}\FunctionTok{crossing}\NormalTok{(}
+    \AttributeTok{outcome\_var =}\NormalTok{ discordance\_outcome\_vars,}
+    \AttributeTok{group =}\NormalTok{ discordance\_groups}
+\NormalTok{  ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{rowwise}\NormalTok{() }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+      \AttributeTok{outcome =}\NormalTok{ discordance\_outcome\_labels[[outcome\_var]],}
+      \AttributeTok{treat\_var =} \FunctionTok{ifelse}\NormalTok{(group }\SpecialCharTok{==} \StringTok{"ABG"}\NormalTok{, }\StringTok{"has\_abg"}\NormalTok{, }\StringTok{"has\_vbg"}\NormalTok{),}
+      \AttributeTok{n\_tested =} \FunctionTok{sum}\NormalTok{(first\_df[[treat\_var]] }\SpecialCharTok{==} \DecValTok{1}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+      \AttributeTok{events =} \FunctionTok{sum}\NormalTok{(}\FunctionTok{to01}\NormalTok{(first\_df[[outcome\_var]]) }\SpecialCharTok{==} \DecValTok{1} \SpecialCharTok{\&}\NormalTok{ first\_df[[treat\_var]] }\SpecialCharTok{==} \DecValTok{1}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{),}
+      \AttributeTok{event\_rate =} \FunctionTok{ifelse}\NormalTok{(n\_tested }\SpecialCharTok{\textgreater{}} \DecValTok{0}\NormalTok{, events }\SpecialCharTok{/}\NormalTok{ n\_tested, }\ConstantTok{NA\_real\_}\NormalTok{),}
+      \AttributeTok{patient\_field =}\NormalTok{ patient\_field,}
+      \AttributeTok{encounter\_date\_field =} \FunctionTok{ifelse}\NormalTok{(}\FunctionTok{is.na}\NormalTok{(encounter\_date\_field), }\StringTok{""}\NormalTok{, encounter\_date\_field)}
+\NormalTok{    ) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{ungroup}\NormalTok{() }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{select}\NormalTok{(outcome, group, n\_tested, events, event\_rate, patient\_field, encounter\_date\_field)}
+  \FunctionTok{record\_discordance\_status}\NormalTok{(}
+    \StringTok{"first\_encounter\_sensitivity"}\NormalTok{,}
+    \StringTok{"completed"}\NormalTok{,}
+    \FunctionTok{paste0}\NormalTok{(}\StringTok{"First{-}encounter sensitivity used patient field "}\NormalTok{, patient\_field, }\StringTok{"."}\NormalTok{),}
+    \StringTok{"Results/discordance\_first\_encounter\_sensitivity.csv"}\NormalTok{,}
+    \AttributeTok{optional =} \ConstantTok{TRUE}
+\NormalTok{  )}
+\NormalTok{\} }\ControlFlowTok{else}\NormalTok{ \{}
+\NormalTok{  discordance\_first\_encounter\_sensitivity }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+    \AttributeTok{outcome =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{group =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{n\_tested =} \ConstantTok{NA\_integer\_}\NormalTok{,}
+    \AttributeTok{events =} \ConstantTok{NA\_integer\_}\NormalTok{,}
+    \AttributeTok{event\_rate =} \ConstantTok{NA\_real\_}\NormalTok{,}
+    \AttributeTok{patient\_field =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{encounter\_date\_field =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{component\_status =} \StringTok{"skipped"}\NormalTok{,}
+    \AttributeTok{reason =} \StringTok{"patient\_identifier\_unavailable"}
+\NormalTok{  )}
+  \FunctionTok{record\_discordance\_status}\NormalTok{(}
+    \StringTok{"first\_encounter\_sensitivity"}\NormalTok{,}
+    \StringTok{"skipped"}\NormalTok{,}
+    \StringTok{"No patient identifier was available for first{-}encounter restriction."}\NormalTok{,}
+    \StringTok{"Results/discordance\_first\_encounter\_sensitivity.csv"}\NormalTok{,}
+    \AttributeTok{optional =} \ConstantTok{TRUE}
+\NormalTok{  )}
+\NormalTok{\}}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_first\_encounter\_sensitivity,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_first\_encounter\_sensitivity.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+
+\DocumentationTok{\#\# Timing sensitivity}
+\NormalTok{timing\_names }\OtherTok{\textless{}{-}} \FunctionTok{names}\NormalTok{(subset\_data\_raw)}
+\NormalTok{gas\_time\_candidates }\OtherTok{\textless{}{-}} \FunctionTok{candidate\_cols}\NormalTok{(}
+\NormalTok{  timing\_names,}
+  \StringTok{"(abg|vbg|blood\_gas|gas).*(date|time|timestamp|datetime)"}\NormalTok{,}
+  \AttributeTok{max\_n =} \DecValTok{20}
+\NormalTok{)}
+\NormalTok{proc\_time\_candidates }\OtherTok{\textless{}{-}} \FunctionTok{candidate\_cols}\NormalTok{(}
+\NormalTok{  timing\_names,}
+  \StringTok{"(imv|niv).*(date|time|timestamp|datetime)"}\NormalTok{,}
+  \AttributeTok{max\_n =} \DecValTok{20}
+\NormalTok{)}
+
+\ControlFlowTok{if}\NormalTok{ (}\FunctionTok{length}\NormalTok{(gas\_time\_candidates) }\SpecialCharTok{\&\&} \FunctionTok{length}\NormalTok{(proc\_time\_candidates)) \{}
+\NormalTok{  discordance\_timing\_status }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+    \AttributeTok{component =} \StringTok{"timing\_sensitivity"}\NormalTok{,}
+    \AttributeTok{status =} \StringTok{"available\_fields\_detected"}\NormalTok{,}
+    \AttributeTok{gas\_time\_fields =} \FunctionTok{paste}\NormalTok{(gas\_time\_candidates, }\AttributeTok{collapse =} \StringTok{"; "}\NormalTok{),}
+    \AttributeTok{procedure\_time\_fields =} \FunctionTok{paste}\NormalTok{(proc\_time\_candidates, }\AttributeTok{collapse =} \StringTok{"; "}\NormalTok{),}
+    \AttributeTok{reason =} \StringTok{"candidate\_fields\_available\_manual\_review\_needed"}
+\NormalTok{  )}
+\NormalTok{  discordance\_timing\_sensitivity }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+    \AttributeTok{outcome =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{group =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{n\_candidate\_gas\_time\_fields =} \FunctionTok{length}\NormalTok{(gas\_time\_candidates),}
+    \AttributeTok{n\_candidate\_procedure\_time\_fields =} \FunctionTok{length}\NormalTok{(proc\_time\_candidates),}
+    \AttributeTok{status =} \StringTok{"candidate\_fields\_detected"}\NormalTok{,}
+    \AttributeTok{reason =} \StringTok{"Field naming is not specific enough for an automated before{-}procedure restriction."}
+\NormalTok{  )}
+  \FunctionTok{record\_discordance\_status}\NormalTok{(}
+    \StringTok{"timing\_sensitivity"}\NormalTok{,}
+    \StringTok{"skipped"}\NormalTok{,}
+    \StringTok{"Candidate timing fields were detected, but no unambiguous gas/procedure timestamp pairs were available."}\NormalTok{,}
+    \StringTok{"Results/discordance\_timing\_status.csv"}\NormalTok{,}
+    \AttributeTok{optional =} \ConstantTok{TRUE}
+\NormalTok{  )}
+\NormalTok{\} }\ControlFlowTok{else}\NormalTok{ \{}
+\NormalTok{  discordance\_timing\_status }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+    \AttributeTok{component =} \StringTok{"timing\_sensitivity"}\NormalTok{,}
+    \AttributeTok{status =} \StringTok{"skipped"}\NormalTok{,}
+    \AttributeTok{gas\_time\_fields =} \FunctionTok{paste}\NormalTok{(gas\_time\_candidates, }\AttributeTok{collapse =} \StringTok{"; "}\NormalTok{),}
+    \AttributeTok{procedure\_time\_fields =} \FunctionTok{paste}\NormalTok{(proc\_time\_candidates, }\AttributeTok{collapse =} \StringTok{"; "}\NormalTok{),}
+    \AttributeTok{reason =} \StringTok{"timestamp\_fields\_unavailable"}
+\NormalTok{  )}
+\NormalTok{  discordance\_timing\_sensitivity }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+    \AttributeTok{outcome =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{group =} \ConstantTok{NA\_character\_}\NormalTok{,}
+    \AttributeTok{n\_candidate\_gas\_time\_fields =} \FunctionTok{length}\NormalTok{(gas\_time\_candidates),}
+    \AttributeTok{n\_candidate\_procedure\_time\_fields =} \FunctionTok{length}\NormalTok{(proc\_time\_candidates),}
+    \AttributeTok{status =} \StringTok{"skipped"}\NormalTok{,}
+    \AttributeTok{reason =} \StringTok{"timestamp\_fields\_unavailable"}
+\NormalTok{  )}
+  \FunctionTok{record\_discordance\_status}\NormalTok{(}
+    \StringTok{"timing\_sensitivity"}\NormalTok{,}
+    \StringTok{"skipped"}\NormalTok{,}
+    \StringTok{"Blood{-}gas/procedure timestamp fields were unavailable."}\NormalTok{,}
+    \StringTok{"Results/discordance\_timing\_status.csv"}\NormalTok{,}
+    \AttributeTok{optional =} \ConstantTok{TRUE}
+\NormalTok{  )}
+\NormalTok{\}}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_timing\_status,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_timing\_status.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_timing\_sensitivity,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_timing\_sensitivity.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+
+\DocumentationTok{\#\# Summary of hypotheses and interpretation}
+\NormalTok{standardization\_supported }\OtherTok{\textless{}{-}} \FunctionTok{any}\NormalTok{(}
+  \FunctionTok{is.finite}\NormalTok{(discordance\_standardization\_summary}\SpecialCharTok{$}\NormalTok{gap\_current\_ref) }\SpecialCharTok{\&}
+\NormalTok{    (}
+      \FunctionTok{abs}\NormalTok{(discordance\_standardization\_summary}\SpecialCharTok{$}\NormalTok{gap\_common\_ref) }\SpecialCharTok{\textless{}=}
+        \FloatTok{0.75} \SpecialCharTok{*} \FunctionTok{abs}\NormalTok{(discordance\_standardization\_summary}\SpecialCharTok{$}\NormalTok{gap\_current\_ref) }\SpecialCharTok{|}
+        \FunctionTok{abs}\NormalTok{(discordance\_standardization\_summary}\SpecialCharTok{$}\NormalTok{gap\_marginal\_standardized) }\SpecialCharTok{\textless{}=}
+          \FloatTok{0.75} \SpecialCharTok{*} \FunctionTok{abs}\NormalTok{(discordance\_standardization\_summary}\SpecialCharTok{$}\NormalTok{gap\_current\_ref)}
+\NormalTok{    ),}
+  \AttributeTok{na.rm =} \ConstantTok{TRUE}
+\NormalTok{)}
+
+\NormalTok{scale\_supported }\OtherTok{\textless{}{-}} \FunctionTok{any}\NormalTok{(}
+  \FunctionTok{grepl}\NormalTok{(}\StringTok{"Relative odds are closer"}\NormalTok{, discordance\_scale\_summary}\SpecialCharTok{$}\NormalTok{comment, }\AttributeTok{fixed =} \ConstantTok{TRUE}\NormalTok{),}
+  \AttributeTok{na.rm =} \ConstantTok{TRUE}
+\NormalTok{)}
+
+\NormalTok{capture\_supported }\OtherTok{\textless{}{-}} \FunctionTok{any}\NormalTok{(}
+\NormalTok{  missingness\_capture\_summary}\SpecialCharTok{$}\NormalTok{max\_abs\_abg\_vbg\_difference }\SpecialCharTok{\textgreater{}} \FloatTok{0.05}\NormalTok{,}
+  \AttributeTok{na.rm =} \ConstantTok{TRUE}
+\NormalTok{)}
+
+\NormalTok{tail\_supported }\OtherTok{\textless{}{-}} \FunctionTok{any}\NormalTok{(discordance\_tail\_support\_summary}\SpecialCharTok{$}\NormalTok{support\_flag }\SpecialCharTok{\%in\%} \ConstantTok{TRUE}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)}
+
+\NormalTok{setting\_supported }\OtherTok{\textless{}{-}} \FunctionTok{any}\NormalTok{(discordance\_setting\_rate\_ranges}\SpecialCharTok{$}\NormalTok{rate\_range }\SpecialCharTok{\textgreater{}} \FloatTok{0.10}\NormalTok{, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)}
+
+\NormalTok{dual\_inconclusive }\OtherTok{\textless{}{-}} \FunctionTok{any}\NormalTok{(}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(discordance\_status\_rows) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{component }\SpecialCharTok{==} \StringTok{"dual\_tested\_sensitivity"}\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{pull}\NormalTok{(status) }\SpecialCharTok{==} \StringTok{"skipped"}\NormalTok{,}
+  \AttributeTok{na.rm =} \ConstantTok{TRUE}
+\NormalTok{)}
+
+\NormalTok{timing\_inconclusive }\OtherTok{\textless{}{-}} \FunctionTok{any}\NormalTok{(}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{bind\_rows}\NormalTok{(discordance\_status\_rows) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{component }\SpecialCharTok{==} \StringTok{"timing\_sensitivity"}\NormalTok{) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{pull}\NormalTok{(status) }\SpecialCharTok{==} \StringTok{"skipped"}\NormalTok{,}
+  \AttributeTok{na.rm =} \ConstantTok{TRUE}
+\NormalTok{)}
+
+\NormalTok{discordance\_interpretation\_summary }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+  \AttributeTok{hypothesis =} \FunctionTok{c}\NormalTok{(}
+    \StringTok{"Reference{-}profile / standardization effect"}\NormalTok{,}
+    \StringTok{"Scale / noncollapsibility effect"}\NormalTok{,}
+    \StringTok{"Differential missingness or procedure capture"}\NormalTok{,}
+    \StringTok{"Tail support / positivity"}\NormalTok{,}
+    \StringTok{"Setting or workflow heterogeneity"}\NormalTok{,}
+    \StringTok{"Dual{-}tested measurement structure"}\NormalTok{,}
+    \StringTok{"Same{-}encounter timing structure"}
+\NormalTok{  ),}
+  \AttributeTok{supported =} \FunctionTok{c}\NormalTok{(}
+\NormalTok{    standardization\_supported,}
+\NormalTok{    scale\_supported,}
+\NormalTok{    capture\_supported,}
+\NormalTok{    tail\_supported,}
+\NormalTok{    setting\_supported,}
+    \ConstantTok{FALSE}\NormalTok{,}
+    \ConstantTok{FALSE}
+\NormalTok{  ),}
+  \AttributeTok{not\_supported =} \FunctionTok{c}\NormalTok{(}
+    \SpecialCharTok{!}\NormalTok{standardization\_supported,}
+    \SpecialCharTok{!}\NormalTok{scale\_supported,}
+    \SpecialCharTok{!}\NormalTok{capture\_supported,}
+    \SpecialCharTok{!}\NormalTok{tail\_supported,}
+    \SpecialCharTok{!}\NormalTok{setting\_supported,}
+    \SpecialCharTok{!}\NormalTok{dual\_inconclusive,}
+    \SpecialCharTok{!}\NormalTok{timing\_inconclusive}
+\NormalTok{  ),}
+  \AttributeTok{inconclusive =} \FunctionTok{c}\NormalTok{(}
+    \ConstantTok{FALSE}\NormalTok{,}
+    \ConstantTok{FALSE}\NormalTok{,}
+    \ConstantTok{FALSE}\NormalTok{,}
+    \ConstantTok{FALSE}\NormalTok{,}
+    \ConstantTok{FALSE}\NormalTok{,}
+\NormalTok{    dual\_inconclusive,}
+\NormalTok{    timing\_inconclusive}
+\NormalTok{  ),}
+  \AttributeTok{key\_evidence =} \FunctionTok{c}\NormalTok{(}
+    \FunctionTok{ifelse}\NormalTok{(standardization\_supported, }\StringTok{"Common or marginal standardization shrank at least one current probability gap by \textgreater{}=25\%."}\NormalTok{, }\StringTok{"Standardization did not shrink probability gaps by \textgreater{}=25\%."}\NormalTok{),}
+    \FunctionTok{ifelse}\NormalTok{(scale\_supported, }\StringTok{"At least one contrast had closer ABG{-}VBG agreement on OR scale than risk{-}difference scale."}\NormalTok{, }\StringTok{"OR{-}scale agreement was not consistently closer than probability{-}scale agreement."}\NormalTok{),}
+    \FunctionTok{ifelse}\NormalTok{(capture\_supported, }\StringTok{"Detected missingness/capture summaries show \textgreater{}5 percentage{-}point or SMD{-}scale differences."}\NormalTok{, }\StringTok{"Detected missingness/capture summaries did not show \textgreater{}5{-}point differences."}\NormalTok{),}
+    \FunctionTok{ifelse}\NormalTok{(tail\_supported, }\StringTok{"At least one clinical/quantile bin had ESS \textless{}100 or weighted events \textless{}10."}\NormalTok{, }\StringTok{"Tail bins did not trigger the ESS/event{-}count support flag."}\NormalTok{),}
+    \FunctionTok{ifelse}\NormalTok{(setting\_supported, }\StringTok{"Within{-}modality weighted event{-}rate range exceeded 10 percentage points for at least one setting variable."}\NormalTok{, }\StringTok{"Within{-}modality setting{-}specific weighted event{-}rate ranges were \textless{}=10 percentage points."}\NormalTok{),}
+    \FunctionTok{ifelse}\NormalTok{(dual\_inconclusive, }\StringTok{"Dual{-}tested subset was unavailable in this render subset."}\NormalTok{, }\StringTok{"Dual{-}tested subset event rates were generated for direct review."}\NormalTok{),}
+    \FunctionTok{ifelse}\NormalTok{(timing\_inconclusive, }\StringTok{"Timestamp fields were unavailable or ambiguous."}\NormalTok{, }\StringTok{"Timing fields were available for direct review."}\NormalTok{)}
+\NormalTok{  ),}
+  \AttributeTok{recommended\_next\_step =} \FunctionTok{c}\NormalTok{(}
+    \StringTok{"If supported, consider whether manuscript probability curves should use common or marginal standardization in a future methodological ticket."}\NormalTok{,}
+    \StringTok{"Use risk differences/RRs beside ORs when communicating procedure outcomes."}\NormalTok{,}
+    \StringTok{"If supported, audit NIV/IMV source{-}field construction and coding{-}density definitions before changing models."}\NormalTok{,}
+    \StringTok{"If supported, avoid overinterpreting tail probability gaps and consider trimming/support annotations."}\NormalTok{,}
+    \StringTok{"If supported, consider setting{-}stratified or setting{-}interaction sensitivity models."}\NormalTok{,}
+    \StringTok{"Compare dual{-}tested event{-}rate patterns against primary ABG/VBG gaps before attributing discordance to modality."}\NormalTok{,}
+    \StringTok{"If timestamps become available, restrict to blood gases clearly preceding NIV/IMV."}
+\NormalTok{  )}
+\NormalTok{)}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_interpretation\_summary,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_interpretation\_summary.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+\FunctionTok{record\_discordance\_status}\NormalTok{(}
+  \StringTok{"interpretation\_summary"}\NormalTok{,}
+  \StringTok{"completed"}\NormalTok{,}
+  \StringTok{"Hypothesis{-}level interpretation summary was generated."}\NormalTok{,}
+  \StringTok{"Results/discordance\_interpretation\_summary.csv"}
+\NormalTok{)}
+
+\NormalTok{status\_df\_pre\_manifest }\OtherTok{\textless{}{-}} \FunctionTok{write\_discordance\_status}\NormalTok{()}
+
+\NormalTok{discordance\_required\_artifacts }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}
+  \StringTok{"discordance\_validation\_status.csv"}\NormalTok{,}
+  \StringTok{"discordance\_current\_summary.csv"}\NormalTok{,}
+  \StringTok{"discordance\_gap\_metrics.csv"}\NormalTok{,}
+  \StringTok{"discordance\_xref\_common\_prob\_curves.csv"}\NormalTok{,}
+  \StringTok{"discordance\_marginal\_standardized\_prob\_curves.csv"}\NormalTok{,}
+  \StringTok{"discordance\_marginal\_standardization\_status.csv"}\NormalTok{,}
+  \StringTok{"discordance\_standardization\_summary.csv"}\NormalTok{,}
+  \StringTok{"discordance\_scale\_summary.csv"}\NormalTok{,}
+  \StringTok{"discordance\_missingness\_outcome\_fields.csv"}\NormalTok{,}
+  \StringTok{"discordance\_procedure\_capture\_proxies.csv"}\NormalTok{,}
+  \StringTok{"discordance\_missing\_indicator\_balance.csv"}\NormalTok{,}
+  \StringTok{"discordance\_missingness\_capture\_summary.csv"}\NormalTok{,}
+  \StringTok{"discordance\_tail\_support\_summary.csv"}\NormalTok{,}
+  \StringTok{"discordance\_tail\_support\_by\_bin.csv"}\NormalTok{,}
+  \StringTok{"discordance\_setting\_sensitivity.csv"}\NormalTok{,}
+  \StringTok{"discordance\_setting\_rate\_ranges.csv"}\NormalTok{,}
+  \StringTok{"discordance\_dual\_tested\_sensitivity.csv"}\NormalTok{,}
+  \StringTok{"discordance\_first\_encounter\_sensitivity.csv"}\NormalTok{,}
+  \StringTok{"discordance\_timing\_sensitivity.csv"}\NormalTok{,}
+  \StringTok{"discordance\_timing\_status.csv"}\NormalTok{,}
+  \StringTok{"discordance\_interpretation\_summary.csv"}\NormalTok{,}
+  \StringTok{"figs/discordance\_probability\_standardization\_niv\_imv.png"}\NormalTok{,}
+  \StringTok{"figs/discordance\_tail\_support\_niv\_imv.png"}\NormalTok{,}
+  \StringTok{"discordance\_artifact\_manifest.csv"}
+\NormalTok{)}
+
+\NormalTok{discordance\_artifact\_manifest }\OtherTok{\textless{}{-}}\NormalTok{ tibble}\SpecialCharTok{::}\FunctionTok{tibble}\NormalTok{(}
+  \AttributeTok{artifact\_path =}\NormalTok{ discordance\_required\_artifacts,}
+  \AttributeTok{required =} \ConstantTok{TRUE}\NormalTok{,}
+  \AttributeTok{kind =}\NormalTok{ dplyr}\SpecialCharTok{::}\FunctionTok{case\_when}\NormalTok{(}
+    \FunctionTok{grepl}\NormalTok{(}\StringTok{"\^{}figs/"}\NormalTok{, artifact\_path) }\SpecialCharTok{\textasciitilde{}} \StringTok{"figure"}\NormalTok{,}
+    \FunctionTok{grepl}\NormalTok{(}\StringTok{"manifest|status"}\NormalTok{, artifact\_path) }\SpecialCharTok{\textasciitilde{}} \StringTok{"validation"}\NormalTok{,}
+    \ConstantTok{TRUE} \SpecialCharTok{\textasciitilde{}} \StringTok{"csv"}
+\NormalTok{  ),}
+  \AttributeTok{exists =} \FunctionTok{vapply}\NormalTok{(}
+\NormalTok{    artifact\_path,}
+    \ControlFlowTok{function}\NormalTok{(path) \{}
+      \ControlFlowTok{if}\NormalTok{ (}\FunctionTok{identical}\NormalTok{(path, }\StringTok{"discordance\_artifact\_manifest.csv"}\NormalTok{)) }\FunctionTok{return}\NormalTok{(}\ConstantTok{TRUE}\NormalTok{)}
+      \FunctionTok{file.exists}\NormalTok{(}\FunctionTok{results\_path}\NormalTok{(path))}
+\NormalTok{    \},}
+    \FunctionTok{logical}\NormalTok{(}\DecValTok{1}\NormalTok{L)}
+\NormalTok{  ),}
+  \AttributeTok{purpose =} \StringTok{"NIV/IMV probability{-}OR discordance diagnostic artifact."}
+\NormalTok{)}
+\FunctionTok{write\_csv\_safely}\NormalTok{(}
+\NormalTok{  discordance\_artifact\_manifest,}
+  \FunctionTok{results\_path}\NormalTok{(}\StringTok{"discordance\_artifact\_manifest.csv"}\NormalTok{),}
+  \AttributeTok{row\_names =} \ConstantTok{FALSE}
+\NormalTok{)}
+
+\NormalTok{missing\_discordance\_artifacts }\OtherTok{\textless{}{-}}\NormalTok{ discordance\_artifact\_manifest }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(.data}\SpecialCharTok{$}\NormalTok{required, }\SpecialCharTok{!}\NormalTok{.data}\SpecialCharTok{$}\NormalTok{exists) }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{pull}\NormalTok{(artifact\_path)}
+\ControlFlowTok{if}\NormalTok{ (}\FunctionTok{length}\NormalTok{(missing\_discordance\_artifacts)) \{}
+  \FunctionTok{stop}\NormalTok{(}
+    \StringTok{"Discordance artifact completeness check failed: "}\NormalTok{,}
+    \FunctionTok{paste}\NormalTok{(missing\_discordance\_artifacts, }\AttributeTok{collapse =} \StringTok{", "}\NormalTok{)}
+\NormalTok{  )}
+\NormalTok{\}}
+\FunctionTok{record\_discordance\_status}\NormalTok{(}
+  \StringTok{"artifact\_manifest"}\NormalTok{,}
+  \StringTok{"completed"}\NormalTok{,}
+  \StringTok{"All required discordance artifacts were present."}\NormalTok{,}
+  \StringTok{"Results/discordance\_artifact\_manifest.csv"}
+\NormalTok{)}
+\NormalTok{status\_df }\OtherTok{\textless{}{-}} \FunctionTok{write\_discordance\_status}\NormalTok{()}
+
+\NormalTok{required\_status\_failures }\OtherTok{\textless{}{-}}\NormalTok{ status\_df }\SpecialCharTok{|\textgreater{}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{filter}\NormalTok{(}\SpecialCharTok{!}\NormalTok{.data}\SpecialCharTok{$}\NormalTok{optional, .data}\SpecialCharTok{$}\NormalTok{status }\SpecialCharTok{!=} \StringTok{"completed"}\NormalTok{)}
+\ControlFlowTok{if}\NormalTok{ (}\FunctionTok{nrow}\NormalTok{(required\_status\_failures)) \{}
+  \FunctionTok{stop}\NormalTok{(}
+    \StringTok{"Required discordance component(s) did not complete: "}\NormalTok{,}
+    \FunctionTok{paste}\NormalTok{(required\_status\_failures}\SpecialCharTok{$}\NormalTok{component, }\AttributeTok{collapse =} \StringTok{", "}\NormalTok{)}
+\NormalTok{  )}
+\NormalTok{\}}
+
+\FunctionTok{render\_table\_pdf}\NormalTok{(}
+\NormalTok{  discordance\_interpretation\_summary }\SpecialCharTok{|\textgreater{}}
+\NormalTok{    dplyr}\SpecialCharTok{::}\FunctionTok{mutate}\NormalTok{(}
+      \AttributeTok{supported =} \FunctionTok{ifelse}\NormalTok{(supported, }\StringTok{"yes"}\NormalTok{, }\StringTok{"no"}\NormalTok{),}
+      \AttributeTok{not\_supported =} \FunctionTok{ifelse}\NormalTok{(not\_supported, }\StringTok{"yes"}\NormalTok{, }\StringTok{"no"}\NormalTok{),}
+      \AttributeTok{inconclusive =} \FunctionTok{ifelse}\NormalTok{(inconclusive, }\StringTok{"yes"}\NormalTok{, }\StringTok{"no"}\NormalTok{)}
+\NormalTok{    ),}
+  \AttributeTok{caption =} \StringTok{"Summary of plausible explanations for NIV/IMV probability{-}OR discordance"}\NormalTok{,}
+  \AttributeTok{file\_stub =} \StringTok{"discordance\_interpretation\_summary\_display"}\NormalTok{,}
+  \AttributeTok{wide =} \ConstantTok{TRUE}\NormalTok{,}
+  \AttributeTok{digits =} \DecValTok{2}\NormalTok{,}
+  \AttributeTok{max\_cols =} \DecValTok{5}\NormalTok{,}
+  \AttributeTok{landscape =} \ConstantTok{TRUE}
+\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{landscape}
+
+\begin{center}\textbf{Summary of plausible explanations for NIV/IMV probability-OR discordance}\end{center}
+
+\begin{table}[!h]
+\centering\begingroup\fontsize{6}{8}\selectfont
+
+\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
+\begin{tabular}{lllll}
+\toprule
+hypothesis & supported & not\_supported & inconclusive & key\_evidence\\
+\midrule
+Reference-profile / standardization effect & yes & no & no & Common or marginal standardization shrank at least one current probability gap by >=25\%.\\
+Scale / noncollapsibility effect & no & yes & no & OR-scale agreement was not consistently closer than probability-scale agreement.\\
+Differential missingness or procedure capture & yes & no & no & Detected missingness/capture summaries show >5 percentage-point or SMD-scale differences.\\
+Tail support / positivity & yes & no & no & At least one clinical/quantile bin had ESS <100 or weighted events <10.\\
+Setting or workflow heterogeneity & yes & no & no & Within-modality weighted event-rate range exceeded 10 percentage points for at least one setting variable.\\
+\addlinespace
+Dual-tested measurement structure & no & yes & no & Dual-tested subset event rates were generated for direct review.\\
+Same-encounter timing structure & no & no & yes & Timestamp fields were unavailable or ambiguous.\\
+\bottomrule
+\end{tabular}}
+\endgroup{}
+\end{table}
+
+\begin{table}[!h]
+\centering\begingroup\fontsize{6}{8}\selectfont
+
+\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
+\begin{tabular}{l}
+\toprule
+recommended\_next\_step\\
+\midrule
+If supported, consider whether manuscript probability curves should use common or marginal standardization in a future methodological ticket.\\
+Use risk differences/RRs beside ORs when communicating procedure outcomes.\\
+If supported, audit NIV/IMV source-field construction and coding-density definitions before changing models.\\
+If supported, avoid overinterpreting tail probability gaps and consider trimming/support annotations.\\
+If supported, consider setting-stratified or setting-interaction sensitivity models.\\
+\addlinespace
+Compare dual-tested event-rate patterns against primary ABG/VBG gaps before attributing discordance to modality.\\
+If timestamps become available, restrict to blood gases clearly preceding NIV/IMV.\\
+\bottomrule
+\end{tabular}}
+\endgroup{}
+\end{table}
+
+\end{landscape}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{cat}\NormalTok{(}
+  \StringTok{"Summary of plausible explanations for NIV/IMV probability{-}OR discordance}\SpecialCharTok{\textbackslash{}n\textbackslash{}n}\StringTok{"}\NormalTok{,}
+  \StringTok{"{-} Required discordance diagnostics completed in run mode \textasciigrave{}"}\NormalTok{, RUN\_MODE, }\StringTok{"\textasciigrave{} with \textasciigrave{}pilot\_frac = "}\NormalTok{, PILOT\_FRAC, }\StringTok{"\textasciigrave{}.}\SpecialCharTok{\textbackslash{}n}\StringTok{"}\NormalTok{,}
+  \StringTok{"{-} Optional timing, first{-}encounter, dual{-}tested, and site{-}specific diagnostics may be marked skipped when required fields or rows are unavailable.}\SpecialCharTok{\textbackslash{}n}\StringTok{"}\NormalTok{,}
+  \StringTok{"{-} Detailed artifacts are written under \textasciigrave{}Results/discordance\_*\textasciigrave{} and \textasciigrave{}Results/figs/discordance\_*\textasciigrave{}.}\SpecialCharTok{\textbackslash{}n}\StringTok{"}\NormalTok{,}
+  \AttributeTok{sep =} \StringTok{""}
+\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+Summary of plausible explanations for NIV/IMV probability-OR discordance
+
+\begin{itemize}
+\tightlist
+\item
+  Required discordance diagnostics completed in run mode \texttt{pilot}
+  with \texttt{pilot\_frac\ =\ 0.01}.
+\item
+  Optional timing, first-encounter, dual-tested, and site-specific
+  diagnostics may be marked skipped when required fields or rows are
+  unavailable.
+\item
+  Detailed artifacts are written under \texttt{Results/discordance\_*}
+  and \texttt{Results/figs/discordance\_*}.
+\end{itemize}
+
 \begin{Shaded}
 \begin{Highlighting}[]
 \CommentTok{\# Purpose: diagnostics completeness.}
@@ -16399,7 +18407,27 @@ log}\label{performance-runtime-log-1}
   \StringTok{"mice\_pred\_width\_preflight.csv"}\NormalTok{, }\StringTok{"mice\_chain\_diagnostics.csv"}\NormalTok{,}
   \StringTok{"mice\_batches\_log.csv"}\NormalTok{, }\StringTok{"missingness{-}by{-}strata.csv"}\NormalTok{,}
   \StringTok{"missingness{-}drivers.csv"}\NormalTok{, }\StringTok{"missingness{-}pattern.csv"}\NormalTok{, }\StringTok{"plot\_drop\_log.csv"}\NormalTok{,}
-  \StringTok{"mice\_smoketest.log"}
+  \StringTok{"mice\_smoketest.log"}\NormalTok{,}
+  \StringTok{"discordance\_validation\_status.csv"}\NormalTok{, }\StringTok{"discordance\_artifact\_manifest.csv"}\NormalTok{,}
+  \StringTok{"discordance\_current\_summary.csv"}\NormalTok{, }\StringTok{"discordance\_gap\_metrics.csv"}\NormalTok{,}
+  \StringTok{"discordance\_xref\_common\_prob\_curves.csv"}\NormalTok{,}
+  \StringTok{"discordance\_marginal\_standardized\_prob\_curves.csv"}\NormalTok{,}
+  \StringTok{"discordance\_marginal\_standardization\_status.csv"}\NormalTok{,}
+  \StringTok{"discordance\_standardization\_summary.csv"}\NormalTok{, }\StringTok{"discordance\_scale\_summary.csv"}\NormalTok{,}
+  \StringTok{"discordance\_missingness\_outcome\_fields.csv"}\NormalTok{,}
+  \StringTok{"discordance\_procedure\_capture\_proxies.csv"}\NormalTok{,}
+  \StringTok{"discordance\_missing\_indicator\_balance.csv"}\NormalTok{,}
+  \StringTok{"discordance\_missingness\_capture\_summary.csv"}\NormalTok{,}
+  \StringTok{"discordance\_tail\_support\_summary.csv"}\NormalTok{,}
+  \StringTok{"discordance\_tail\_support\_by\_bin.csv"}\NormalTok{,}
+  \StringTok{"discordance\_setting\_sensitivity.csv"}\NormalTok{,}
+  \StringTok{"discordance\_setting\_rate\_ranges.csv"}\NormalTok{,}
+  \StringTok{"discordance\_dual\_tested\_sensitivity.csv"}\NormalTok{,}
+  \StringTok{"discordance\_first\_encounter\_sensitivity.csv"}\NormalTok{,}
+  \StringTok{"discordance\_timing\_sensitivity.csv"}\NormalTok{, }\StringTok{"discordance\_timing\_status.csv"}\NormalTok{,}
+  \StringTok{"discordance\_interpretation\_summary.csv"}\NormalTok{,}
+  \StringTok{"figs/discordance\_probability\_standardization\_niv\_imv.png"}\NormalTok{,}
+  \StringTok{"figs/discordance\_tail\_support\_niv\_imv.png"}
 \NormalTok{)}
 \NormalTok{missing\_files }\OtherTok{\textless{}{-}}\NormalTok{ expected\_diag[}\SpecialCharTok{!}\FunctionTok{file.exists}\NormalTok{(}\FunctionTok{results\_path}\NormalTok{(expected\_diag))]}
 \FunctionTok{stopifnot}\NormalTok{(}\FunctionTok{length}\NormalTok{(missing\_files) }\SpecialCharTok{==} \DecValTok{0}\NormalTok{)}
@@ -17172,8 +19200,8 @@ high & Outcome & Results/model\_fit\_diagnostics.csv & sep\_flag TRUE for 540 / 
 \toprule
 run\_id & run\_ts\\
 \midrule
-20260421\_073405 & 2026-04-21 07:34:05.211923\\
-20260421\_073405 & 2026-04-21 07:34:05.211923\\
+20260421\_092434 & 2026-04-21 09:24:34.367118\\
+20260421\_092434 & 2026-04-21 09:24:34.367118\\
 \bottomrule
 \end{tabular}}
 \endgroup{}

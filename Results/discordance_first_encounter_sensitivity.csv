@@ -1,0 +1,5 @@
+"outcome","group","n_tested","events","event_rate","patient_field","encounter_date_field","run_id","run_ts"
+"IMV","ABG",1906,462,0.242392444910808,"patient_id","encounter_date","20260421_092434","2026-04-21 09:24:34.367118"
+"IMV","VBG",1444,208,0.14404432132964,"patient_id","encounter_date","20260421_092434","2026-04-21 09:24:34.367118"
+"NIV","ABG",1906,183,0.09601259181532,"patient_id","encounter_date","20260421_092434","2026-04-21 09:24:34.367118"
+"NIV","VBG",1444,99,0.0685595567867036,"patient_id","encounter_date","20260421_092434","2026-04-21 09:24:34.367118"

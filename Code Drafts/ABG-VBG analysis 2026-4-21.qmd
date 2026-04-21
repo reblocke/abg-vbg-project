@@ -9649,6 +9649,28 @@ target_balance_table <- function(data, treat_var, weights, covars, levels_ref = 
   dplyr::bind_rows(out)
 }
 
+# helper: keep only model metadata needed for prediction without retaining the
+# fitting function frame through terms/formula environments.
+strip_terms_environment <- function(tt) {
+  stopifnot(inherits(tt, "terms"))
+  attr(tt, ".Environment") <- baseenv()
+  stopifnot(identical(attr(tt, ".Environment"), baseenv()))
+  tt
+}
+
+compact_model_metadata <- function(fit) {
+  fit_terms <- strip_terms_environment(stats::delete.response(stats::terms(fit)))
+  fit_frame <- stats::model.frame(fit)
+  list(
+    terms = fit_terms,
+    xlevels = stats::.getXlevels(fit_terms, fit_frame),
+    contrasts = tryCatch(
+      attr(stats::model.matrix(fit), "contrasts"),
+      error = function(e) NULL
+    )
+  )
+}
+
 # --- Helper: fit 3-level outcome per imputation -------------------------------
 fit_cat3_imp <- function(d, weights, outcome_var, co2_var, treat_var,
                          low_cut, high_cut, group_label, imp_index,
@@ -9710,10 +9732,13 @@ fit_cat3_imp <- function(d, weights, outcome_var, co2_var, treat_var,
   fit <- fit_res$fit
   fit_compact <- NULL
   if (!is.null(fit) && inherits(fit, "svyglm")) {
-    # Store only coef/vcov to avoid carrying heavy fit objects in memory.
-    fit_compact <- list(
-      coef = stats::coef(fit),
-      vcov = stats::vcov(fit)
+    # Store only lightweight model metadata needed for reusable predictions.
+    fit_compact <- c(
+      list(
+        coef = stats::coef(fit),
+        vcov = stats::vcov(fit)
+      ),
+      compact_model_metadata(fit)
     )
   }
   list(fit = fit_compact, diag = diag, warnings = fit_res$warnings)
@@ -9864,10 +9889,17 @@ fit_spline_imp <- function(data, weights, outcome, co2_var, treat_var,
   }
 
   fit_compact <- list(
-    # Compact storage for Rubin pooling.
+    # Compact storage for Rubin pooling and post-hoc diagnostic predictions.
     coef = stats::coef(fit),
-    vcov = stats::vcov(fit)
+    vcov = stats::vcov(fit),
+    formula_text = paste(deparse(fml, width.cutoff = 500L), collapse = " "),
+    outcome = outcome,
+    co2_var = co2_var,
+    adj_vars = adj_vars,
+    spline_df = spline_df,
+    spline_basis = spline_basis
   )
+  fit_compact <- c(fit_compact, compact_model_metadata(fit))
 
   if (!is.null(grid_df)) {
     if (is.null(ref_idx)) {
@@ -15555,6 +15587,1830 @@ get_imp_df <- data.frame(
 write_csv_safely(get_imp_df, results_path("get_imp_usage.csv"), row_names = FALSE)
 ```
 
+# Analysis of the discordance between predicted probabilities and OR for NIV and IMV
+
+This section is diagnostic and additive. It does not change the primary
+manuscript estimates; instead it reproduces the NIV/IMV probability-OR
+discordance and checks whether it is explained by reference profiles,
+probability scale, residual capture/missingness, support, setting, subgroup, or
+timing structure.
+
+## Pilot validation and scope
+
+```{r discordance-diagnostics}
+#| code-block-title: "NIV/IMV probability-OR discordance diagnostics"
+#| include: true
+#| echo: true
+#| results: "asis"
+#| message: false
+# Purpose: additive diagnostics for NIV/IMV probability-OR discordance.
+discordance_outcome_vars <- c("imv_proc", "niv_proc")
+discordance_outcome_labels <- c(imv_proc = "IMV", niv_proc = "NIV")
+discordance_groups <- c("ABG", "VBG")
+
+discordance_status_rows <- list()
+
+record_discordance_status <- function(component, status, reason,
+                                      artifact_path = "",
+                                      optional = FALSE) {
+  discordance_status_rows[[length(discordance_status_rows) + 1L]] <<- tibble::tibble(
+    component = component,
+    status = status,
+    reason = reason,
+    artifact_path = artifact_path,
+    optional = optional,
+    run_mode = RUN_MODE,
+    pilot_frac = PILOT_FRAC
+  )
+  invisible(TRUE)
+}
+
+write_discordance_status <- function() {
+  status_df <- dplyr::bind_rows(discordance_status_rows)
+  write_csv_safely(
+    status_df,
+    results_path("discordance_validation_status.csv"),
+    row_names = FALSE
+  )
+  invisible(status_df)
+}
+
+safe_relative_gap <- function(abg_value, vbg_value) {
+  ifelse(is.finite(vbg_value) & abs(vbg_value) > 0,
+         (abg_value - vbg_value) / abs(vbg_value),
+         NA_real_)
+}
+
+weighted_mean_safe <- function(x, w = NULL) {
+  x <- suppressWarnings(as.numeric(x))
+  if (is.null(w)) {
+    return(mean(x, na.rm = TRUE))
+  }
+  w <- suppressWarnings(as.numeric(w))
+  ok <- is.finite(x) & is.finite(w) & w > 0
+  if (!any(ok)) return(NA_real_)
+  sum(w[ok] * x[ok]) / sum(w[ok])
+}
+
+weighted_ess <- function(w) {
+  w <- suppressWarnings(as.numeric(w))
+  w <- w[is.finite(w) & w > 0]
+  if (!length(w)) return(NA_real_)
+  sum(w)^2 / sum(w^2)
+}
+
+first_existing_col <- function(candidates, data_names) {
+  hits <- candidates[candidates %in% data_names]
+  if (length(hits)) hits[[1L]] else NA_character_
+}
+
+candidate_cols <- function(data_names, pattern, exclude = character(), max_n = Inf) {
+  out <- grep(pattern, data_names, value = TRUE, ignore.case = TRUE, perl = TRUE)
+  out <- setdiff(out, exclude)
+  unique(utils::head(out, max_n))
+}
+
+compact_spline_fit <- function(x) {
+  if (is.list(x) && !is.null(x$fit) && is.list(x$fit) &&
+      !is.null(x$fit$coef) && !is.null(x$fit$vcov)) {
+    return(x$fit)
+  }
+  if (is.list(x) && !is.null(x$coef) && !is.null(x$vcov)) {
+    return(x)
+  }
+  NULL
+}
+
+predict_spline_prob_from_compact <- function(fit_compact, grid_df,
+                                             outcome_var,
+                                             co2_var,
+                                             adj_vars = adj_core) {
+  stopifnot(is.list(fit_compact), !is.null(fit_compact$coef), !is.null(fit_compact$vcov))
+  stopifnot(is.data.frame(grid_df), co2_var %in% names(grid_df))
+
+  beta <- fit_compact$coef
+  V <- fit_compact$vcov
+  bn <- names(beta)
+  if (is.null(bn) || any(!nzchar(bn))) {
+    stop("predict_spline_prob_from_compact: coefficient names are required.")
+  }
+
+  if (!is.null(fit_compact$terms)) {
+    tt <- fit_compact$terms
+    if (!identical(attr(tt, ".Environment"), baseenv())) {
+      stop("predict_spline_prob_from_compact: compact terms retain a non-base environment.")
+    }
+    mf_new <- stats::model.frame(
+      tt,
+      data = grid_df,
+      na.action = stats::na.pass,
+      xlev = fit_compact$xlevels
+    )
+    mm <- stats::model.matrix(tt, mf_new, contrasts.arg = fit_compact$contrasts)
+  } else {
+    rhs_terms <- c(sprintf("splines::ns(%s, %d)", co2_var, SPLINE_DF), adj_vars)
+    fml <- stats::as.formula(paste(outcome_var, "~", paste(rhs_terms, collapse = " + ")))
+    tt <- stats::delete.response(stats::terms(fml))
+    mm <- stats::model.matrix(tt, data = grid_df)
+  }
+
+  missing_cols <- setdiff(bn, colnames(mm))
+  if (length(missing_cols)) {
+    mm <- cbind(
+      mm,
+      matrix(
+        0,
+        nrow = nrow(mm),
+        ncol = length(missing_cols),
+        dimnames = list(NULL, missing_cols)
+      )
+    )
+  }
+  mm <- mm[, bn, drop = FALSE]
+
+  if (!is.null(rownames(V)) && all(bn %in% rownames(V)) && all(bn %in% colnames(V))) {
+    V <- V[bn, bn, drop = FALSE]
+  }
+
+  eta <- as.numeric(mm %*% beta)
+  mmV <- mm %*% V
+  var_eta <- pmax(rowSums(mmV * mm), 0)
+  se_eta <- sqrt(var_eta)
+
+  tibble::as_tibble(grid_df) |>
+    dplyr::mutate(
+      eta = eta,
+      SE_eta = se_eta,
+      var_eta = var_eta,
+      p = stats::plogis(eta),
+      p_LCL = stats::plogis(eta - 1.96 * se_eta),
+      p_UCL = stats::plogis(eta + 1.96 * se_eta)
+    )
+}
+
+pool_spline_prob_curve_from_compact <- function(fit_list, grid_df,
+                                                outcome_var,
+                                                co2_var,
+                                                co2_ref,
+                                                min_ok_frac = 0.9) {
+  pred_list <- lapply(fit_list, function(x) {
+    fit_compact <- compact_spline_fit(x)
+    if (is.null(fit_compact)) return(NULL)
+    tryCatch(
+      predict_spline_prob_from_compact(
+        fit_compact,
+        grid_df = grid_df,
+        outcome_var = outcome_var,
+        co2_var = co2_var
+      ),
+      error = function(e) NULL
+    )
+  })
+
+  n_grid <- nrow(grid_df)
+  ok <- vapply(pred_list, function(x) {
+    is.data.frame(x) &&
+      nrow(x) == n_grid &&
+      all(c("eta", "var_eta") %in% names(x))
+  }, logical(1L))
+  m_tot <- length(ok)
+  m_ok <- sum(ok)
+  if (m_ok < ceiling(min_ok_frac * m_tot)) {
+    stop("Too many failed compact spline predictions: m_ok=", m_ok, " / m_total=", m_tot)
+  }
+
+  eta_mat <- matrix(NA_real_, nrow = n_grid, ncol = m_ok)
+  var_mat <- matrix(NA_real_, nrow = n_grid, ncol = m_ok)
+  ok_idx <- which(ok)
+  for (j in seq_along(ok_idx)) {
+    pred_j <- pred_list[[ok_idx[[j]]]]
+    eta_mat[, j] <- pred_j$eta
+    var_mat[, j] <- pred_j$var_eta
+  }
+
+  qbar <- rowMeans(eta_mat, na.rm = TRUE)
+  ubar <- rowMeans(var_mat, na.rm = TRUE)
+  bvar <- apply(eta_mat, 1, stats::var, na.rm = TRUE)
+  tvar <- ubar + (1 + 1 / m_ok) * bvar
+  se_eta <- sqrt(pmax(tvar, 0))
+
+  tibble::as_tibble(grid_df) |>
+    dplyr::mutate(
+      eta = qbar,
+      SE_eta = se_eta,
+      var_eta = tvar,
+      p = stats::plogis(qbar),
+      p_LCL = stats::plogis(qbar - 1.96 * se_eta),
+      p_UCL = stats::plogis(qbar + 1.96 * se_eta),
+      co2_ref = co2_ref,
+      m_used = m_ok,
+      m_total = m_tot
+    )
+}
+
+nearest_curve_value <- function(curve_df, co2_var, target_value, value_col) {
+  if (!nrow(curve_df) || !(co2_var %in% names(curve_df)) || !(value_col %in% names(curve_df))) {
+    return(NA_real_)
+  }
+  x <- suppressWarnings(as.numeric(curve_df[[co2_var]]))
+  ok <- is.finite(x)
+  if (!any(ok) || !is.finite(target_value)) return(NA_real_)
+  idx <- which(ok)[which.min(abs(x[ok] - target_value))]
+  suppressWarnings(as.numeric(curve_df[[value_col]][[idx]]))
+}
+
+co2_level_targets <- function(group) {
+  if (identical(group, "ABG")) {
+    return(c(Low = ABG_CO2_LOW, Normal = co2_ref_abg_mi, High = ABG_CO2_HIGH))
+  }
+  c(Low = VBG_CO2_LOW, Normal = co2_ref_vbg_mi, High = VBG_CO2_HIGH)
+}
+
+cat_prob_value <- function(group, outcome_label, category, value_col = "p") {
+  group_i <- group
+  outcome_i <- outcome_label
+  category_i <- category
+  out <- main_cat3_probs |>
+    dplyr::filter(
+      .data$group == .env$group_i,
+      .data$outcome == .env$outcome_i,
+      .data$category == .env$category_i
+    ) |>
+    dplyr::slice_head(n = 1) |>
+    dplyr::pull(dplyr::all_of(value_col))
+  if (length(out)) suppressWarnings(as.numeric(out[[1L]])) else NA_real_
+}
+
+cat_or_value <- function(group, outcome_label, contrast, value_col = "OR") {
+  group_i <- group
+  outcome_i <- outcome_label
+  contrast_i <- contrast
+  out <- main_cat3_results |>
+    dplyr::filter(
+      .data$group == .env$group_i,
+      .data$outcome == .env$outcome_i,
+      .data$contrast == .env$contrast_i
+    ) |>
+    dplyr::slice_head(n = 1) |>
+    dplyr::pull(dplyr::all_of(value_col))
+  if (length(out)) suppressWarnings(as.numeric(out[[1L]])) else NA_real_
+}
+
+spline_current_summary_one <- function(group, outcome_var) {
+  outcome_label <- discordance_outcome_labels[[outcome_var]]
+  co2_var <- if (identical(group, "ABG")) "paco2" else "vbg_co2"
+  or_df <- if (identical(group, "ABG")) abg_curves else vbg_curves
+  prob_df <- if (identical(group, "ABG")) abg_prob_curves else vbg_prob_curves
+  or_df <- or_df |>
+    dplyr::filter(.data$group == group, .data$outcome == outcome_var)
+  prob_df <- prob_df |>
+    dplyr::filter(.data$group == group, .data$outcome == outcome_var)
+  targets <- co2_level_targets(group)
+
+  tibble::tibble(
+    outcome = outcome_label,
+    modality = group,
+    analysis_family = "MI-logistic IPSW",
+    co2_representation = "spline",
+    or_low_vs_normal = nearest_curve_value(or_df, co2_var, targets[["Low"]], "OR"),
+    or_high_vs_normal = nearest_curve_value(or_df, co2_var, targets[["High"]], "OR"),
+    prob_normal = nearest_curve_value(prob_df, co2_var, targets[["Normal"]], "p"),
+    prob_low = nearest_curve_value(prob_df, co2_var, targets[["Low"]], "p"),
+    prob_high = nearest_curve_value(prob_df, co2_var, targets[["High"]], "p"),
+    notes = "Current modality-specific reference profile."
+  )
+}
+
+cat_current_summary <- tidyr::crossing(
+  outcome_var = discordance_outcome_vars,
+  modality = discordance_groups
+) |>
+  dplyr::mutate(outcome = unname(discordance_outcome_labels[outcome_var])) |>
+  dplyr::rowwise() |>
+  dplyr::mutate(
+    analysis_family = "MI-logistic IPSW",
+    co2_representation = "cat3",
+    or_low_vs_normal = cat_or_value(modality, outcome, "Low vs normal"),
+    or_high_vs_normal = cat_or_value(modality, outcome, "High vs normal"),
+    prob_normal = cat_prob_value(modality, outcome, "Normal"),
+    prob_low = cat_prob_value(modality, outcome, "Low"),
+    prob_high = cat_prob_value(modality, outcome, "High"),
+    notes = "Current categorical ORs and predicted probabilities."
+  ) |>
+  dplyr::ungroup() |>
+  dplyr::select(
+    outcome, modality, analysis_family, co2_representation,
+    or_low_vs_normal, or_high_vs_normal, prob_normal, prob_low, prob_high, notes
+  )
+
+spline_current_summary <- purrr::map_dfr(discordance_groups, function(group) {
+  purrr::map_dfr(discordance_outcome_vars, function(outcome_var) {
+    spline_current_summary_one(group, outcome_var)
+  })
+})
+
+discordance_current_summary <- dplyr::bind_rows(
+  cat_current_summary,
+  spline_current_summary
+)
+write_csv_safely(
+  discordance_current_summary,
+  results_path("discordance_current_summary.csv"),
+  row_names = FALSE
+)
+record_discordance_status(
+  "current_discordance",
+  "completed",
+  "Current categorical and spline summaries were extracted from primary MI outputs.",
+  "Results/discordance_current_summary.csv"
+)
+
+current_metric_long <- dplyr::bind_rows(
+  discordance_current_summary |>
+    dplyr::transmute(
+      outcome,
+      co2_representation,
+      metric_type = "OR",
+      level = "Low vs normal",
+      modality,
+      value = or_low_vs_normal
+    ),
+  discordance_current_summary |>
+    dplyr::transmute(
+      outcome,
+      co2_representation,
+      metric_type = "OR",
+      level = "High vs normal",
+      modality,
+      value = or_high_vs_normal
+    ),
+  discordance_current_summary |>
+    dplyr::transmute(
+      outcome,
+      co2_representation,
+      metric_type = "probability",
+      level = "Normal",
+      modality,
+      value = prob_normal
+    ),
+  discordance_current_summary |>
+    dplyr::transmute(
+      outcome,
+      co2_representation,
+      metric_type = "probability",
+      level = "Low",
+      modality,
+      value = prob_low
+    ),
+  discordance_current_summary |>
+    dplyr::transmute(
+      outcome,
+      co2_representation,
+      metric_type = "probability",
+      level = "High",
+      modality,
+      value = prob_high
+    )
+)
+
+discordance_gap_metrics <- current_metric_long |>
+  tidyr::pivot_wider(names_from = modality, values_from = value) |>
+  dplyr::transmute(
+    outcome,
+    co2_representation,
+    metric_type,
+    level,
+    abg_value = ABG,
+    vbg_value = VBG,
+    absolute_gap = ABG - VBG,
+    relative_gap = safe_relative_gap(ABG, VBG),
+    comment = dplyr::case_when(
+      metric_type == "OR" ~ "ABG-VBG gap on relative odds scale.",
+      metric_type == "probability" ~ "ABG-VBG gap on absolute probability scale.",
+      TRUE ~ "ABG-VBG gap."
+    )
+  )
+write_csv_safely(
+  discordance_gap_metrics,
+  results_path("discordance_gap_metrics.csv"),
+  row_names = FALSE
+)
+record_discordance_status(
+  "gap_metrics",
+  "completed",
+  "ABG-VBG gaps were computed for OR and probability summaries.",
+  "Results/discordance_gap_metrics.csv"
+)
+
+## Reproduction of the current discordance
+render_table_pdf(
+  discordance_current_summary |>
+    dplyr::mutate(
+      dplyr::across(
+        c(or_low_vs_normal, or_high_vs_normal, prob_normal, prob_low, prob_high),
+        ~ round(.x, 3)
+      )
+    ),
+  caption = "Current NIV/IMV OR and predicted-probability summaries",
+  file_stub = "discordance_current_summary_display",
+  wide = TRUE,
+  digits = 3,
+  max_cols = 6,
+  landscape = TRUE
+)
+
+## Common-reference and marginal-standardization checks
+common_ref_source <- subset_data |>
+  dplyr::filter(
+    (.data$has_abg == 1 & is.finite(suppressWarnings(as.numeric(.data$paco2)))) |
+      (.data$has_vbg == 1 & is.finite(suppressWarnings(as.numeric(.data$vbg_co2))))
+  )
+if (!nrow(common_ref_source)) common_ref_source <- subset_data
+x_ref_common <- make_ref_profile(common_ref_source, adj_core)
+
+grid_abg_common_info <- make_co2_grid_ref(
+  "paco2",
+  grid_abg_mi$paco2,
+  x_ref_common,
+  co2_ref_abg_mi
+)
+grid_vbg_common_info <- make_co2_grid_ref(
+  "vbg_co2",
+  grid_vbg_mi$vbg_co2,
+  x_ref_common,
+  co2_ref_vbg_mi
+)
+
+common_ref_curve_one <- function(group, outcome_var) {
+  fit_list <- if (identical(group, "ABG")) spline_fits_abg[[outcome_var]] else spline_fits_vbg[[outcome_var]]
+  grid_info <- if (identical(group, "ABG")) grid_abg_common_info else grid_vbg_common_info
+  co2_var <- if (identical(group, "ABG")) "paco2" else "vbg_co2"
+  co2_ref <- if (identical(group, "ABG")) co2_ref_abg_mi else co2_ref_vbg_mi
+  pool_spline_prob_curve_from_compact(
+    fit_list,
+    grid_df = grid_info$grid,
+    outcome_var = outcome_var,
+    co2_var = co2_var,
+    co2_ref = co2_ref
+  ) |>
+    dplyr::mutate(
+      outcome = discordance_outcome_labels[[outcome_var]],
+      outcome_var = outcome_var,
+      group = group,
+      strategy = "common_reference",
+      co2_scale = co2_var,
+      co2_value = .data[[co2_var]]
+    )
+}
+
+discordance_xref_common_prob_curves <- purrr::map_dfr(discordance_groups, function(group) {
+  purrr::map_dfr(discordance_outcome_vars, function(outcome_var) {
+    common_ref_curve_one(group, outcome_var)
+  })
+})
+write_csv_safely(
+  discordance_xref_common_prob_curves,
+  results_path("discordance_xref_common_prob_curves.csv"),
+  row_names = FALSE
+)
+
+standardization_sample_cap <- if (IS_PILOT) 1000L else 20000L
+min_marginal_ok_frac <- 0.9
+min_marginal_required <- ceiling(min_marginal_ok_frac * imp_n)
+standardization_source_rows <- function(d, imp_index) {
+  d <- d[, intersect(c(adj_core, "has_abg", "has_vbg"), names(d)), drop = FALSE]
+  d <- d[stats::complete.cases(d[, adj_core, drop = FALSE]), , drop = FALSE]
+  if (nrow(d) <= standardization_sample_cap) return(d)
+  set.seed(7100L + imp_index)
+  d[sample.int(nrow(d), standardization_sample_cap), , drop = FALSE]
+}
+
+marginal_predict_compact <- function(fit_compact, source_df, co2_var,
+                                     co2_values, outcome_var) {
+  purrr::map_dfr(co2_values, function(co2_value) {
+    nd <- source_df
+    nd[[co2_var]] <- co2_value
+    pred <- predict_spline_prob_from_compact(
+      fit_compact,
+      grid_df = nd,
+      outcome_var = outcome_var,
+      co2_var = co2_var
+    )
+    tibble::tibble(
+      co2_value = co2_value,
+      p_imp = mean(pred$p, na.rm = TRUE),
+      n_standardized = nrow(nd)
+    )
+  })
+}
+
+marginal_rows <- list()
+marginal_status_rows <- list()
+
+record_marginal_status <- function(imp_index, group, outcome_var, co2_var,
+                                   status, error_message = "",
+                                   n_standardized = NA_integer_,
+                                   n_grid = NA_integer_) {
+  marginal_status_rows[[length(marginal_status_rows) + 1L]] <<- tibble::tibble(
+    imp = imp_index,
+    group = group,
+    outcome = discordance_outcome_labels[[outcome_var]],
+    outcome_var = outcome_var,
+    co2_scale = co2_var,
+    status = status,
+    error_message = error_message,
+    n_standardized = as.integer(n_standardized),
+    n_grid = as.integer(n_grid)
+  )
+  invisible(TRUE)
+}
+
+for (imp_index in seq_len(imp_n)) {
+  d_imp <- get_imp(imp_index)
+  source_imp <- standardization_source_rows(d_imp, imp_index)
+  for (group in discordance_groups) {
+    co2_var <- if (identical(group, "ABG")) "paco2" else "vbg_co2"
+    co2_values <- if (identical(group, "ABG")) grid_abg_mi$paco2 else grid_vbg_mi$vbg_co2
+    fit_bank <- if (identical(group, "ABG")) spline_fits_abg else spline_fits_vbg
+    for (outcome_var in discordance_outcome_vars) {
+      fit_compact <- compact_spline_fit(fit_bank[[outcome_var]][[imp_index]])
+      if (is.null(fit_compact)) {
+        record_marginal_status(
+          imp_index,
+          group,
+          outcome_var,
+          co2_var,
+          status = "skipped_no_compact_fit",
+          error_message = "compact spline fit unavailable",
+          n_standardized = nrow(source_imp),
+          n_grid = length(co2_values)
+        )
+        next
+      }
+      pred_try <- tryCatch(
+        list(
+          value = marginal_predict_compact(
+            fit_compact,
+            source_df = source_imp,
+            co2_var = co2_var,
+            co2_values = co2_values,
+            outcome_var = outcome_var
+          ),
+          error = NULL
+        ),
+        error = function(e) list(value = NULL, error = conditionMessage(e))
+      )
+      if (!is.null(pred_try$error) || is.null(pred_try$value) || !nrow(pred_try$value)) {
+        error_message <- if (is.null(pred_try$error)) {
+          "prediction returned no rows"
+        } else {
+          pred_try$error
+        }
+        record_marginal_status(
+          imp_index,
+          group,
+          outcome_var,
+          co2_var,
+          status = "failed_prediction",
+          error_message = error_message,
+          n_standardized = nrow(source_imp),
+          n_grid = length(co2_values)
+        )
+        next
+      }
+      pred_imp <- pred_try$value
+      record_marginal_status(
+        imp_index,
+        group,
+        outcome_var,
+        co2_var,
+        status = "completed",
+        n_standardized = nrow(source_imp),
+        n_grid = nrow(pred_imp)
+      )
+      marginal_rows[[length(marginal_rows) + 1L]] <- pred_imp |>
+        dplyr::mutate(
+          imp = imp_index,
+          outcome = discordance_outcome_labels[[outcome_var]],
+          outcome_var = outcome_var,
+          group = group,
+          co2_scale = co2_var,
+          strategy = "marginal_standardized"
+        )
+    }
+  }
+  rm(d_imp, source_imp)
+  invisible(gc(FALSE))
+}
+
+marginal_status_raw <- dplyr::bind_rows(marginal_status_rows)
+required_marginal_combos <- tidyr::crossing(
+  group = discordance_groups,
+  outcome_var = discordance_outcome_vars
+) |>
+  dplyr::mutate(
+    outcome = unname(discordance_outcome_labels[outcome_var]),
+    m_total = imp_n,
+    min_required = min_marginal_required
+  )
+marginal_completion_summary <- marginal_status_raw |>
+  dplyr::group_by(group, outcome_var, outcome) |>
+  dplyr::summarise(
+    m_used = sum(.data$status == "completed", na.rm = TRUE),
+    m_failed = sum(.data$status == "failed_prediction", na.rm = TRUE),
+    m_skipped_no_compact_fit = sum(.data$status == "skipped_no_compact_fit", na.rm = TRUE),
+    m_attempted = dplyr::n(),
+    first_error = {
+      errors <- .data$error_message[nzchar(.data$error_message)]
+      if (length(errors)) errors[[1L]] else ""
+    },
+    .groups = "drop"
+  ) |>
+  dplyr::right_join(
+    required_marginal_combos,
+    by = c("group", "outcome_var", "outcome")
+  ) |>
+  dplyr::mutate(
+    dplyr::across(
+      c(m_used, m_failed, m_skipped_no_compact_fit, m_attempted),
+      ~ tidyr::replace_na(.x, 0L)
+    ),
+    first_error = tidyr::replace_na(.data$first_error, ""),
+    passed_threshold = .data$m_used >= .data$min_required
+  )
+marginal_status_df <- marginal_status_raw |>
+  dplyr::left_join(
+    marginal_completion_summary |>
+      dplyr::select(
+        group, outcome_var, m_used, m_total, min_required,
+        passed_threshold
+      ),
+    by = c("group", "outcome_var")
+  )
+write_csv_safely(
+  marginal_status_df,
+  results_path("discordance_marginal_standardization_status.csv"),
+  row_names = FALSE
+)
+
+marginal_threshold_failures <- marginal_completion_summary |>
+  dplyr::filter(!.data$passed_threshold)
+if (nrow(marginal_threshold_failures)) {
+  record_discordance_status(
+    "marginal_standardization",
+    "failed",
+    paste0(
+      "Marginal standardization did not meet min_marginal_ok_frac = ",
+      min_marginal_ok_frac,
+      " for: ",
+      paste(
+        paste0(
+          marginal_threshold_failures$group,
+          "/",
+          marginal_threshold_failures$outcome,
+          " (",
+          marginal_threshold_failures$m_used,
+          "/",
+          marginal_threshold_failures$m_total,
+          ")"
+        ),
+        collapse = "; "
+      )
+    ),
+    "Results/discordance_marginal_standardization_status.csv"
+  )
+  write_discordance_status()
+  stop(
+    "Discordance marginal standardization failed the completion threshold: ",
+    paste(
+      paste0(
+        marginal_threshold_failures$group,
+        "/",
+        marginal_threshold_failures$outcome,
+        "=",
+        marginal_threshold_failures$m_used,
+        "/",
+        marginal_threshold_failures$m_total
+      ),
+      collapse = ", "
+    )
+  )
+}
+record_discordance_status(
+  "marginal_standardization",
+  "completed",
+  paste0(
+    "Marginal standardization met min_marginal_ok_frac = ",
+    min_marginal_ok_frac,
+    " for all NIV/IMV group/outcome combinations."
+  ),
+  "Results/discordance_marginal_standardization_status.csv"
+)
+
+marginal_imp_curves <- dplyr::bind_rows(marginal_rows)
+if (!nrow(marginal_imp_curves)) {
+  stop("Discordance marginal standardization produced no predictions.")
+}
+
+discordance_marginal_standardized_prob_curves <- marginal_imp_curves |>
+  dplyr::group_by(outcome, outcome_var, group, co2_scale, strategy, co2_value) |>
+  dplyr::summarise(
+    p = mean(p_imp, na.rm = TRUE),
+    p_LCL = stats::quantile(p_imp, 0.025, na.rm = TRUE, names = FALSE),
+    p_UCL = stats::quantile(p_imp, 0.975, na.rm = TRUE, names = FALSE),
+    m_used = dplyr::n_distinct(imp),
+    n_standardized = stats::median(n_standardized, na.rm = TRUE),
+    standardization_sample_cap = standardization_sample_cap,
+    .groups = "drop"
+  )
+write_csv_safely(
+  discordance_marginal_standardized_prob_curves,
+  results_path("discordance_marginal_standardized_prob_curves.csv"),
+  row_names = FALSE
+)
+
+current_spline_prob_curves_for_plot <- dplyr::bind_rows(
+  abg_prob_curves |>
+    dplyr::filter(.data$outcome %in% discordance_outcome_vars) |>
+    dplyr::mutate(
+      outcome_var = .data$outcome,
+      outcome = unname(discordance_outcome_labels[.data$outcome]),
+      strategy = "current_modality_reference",
+      co2_scale = "paco2",
+      co2_value = .data$paco2
+    ),
+  vbg_prob_curves |>
+    dplyr::filter(.data$outcome %in% discordance_outcome_vars) |>
+    dplyr::mutate(
+      outcome_var = .data$outcome,
+      outcome = unname(discordance_outcome_labels[.data$outcome]),
+      strategy = "current_modality_reference",
+      co2_scale = "vbg_co2",
+      co2_value = .data$vbg_co2
+    )
+) |>
+  dplyr::select(outcome, outcome_var, group, strategy, co2_scale, co2_value, p, p_LCL, p_UCL)
+
+standardization_curves_for_plot <- dplyr::bind_rows(
+  current_spline_prob_curves_for_plot,
+  discordance_xref_common_prob_curves |>
+    dplyr::select(outcome, outcome_var, group, strategy, co2_scale, co2_value, p, p_LCL, p_UCL),
+  discordance_marginal_standardized_prob_curves |>
+    dplyr::select(outcome, outcome_var, group, strategy, co2_scale, co2_value, p, p_LCL, p_UCL)
+) |>
+  dplyr::mutate(
+    strategy = factor(
+      strategy,
+      levels = c("current_modality_reference", "common_reference", "marginal_standardized"),
+      labels = c("Current reference", "Common reference", "Marginal standardized")
+    )
+  )
+
+representative_prob <- function(curves, strategy_name, group, outcome_var, level) {
+  strategy_i <- strategy_name
+  group_i <- group
+  outcome_i <- outcome_var
+  co2_var <- if (identical(group, "ABG")) "paco2" else "vbg_co2"
+  target <- co2_level_targets(group)[[level]]
+  df <- curves |>
+    dplyr::filter(
+      as.character(.data$strategy) == .env$strategy_i,
+      .data$group == .env$group_i,
+      .data$outcome_var == .env$outcome_i
+    )
+  nearest_curve_value(df, "co2_value", target, "p")
+}
+
+standardization_summary_rows <- tidyr::crossing(
+  outcome_var = discordance_outcome_vars,
+  co2_level = c("Low", "Normal", "High")
+) |>
+  dplyr::mutate(outcome = unname(discordance_outcome_labels[outcome_var])) |>
+  dplyr::rowwise() |>
+  dplyr::mutate(
+    gap_current_ref = representative_prob(
+      standardization_curves_for_plot,
+      "Current reference",
+      "ABG",
+      outcome_var,
+      co2_level
+    ) - representative_prob(
+      standardization_curves_for_plot,
+      "Current reference",
+      "VBG",
+      outcome_var,
+      co2_level
+    ),
+    gap_common_ref = representative_prob(
+      standardization_curves_for_plot,
+      "Common reference",
+      "ABG",
+      outcome_var,
+      co2_level
+    ) - representative_prob(
+      standardization_curves_for_plot,
+      "Common reference",
+      "VBG",
+      outcome_var,
+      co2_level
+    ),
+    gap_marginal_standardized = representative_prob(
+      standardization_curves_for_plot,
+      "Marginal standardized",
+      "ABG",
+      outcome_var,
+      co2_level
+    ) - representative_prob(
+      standardization_curves_for_plot,
+      "Marginal standardized",
+      "VBG",
+      outcome_var,
+      co2_level
+    ),
+    standardization_sample_cap = standardization_sample_cap,
+    interpretation = dplyr::case_when(
+      is.finite(gap_current_ref) &
+        is.finite(gap_common_ref) &
+        abs(gap_common_ref) <= 0.75 * abs(gap_current_ref) ~ "Common reference shrinks the current probability gap.",
+      is.finite(gap_current_ref) &
+        is.finite(gap_marginal_standardized) &
+        abs(gap_marginal_standardized) <= 0.75 * abs(gap_current_ref) ~ "Marginal standardization shrinks the current probability gap.",
+      TRUE ~ "Standardization did not materially shrink the current probability gap."
+    )
+  ) |>
+  dplyr::ungroup() |>
+  dplyr::left_join(
+    marginal_completion_summary |>
+      dplyr::group_by(outcome_var, outcome) |>
+      dplyr::summarise(
+        m_used = min(.data$m_used, na.rm = TRUE),
+        m_total = max(.data$m_total, na.rm = TRUE),
+        min_required = max(.data$min_required, na.rm = TRUE),
+        .groups = "drop"
+      ),
+    by = c("outcome_var", "outcome")
+  ) |>
+  dplyr::select(
+    outcome, co2_level, gap_current_ref, gap_common_ref,
+    gap_marginal_standardized, standardization_sample_cap,
+    m_used, m_total, min_required, interpretation
+  )
+
+discordance_standardization_summary <- standardization_summary_rows
+write_csv_safely(
+  discordance_standardization_summary,
+  results_path("discordance_standardization_summary.csv"),
+  row_names = FALSE
+)
+record_discordance_status(
+  "standardization",
+  "completed",
+  paste0(
+    "Common-reference and marginal-standardized curves computed; marginal cap = ",
+    standardization_sample_cap,
+    "; min_marginal_ok_frac = ",
+    min_marginal_ok_frac,
+    "."
+  ),
+  "Results/discordance_xref_common_prob_curves.csv; Results/discordance_marginal_standardized_prob_curves.csv; Results/discordance_standardization_summary.csv; Results/discordance_marginal_standardization_status.csv"
+)
+
+discordance_probability_standardization_plot <- standardization_curves_for_plot |>
+  ggplot2::ggplot(ggplot2::aes(x = co2_value, y = p, color = strategy, linetype = strategy)) +
+  ggplot2::geom_line(linewidth = 0.55) +
+  ggplot2::facet_grid(outcome ~ group, scales = "free_x") +
+  ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  ggplot2::labs(
+    title = "NIV/IMV predicted probabilities under alternative standardization",
+    x = "CO2 value (mmHg; modality-specific scale)",
+    y = "Predicted probability",
+    color = "Prediction target",
+    linetype = "Prediction target"
+  ) +
+  theme_pub(base_size = 9)
+
+discordance_standardization_png <- results_path(
+  "figs",
+  "discordance_probability_standardization_niv_imv.png"
+)
+discordance_standardization_pdf <- results_path(
+  "figs",
+  "discordance_probability_standardization_niv_imv.pdf"
+)
+save_diag_plot(discordance_probability_standardization_plot, discordance_standardization_png, width = 8.5, height = 5.6)
+save_diag_plot(discordance_probability_standardization_plot, discordance_standardization_pdf, width = 8.5, height = 5.6)
+register_plot_file("discordance_probability_standardization_niv_imv", discordance_standardization_png)
+render_inline_graphic(discordance_standardization_png)
+
+## Noncollapsibility and scale checks
+discordance_scale_summary <- tidyr::crossing(
+  outcome_var = discordance_outcome_vars,
+  contrast = c("Low vs normal", "High vs normal")
+) |>
+  dplyr::mutate(
+    outcome = unname(discordance_outcome_labels[outcome_var]),
+    category = dplyr::if_else(contrast == "Low vs normal", "Low", "High")
+  ) |>
+  dplyr::rowwise() |>
+  dplyr::mutate(
+    abg_or = cat_or_value("ABG", outcome, contrast),
+    vbg_or = cat_or_value("VBG", outcome, contrast),
+    abg_prob = cat_prob_value("ABG", outcome, category),
+    vbg_prob = cat_prob_value("VBG", outcome, category),
+    abg_prob_ref = cat_prob_value("ABG", outcome, "Normal"),
+    vbg_prob_ref = cat_prob_value("VBG", outcome, "Normal"),
+    abg_rd = abg_prob - abg_prob_ref,
+    vbg_rd = vbg_prob - vbg_prob_ref,
+    abg_rr = ifelse(is.finite(abg_prob_ref) & abg_prob_ref > 0, abg_prob / abg_prob_ref, NA_real_),
+    vbg_rr = ifelse(is.finite(vbg_prob_ref) & vbg_prob_ref > 0, vbg_prob / vbg_prob_ref, NA_real_),
+    comment = dplyr::case_when(
+      is.finite(abg_or) & is.finite(vbg_or) &
+        abs(log(abg_or) - log(vbg_or)) < abs(abg_rd - vbg_rd) ~
+        "Relative odds are closer than absolute risk differences.",
+      TRUE ~ "Scale check does not show clearly closer ORs."
+    )
+  ) |>
+  dplyr::ungroup() |>
+  dplyr::select(
+    outcome, contrast, abg_or, vbg_or, abg_prob, vbg_prob,
+    abg_rd, vbg_rd, abg_rr, vbg_rr, comment
+  )
+write_csv_safely(
+  discordance_scale_summary,
+  results_path("discordance_scale_summary.csv"),
+  row_names = FALSE
+)
+record_discordance_status(
+  "scale_noncollapsibility",
+  "completed",
+  "OR, risk-difference, risk-ratio, and predicted-probability scale summaries were computed.",
+  "Results/discordance_scale_summary.csv"
+)
+
+## Missingness and procedure-capture diagnostics
+outcome_source_fields <- unique(c(
+  "imv_proc",
+  "niv_proc",
+  candidate_cols(
+    names(subset_data_raw),
+    "(imv|niv).*(date|time|timestamp|source|code|proc|procedure)",
+    exclude = character(),
+    max_n = 30
+  )
+))
+outcome_source_fields <- outcome_source_fields[outcome_source_fields %in% names(subset_data_raw)]
+
+if (!length(outcome_source_fields)) {
+  discordance_missingness_outcome_fields <- tibble::tibble(
+    field = NA_character_,
+    component_status = "skipped",
+    reason = "unavailable_field"
+  )
+  record_discordance_status(
+    "outcome_field_missingness",
+    "skipped",
+    "No NIV/IMV procedure source fields were available.",
+    "Results/discordance_missingness_outcome_fields.csv",
+    optional = TRUE
+  )
+} else {
+  discordance_missingness_outcome_fields <- purrr::map_dfr(outcome_source_fields, function(field) {
+    x <- subset_data_raw[[field]]
+    tibble::tibble(
+      field = field,
+      missing_overall = mean(is.na(x)),
+      missing_abg_tested = mean(is.na(x[subset_data$has_abg == 1])),
+      missing_vbg_tested = mean(is.na(x[subset_data$has_vbg == 1])),
+      n_overall = length(x),
+      n_abg_tested = sum(subset_data$has_abg == 1, na.rm = TRUE),
+      n_vbg_tested = sum(subset_data$has_vbg == 1, na.rm = TRUE),
+      component_status = "completed",
+      reason = "available_field"
+    )
+  })
+  record_discordance_status(
+    "outcome_field_missingness",
+    "completed",
+    "NIV/IMV outcome-source field missingness was summarized.",
+    "Results/discordance_missingness_outcome_fields.csv"
+  )
+}
+write_csv_safely(
+  discordance_missingness_outcome_fields,
+  results_path("discordance_missingness_outcome_fields.csv"),
+  row_names = FALSE
+)
+
+proxy_fields <- unique(c(
+  "imv_proc",
+  "niv_proc",
+  candidate_cols(
+    names(subset_data),
+    "(procedure|proc|cpt|icd|code|dx|charge|document|claim)",
+    exclude = c("has_abg", "has_vbg"),
+    max_n = 20
+  )
+))
+proxy_fields <- proxy_fields[proxy_fields %in% names(subset_data)]
+
+capture_rows <- list()
+for (imp_index in seq_len(imp_n)) {
+  d_imp <- get_imp(imp_index)
+  for (group in discordance_groups) {
+    treat_var <- if (identical(group, "ABG")) "has_abg" else "has_vbg"
+    weights_i <- get_mi_weight(group, imp_index)
+    tested <- d_imp[[treat_var]] == 1
+    for (field in proxy_fields) {
+      x <- d_imp[[field]]
+      if (is.factor(x) || is.character(x)) {
+        proxy_value <- as.integer(!is.na(x) & nzchar(trimws(as.character(x))))
+      } else {
+        proxy_value <- suppressWarnings(as.numeric(x))
+      }
+      capture_rows[[length(capture_rows) + 1L]] <- tibble::tibble(
+        imp = imp_index,
+        group = group,
+        proxy_field = field,
+        proxy_type = ifelse(field %in% c("imv_proc", "niv_proc"), "binary_outcome", "coding_density_proxy"),
+        unweighted_mean_tested = mean(proxy_value[tested], na.rm = TRUE),
+        weighted_mean_tested = weighted_mean_safe(proxy_value[tested], weights_i[tested]),
+        missing_fraction_tested = mean(is.na(proxy_value[tested])),
+        n_tested = sum(tested, na.rm = TRUE)
+      )
+    }
+  }
+  rm(d_imp)
+  invisible(gc(FALSE))
+}
+
+discordance_procedure_capture_proxies <- dplyr::bind_rows(capture_rows) |>
+  dplyr::group_by(group, proxy_field, proxy_type) |>
+  dplyr::summarise(
+    unweighted_mean_tested = stats::median(unweighted_mean_tested, na.rm = TRUE),
+    weighted_mean_tested = stats::median(weighted_mean_tested, na.rm = TRUE),
+    missing_fraction_tested = stats::median(missing_fraction_tested, na.rm = TRUE),
+    n_tested = stats::median(n_tested, na.rm = TRUE),
+    m_used = dplyr::n_distinct(imp),
+    .groups = "drop"
+  )
+write_csv_safely(
+  discordance_procedure_capture_proxies,
+  results_path("discordance_procedure_capture_proxies.csv"),
+  row_names = FALSE
+)
+
+missing_indicator_vars <- covars_ps[covars_ps %in% names(subset_data_raw)]
+missing_indicator_vars <- missing_indicator_vars[
+  vapply(missing_indicator_vars, function(v) any(is.na(subset_data_raw[[v]])), logical(1L))
+]
+
+if (!length(missing_indicator_vars)) {
+  discordance_missing_indicator_balance <- tibble::tibble(
+    variable = NA_character_,
+    group = NA_character_,
+    smd_pre = NA_real_,
+    smd_post = NA_real_,
+    component_status = "skipped",
+    reason = "no_missing_baseline_indicators"
+  )
+} else {
+  miss_bal_rows <- list()
+  target_missing <- lapply(missing_indicator_vars, function(v) as.integer(is.na(subset_data_raw[[v]])))
+  names(target_missing) <- missing_indicator_vars
+  for (imp_index in seq_len(imp_n)) {
+    for (group in discordance_groups) {
+      treat_var <- if (identical(group, "ABG")) "has_abg" else "has_vbg"
+      treat <- subset_data[[treat_var]] == 1
+      weights_i <- get_mi_weight(group, imp_index)
+      for (v in missing_indicator_vars) {
+        x <- target_missing[[v]]
+        target_p <- mean(x, na.rm = TRUE)
+        target_sd <- sqrt(target_p * (1 - target_p))
+        pre <- mean(x[treat], na.rm = TRUE)
+        post <- weighted_mean_safe(x[treat], weights_i[treat])
+        miss_bal_rows[[length(miss_bal_rows) + 1L]] <- tibble::tibble(
+          imp = imp_index,
+          variable = v,
+          group = group,
+          missing_target = target_p,
+          missing_tested = pre,
+          missing_weighted = post,
+          smd_pre = ifelse(is.finite(target_sd) & target_sd > 0, (pre - target_p) / target_sd, NA_real_),
+          smd_post = ifelse(is.finite(target_sd) & target_sd > 0, (post - target_p) / target_sd, NA_real_)
+        )
+      }
+    }
+  }
+  discordance_missing_indicator_balance <- dplyr::bind_rows(miss_bal_rows) |>
+    dplyr::group_by(variable, group) |>
+    dplyr::summarise(
+      missing_target = stats::median(missing_target, na.rm = TRUE),
+      missing_tested = stats::median(missing_tested, na.rm = TRUE),
+      missing_weighted = stats::median(missing_weighted, na.rm = TRUE),
+      smd_pre = stats::median(smd_pre, na.rm = TRUE),
+      smd_post = stats::median(smd_post, na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+    dplyr::mutate(component_status = "completed", reason = "baseline_missingness_indicators_available")
+}
+write_csv_safely(
+  discordance_missing_indicator_balance,
+  results_path("discordance_missing_indicator_balance.csv"),
+  row_names = FALSE
+)
+
+capture_wide <- discordance_procedure_capture_proxies |>
+  dplyr::select(group, proxy_field, weighted_mean_tested) |>
+  tidyr::pivot_wider(names_from = group, values_from = weighted_mean_tested)
+
+missingness_capture_summary <- tibble::tibble(
+  component = c("outcome_source_missingness", "procedure_capture_proxy", "baseline_missing_indicator_balance"),
+  max_abs_abg_vbg_difference = c(
+    suppressWarnings(max(abs(
+      discordance_missingness_outcome_fields$missing_abg_tested -
+        discordance_missingness_outcome_fields$missing_vbg_tested
+    ), na.rm = TRUE)),
+    suppressWarnings(max(abs(capture_wide$ABG - capture_wide$VBG), na.rm = TRUE)),
+    suppressWarnings(max(abs(discordance_missing_indicator_balance$smd_post), na.rm = TRUE))
+  ),
+  interpretation = c(
+    "Difference in missingness among detected NIV/IMV source fields.",
+    "Difference in weighted tested-cohort proxy means.",
+    "Largest post-weighting SMD among baseline missingness indicators."
+  )
+) |>
+  dplyr::mutate(
+    max_abs_abg_vbg_difference = ifelse(is.infinite(max_abs_abg_vbg_difference), NA_real_, max_abs_abg_vbg_difference)
+  )
+write_csv_safely(
+  missingness_capture_summary,
+  results_path("discordance_missingness_capture_summary.csv"),
+  row_names = FALSE
+)
+record_discordance_status(
+  "missingness_capture",
+  "completed",
+  "Procedure-source missingness, capture proxies, and baseline missingness indicator balance were summarized.",
+  "Results/discordance_missingness_outcome_fields.csv; Results/discordance_procedure_capture_proxies.csv; Results/discordance_missing_indicator_balance.csv; Results/discordance_missingness_capture_summary.csv"
+)
+
+## Support, tail, and positivity diagnostics
+make_quantile_bin <- function(x) {
+  probs <- c(0, 0.02, 0.25, 0.75, 0.98, 1)
+  cuts <- unique(stats::quantile(x, probs = probs, na.rm = TRUE, names = FALSE))
+  if (length(cuts) < 3L) return(factor(rep(NA_character_, length(x))))
+  cut(x, breaks = cuts, include.lowest = TRUE, ordered_result = TRUE)
+}
+
+tail_support_rows <- list()
+for (imp_index in seq_len(imp_n)) {
+  d_imp <- get_imp(imp_index)
+  for (group in discordance_groups) {
+    co2_var <- if (identical(group, "ABG")) "paco2" else "vbg_co2"
+    treat_var <- if (identical(group, "ABG")) "has_abg" else "has_vbg"
+    low_cut <- if (identical(group, "ABG")) ABG_CO2_LOW else VBG_CO2_LOW
+    high_cut <- if (identical(group, "ABG")) ABG_CO2_HIGH else VBG_CO2_HIGH
+    weights_i <- get_mi_weight(group, imp_index)
+    tested <- d_imp[[treat_var]] == 1 & is.finite(suppressWarnings(as.numeric(d_imp[[co2_var]])))
+    co2_x <- suppressWarnings(as.numeric(d_imp[[co2_var]]))
+    clinical_bin <- make_co2_cat3(co2_x, low_cut, high_cut)
+    clinical_bin <- factor(clinical_bin, levels = c("Low", "Normal", "High"), ordered = TRUE)
+    quantile_bin <- rep(NA, nrow(d_imp))
+    quantile_bin[tested] <- as.character(make_quantile_bin(co2_x[tested]))
+    bin_df <- dplyr::bind_rows(
+      tibble::tibble(bin_type = "clinical_cat3", bin = as.character(clinical_bin)),
+      tibble::tibble(bin_type = "quantile_support", bin = as.character(quantile_bin))
+    ) |>
+      dplyr::mutate(row_id = rep(seq_len(nrow(d_imp)), times = 2L))
+
+    for (outcome_var in discordance_outcome_vars) {
+      y <- to01(d_imp[[outcome_var]])
+      for (bin_type_i in unique(bin_df$bin_type)) {
+        rows_i <- bin_df |>
+          dplyr::filter(.data$bin_type == bin_type_i) |>
+          dplyr::mutate(
+            tested = tested[row_id],
+            y = y[row_id],
+            w = weights_i[row_id],
+            co2 = co2_x[row_id]
+          ) |>
+          dplyr::filter(.data$tested, !is.na(.data$bin))
+        if (!nrow(rows_i)) next
+        tail_support_rows[[length(tail_support_rows) + 1L]] <- rows_i |>
+          dplyr::group_by(bin_type, bin) |>
+          dplyr::summarise(
+            n_unweighted = dplyr::n(),
+            co2_min = min(co2, na.rm = TRUE),
+            co2_max = max(co2, na.rm = TRUE),
+            weighted_n = sum(w, na.rm = TRUE),
+            weighted_events = sum(w * y, na.rm = TRUE),
+            weighted_event_rate = ifelse(weighted_n > 0, weighted_events / weighted_n, NA_real_),
+            ess = weighted_ess(w),
+            .groups = "drop"
+          ) |>
+          dplyr::mutate(
+            imp = imp_index,
+            group = group,
+            outcome = discordance_outcome_labels[[outcome_var]],
+            outcome_var = outcome_var
+          )
+      }
+    }
+  }
+  rm(d_imp)
+  invisible(gc(FALSE))
+}
+
+discordance_tail_support_by_bin <- dplyr::bind_rows(tail_support_rows) |>
+  dplyr::group_by(group, outcome, outcome_var, bin_type, bin) |>
+  dplyr::summarise(
+    n_unweighted = stats::median(n_unweighted, na.rm = TRUE),
+    co2_min = stats::median(co2_min, na.rm = TRUE),
+    co2_max = stats::median(co2_max, na.rm = TRUE),
+    weighted_n = stats::median(weighted_n, na.rm = TRUE),
+    weighted_events = stats::median(weighted_events, na.rm = TRUE),
+    weighted_event_rate = stats::median(weighted_event_rate, na.rm = TRUE),
+    ess = stats::median(ess, na.rm = TRUE),
+    m_used = dplyr::n_distinct(imp),
+    .groups = "drop"
+  )
+write_csv_safely(
+  discordance_tail_support_by_bin,
+  results_path("discordance_tail_support_by_bin.csv"),
+  row_names = FALSE
+)
+
+discordance_tail_support_summary <- discordance_tail_support_by_bin |>
+  dplyr::group_by(group, outcome, bin_type) |>
+  dplyr::summarise(
+    min_ess = min(ess, na.rm = TRUE),
+    min_weighted_events = min(weighted_events, na.rm = TRUE),
+    max_weighted_event_rate = max(weighted_event_rate, na.rm = TRUE),
+    n_bins = dplyr::n(),
+    support_flag = any(ess < 100 | weighted_events < 10, na.rm = TRUE),
+    .groups = "drop"
+  )
+write_csv_safely(
+  discordance_tail_support_summary,
+  results_path("discordance_tail_support_summary.csv"),
+  row_names = FALSE
+)
+record_discordance_status(
+  "tail_support",
+  "completed",
+  "Weighted support, events, event rates, and ESS were summarized by clinical and quantile CO2 bins.",
+  "Results/discordance_tail_support_summary.csv; Results/discordance_tail_support_by_bin.csv"
+)
+
+tail_clinical <- discordance_tail_support_by_bin |>
+  dplyr::filter(.data$bin_type == "clinical_cat3") |>
+  dplyr::mutate(bin = factor(bin, levels = c("Low", "Normal", "High")))
+
+tail_rate_plot <- tail_clinical |>
+  ggplot2::ggplot(ggplot2::aes(x = bin, y = weighted_event_rate, color = group, group = group)) +
+  ggplot2::geom_line(linewidth = 0.5) +
+  ggplot2::geom_point(size = 1.8) +
+  ggplot2::facet_wrap(~ outcome, nrow = 1) +
+  ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  ggplot2::labs(x = "Clinical CO2 category", y = "Weighted event rate", color = "Modality") +
+  theme_pub(base_size = 9)
+
+tail_ess_plot <- tail_clinical |>
+  ggplot2::ggplot(ggplot2::aes(x = bin, y = ess, fill = group)) +
+  ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.7), width = 0.65) +
+  ggplot2::facet_wrap(~ outcome, nrow = 1) +
+  ggplot2::labs(x = "Clinical CO2 category", y = "Weighted ESS", fill = "Modality") +
+  theme_pub(base_size = 9)
+
+discordance_tail_support_plot <- tail_rate_plot / tail_ess_plot +
+  patchwork::plot_annotation(title = "Tail support and event rates for NIV/IMV")
+discordance_tail_png <- results_path("figs", "discordance_tail_support_niv_imv.png")
+discordance_tail_pdf <- results_path("figs", "discordance_tail_support_niv_imv.pdf")
+save_diag_plot(discordance_tail_support_plot, discordance_tail_png, width = 8.5, height = 6.2)
+save_diag_plot(discordance_tail_support_plot, discordance_tail_pdf, width = 8.5, height = 6.2)
+register_plot_file("discordance_tail_support_niv_imv", discordance_tail_png)
+render_inline_graphic(discordance_tail_png)
+
+## Setting and subgroup sensitivity analyses
+site_candidates <- candidate_cols(
+  names(subset_data),
+  "(^site$|facility|hospital|health_system|institution)",
+  exclude = c("location"),
+  max_n = 10
+)
+site_field <- NA_character_
+if (length(site_candidates)) {
+  site_levels <- vapply(site_candidates, function(v) dplyr::n_distinct(subset_data[[v]], na.rm = TRUE), integer(1L))
+  feasible <- site_candidates[site_levels >= 2L & site_levels <= 50L]
+  if (length(feasible)) site_field <- feasible[[1L]]
+}
+setting_vars <- c("encounter_type", "location", site_field)
+setting_vars <- setting_vars[!is.na(setting_vars) & setting_vars %in% names(subset_data)]
+
+setting_rows <- list()
+for (imp_index in seq_len(imp_n)) {
+  d_imp <- get_imp(imp_index)
+  for (group in discordance_groups) {
+    treat_var <- if (identical(group, "ABG")) "has_abg" else "has_vbg"
+    weights_i <- get_mi_weight(group, imp_index)
+    tested <- d_imp[[treat_var]] == 1
+    for (setting_var in setting_vars) {
+      for (outcome_var in discordance_outcome_vars) {
+        setting_rows[[length(setting_rows) + 1L]] <- tibble::tibble(
+          setting_level = as.character(d_imp[[setting_var]]),
+          y = to01(d_imp[[outcome_var]]),
+          w = weights_i,
+          tested = tested
+        ) |>
+          dplyr::filter(.data$tested, !is.na(.data$setting_level), nzchar(.data$setting_level)) |>
+          dplyr::group_by(setting_level) |>
+          dplyr::summarise(
+            n_unweighted = dplyr::n(),
+            weighted_n = sum(w, na.rm = TRUE),
+            weighted_event_rate = weighted_mean_safe(y, w),
+            ess = weighted_ess(w),
+            .groups = "drop"
+          ) |>
+          dplyr::mutate(
+            imp = imp_index,
+            group = group,
+            outcome = discordance_outcome_labels[[outcome_var]],
+            setting_var = setting_var
+          )
+      }
+    }
+  }
+  rm(d_imp)
+  invisible(gc(FALSE))
+}
+
+discordance_setting_sensitivity <- dplyr::bind_rows(setting_rows) |>
+  dplyr::group_by(setting_var, setting_level, group, outcome) |>
+  dplyr::summarise(
+    n_unweighted = stats::median(n_unweighted, na.rm = TRUE),
+    weighted_n = stats::median(weighted_n, na.rm = TRUE),
+    weighted_event_rate = stats::median(weighted_event_rate, na.rm = TRUE),
+    ess = stats::median(ess, na.rm = TRUE),
+    m_used = dplyr::n_distinct(imp),
+    .groups = "drop"
+  )
+write_csv_safely(
+  discordance_setting_sensitivity,
+  results_path("discordance_setting_sensitivity.csv"),
+  row_names = FALSE
+)
+discordance_setting_rate_ranges <- discordance_setting_sensitivity |>
+  dplyr::group_by(setting_var, outcome, group) |>
+  dplyr::summarise(
+    n_setting_levels = dplyr::n(),
+    min_weighted_event_rate = suppressWarnings(min(weighted_event_rate, na.rm = TRUE)),
+    max_weighted_event_rate = suppressWarnings(max(weighted_event_rate, na.rm = TRUE)),
+    rate_range = max_weighted_event_rate - min_weighted_event_rate,
+    .groups = "drop"
+  ) |>
+  dplyr::mutate(
+    dplyr::across(
+      c(min_weighted_event_rate, max_weighted_event_rate, rate_range),
+      ~ ifelse(is.infinite(.x), NA_real_, .x)
+    )
+  )
+write_csv_safely(
+  discordance_setting_rate_ranges,
+  results_path("discordance_setting_rate_ranges.csv"),
+  row_names = FALSE
+)
+record_discordance_status(
+  "setting_sensitivity",
+  "completed",
+  ifelse(
+    is.na(site_field),
+    "Encounter-type and location sensitivity completed; no separate feasible site field was found.",
+    paste0("Encounter-type, location, and site-like field sensitivity completed using ", site_field, ".")
+  ),
+  "Results/discordance_setting_sensitivity.csv; Results/discordance_setting_rate_ranges.csv"
+)
+if (is.na(site_field)) {
+  record_discordance_status(
+    "site_specific_sensitivity",
+    "skipped",
+    "No separate site/facility identifier with 2-50 levels was found.",
+    "Results/discordance_setting_sensitivity.csv",
+    optional = TRUE
+  )
+}
+
+dual_rows <- list()
+dual_tested <- subset_data$has_abg == 1 & subset_data$has_vbg == 1
+if (sum(dual_tested, na.rm = TRUE) > 0L) {
+  for (outcome_var in discordance_outcome_vars) {
+    y <- to01(subset_data[[outcome_var]])
+    dual_rows[[length(dual_rows) + 1L]] <- tibble::tibble(
+      modality = "ABG",
+      co2_category = as.character(make_co2_cat3(subset_data$paco2, ABG_CO2_LOW, ABG_CO2_HIGH)),
+      outcome = discordance_outcome_labels[[outcome_var]],
+      y = y,
+      dual_tested = dual_tested
+    )
+    dual_rows[[length(dual_rows) + 1L]] <- tibble::tibble(
+      modality = "VBG",
+      co2_category = as.character(make_co2_cat3(subset_data$vbg_co2, VBG_CO2_LOW, VBG_CO2_HIGH)),
+      outcome = discordance_outcome_labels[[outcome_var]],
+      y = y,
+      dual_tested = dual_tested
+    )
+  }
+  discordance_dual_tested_sensitivity <- dplyr::bind_rows(dual_rows) |>
+    dplyr::filter(.data$dual_tested, !is.na(.data$co2_category)) |>
+    dplyr::group_by(outcome, modality, co2_category) |>
+    dplyr::summarise(
+      n = dplyr::n(),
+      events = sum(y == 1, na.rm = TRUE),
+      event_rate = mean(y == 1, na.rm = TRUE),
+      .groups = "drop"
+    )
+  record_discordance_status(
+    "dual_tested_sensitivity",
+    "completed",
+    "Dual-tested encounter event rates by ABG/VBG CO2 category were summarized.",
+    "Results/discordance_dual_tested_sensitivity.csv"
+  )
+} else {
+  discordance_dual_tested_sensitivity <- tibble::tibble(
+    outcome = NA_character_,
+    modality = NA_character_,
+    co2_category = NA_character_,
+    n = 0L,
+    events = 0L,
+    event_rate = NA_real_,
+    component_status = "skipped",
+    reason = "no_dual_tested_encounters"
+  )
+  record_discordance_status(
+    "dual_tested_sensitivity",
+    "skipped",
+    "No dual-tested encounters were available in this render subset.",
+    "Results/discordance_dual_tested_sensitivity.csv",
+    optional = TRUE
+  )
+}
+write_csv_safely(
+  discordance_dual_tested_sensitivity,
+  results_path("discordance_dual_tested_sensitivity.csv"),
+  row_names = FALSE
+)
+
+patient_field <- first_existing_col(
+  c("patient_id", "person_id", "pat_id", "empi", "mrn", "member_id"),
+  names(subset_data)
+)
+encounter_date_field <- first_existing_col(
+  c("encounter_date", "encounter_datetime", "encounter_time", "enc_date"),
+  names(subset_data)
+)
+
+if (!is.na(patient_field)) {
+  first_df <- subset_data
+  if (!is.na(encounter_date_field)) {
+    first_df$.encounter_order <- suppressWarnings(as.POSIXct(first_df[[encounter_date_field]]))
+  } else {
+    first_df$.encounter_order <- seq_len(nrow(first_df))
+  }
+  first_df <- first_df |>
+    dplyr::arrange(.data[[patient_field]], .data$.encounter_order) |>
+    dplyr::group_by(.data[[patient_field]]) |>
+    dplyr::slice_head(n = 1) |>
+    dplyr::ungroup()
+  discordance_first_encounter_sensitivity <- tidyr::crossing(
+    outcome_var = discordance_outcome_vars,
+    group = discordance_groups
+  ) |>
+    dplyr::rowwise() |>
+    dplyr::mutate(
+      outcome = discordance_outcome_labels[[outcome_var]],
+      treat_var = ifelse(group == "ABG", "has_abg", "has_vbg"),
+      n_tested = sum(first_df[[treat_var]] == 1, na.rm = TRUE),
+      events = sum(to01(first_df[[outcome_var]]) == 1 & first_df[[treat_var]] == 1, na.rm = TRUE),
+      event_rate = ifelse(n_tested > 0, events / n_tested, NA_real_),
+      patient_field = patient_field,
+      encounter_date_field = ifelse(is.na(encounter_date_field), "", encounter_date_field)
+    ) |>
+    dplyr::ungroup() |>
+    dplyr::select(outcome, group, n_tested, events, event_rate, patient_field, encounter_date_field)
+  record_discordance_status(
+    "first_encounter_sensitivity",
+    "completed",
+    paste0("First-encounter sensitivity used patient field ", patient_field, "."),
+    "Results/discordance_first_encounter_sensitivity.csv",
+    optional = TRUE
+  )
+} else {
+  discordance_first_encounter_sensitivity <- tibble::tibble(
+    outcome = NA_character_,
+    group = NA_character_,
+    n_tested = NA_integer_,
+    events = NA_integer_,
+    event_rate = NA_real_,
+    patient_field = NA_character_,
+    encounter_date_field = NA_character_,
+    component_status = "skipped",
+    reason = "patient_identifier_unavailable"
+  )
+  record_discordance_status(
+    "first_encounter_sensitivity",
+    "skipped",
+    "No patient identifier was available for first-encounter restriction.",
+    "Results/discordance_first_encounter_sensitivity.csv",
+    optional = TRUE
+  )
+}
+write_csv_safely(
+  discordance_first_encounter_sensitivity,
+  results_path("discordance_first_encounter_sensitivity.csv"),
+  row_names = FALSE
+)
+
+## Timing sensitivity
+timing_names <- names(subset_data_raw)
+gas_time_candidates <- candidate_cols(
+  timing_names,
+  "(abg|vbg|blood_gas|gas).*(date|time|timestamp|datetime)",
+  max_n = 20
+)
+proc_time_candidates <- candidate_cols(
+  timing_names,
+  "(imv|niv).*(date|time|timestamp|datetime)",
+  max_n = 20
+)
+
+if (length(gas_time_candidates) && length(proc_time_candidates)) {
+  discordance_timing_status <- tibble::tibble(
+    component = "timing_sensitivity",
+    status = "available_fields_detected",
+    gas_time_fields = paste(gas_time_candidates, collapse = "; "),
+    procedure_time_fields = paste(proc_time_candidates, collapse = "; "),
+    reason = "candidate_fields_available_manual_review_needed"
+  )
+  discordance_timing_sensitivity <- tibble::tibble(
+    outcome = NA_character_,
+    group = NA_character_,
+    n_candidate_gas_time_fields = length(gas_time_candidates),
+    n_candidate_procedure_time_fields = length(proc_time_candidates),
+    status = "candidate_fields_detected",
+    reason = "Field naming is not specific enough for an automated before-procedure restriction."
+  )
+  record_discordance_status(
+    "timing_sensitivity",
+    "skipped",
+    "Candidate timing fields were detected, but no unambiguous gas/procedure timestamp pairs were available.",
+    "Results/discordance_timing_status.csv",
+    optional = TRUE
+  )
+} else {
+  discordance_timing_status <- tibble::tibble(
+    component = "timing_sensitivity",
+    status = "skipped",
+    gas_time_fields = paste(gas_time_candidates, collapse = "; "),
+    procedure_time_fields = paste(proc_time_candidates, collapse = "; "),
+    reason = "timestamp_fields_unavailable"
+  )
+  discordance_timing_sensitivity <- tibble::tibble(
+    outcome = NA_character_,
+    group = NA_character_,
+    n_candidate_gas_time_fields = length(gas_time_candidates),
+    n_candidate_procedure_time_fields = length(proc_time_candidates),
+    status = "skipped",
+    reason = "timestamp_fields_unavailable"
+  )
+  record_discordance_status(
+    "timing_sensitivity",
+    "skipped",
+    "Blood-gas/procedure timestamp fields were unavailable.",
+    "Results/discordance_timing_status.csv",
+    optional = TRUE
+  )
+}
+write_csv_safely(
+  discordance_timing_status,
+  results_path("discordance_timing_status.csv"),
+  row_names = FALSE
+)
+write_csv_safely(
+  discordance_timing_sensitivity,
+  results_path("discordance_timing_sensitivity.csv"),
+  row_names = FALSE
+)
+
+## Summary of hypotheses and interpretation
+standardization_supported <- any(
+  is.finite(discordance_standardization_summary$gap_current_ref) &
+    (
+      abs(discordance_standardization_summary$gap_common_ref) <=
+        0.75 * abs(discordance_standardization_summary$gap_current_ref) |
+        abs(discordance_standardization_summary$gap_marginal_standardized) <=
+          0.75 * abs(discordance_standardization_summary$gap_current_ref)
+    ),
+  na.rm = TRUE
+)
+
+scale_supported <- any(
+  grepl("Relative odds are closer", discordance_scale_summary$comment, fixed = TRUE),
+  na.rm = TRUE
+)
+
+capture_supported <- any(
+  missingness_capture_summary$max_abs_abg_vbg_difference > 0.05,
+  na.rm = TRUE
+)
+
+tail_supported <- any(discordance_tail_support_summary$support_flag %in% TRUE, na.rm = TRUE)
+
+setting_supported <- any(discordance_setting_rate_ranges$rate_range > 0.10, na.rm = TRUE)
+
+dual_inconclusive <- any(
+  dplyr::bind_rows(discordance_status_rows) |>
+    dplyr::filter(.data$component == "dual_tested_sensitivity") |>
+    dplyr::pull(status) == "skipped",
+  na.rm = TRUE
+)
+
+timing_inconclusive <- any(
+  dplyr::bind_rows(discordance_status_rows) |>
+    dplyr::filter(.data$component == "timing_sensitivity") |>
+    dplyr::pull(status) == "skipped",
+  na.rm = TRUE
+)
+
+discordance_interpretation_summary <- tibble::tibble(
+  hypothesis = c(
+    "Reference-profile / standardization effect",
+    "Scale / noncollapsibility effect",
+    "Differential missingness or procedure capture",
+    "Tail support / positivity",
+    "Setting or workflow heterogeneity",
+    "Dual-tested measurement structure",
+    "Same-encounter timing structure"
+  ),
+  supported = c(
+    standardization_supported,
+    scale_supported,
+    capture_supported,
+    tail_supported,
+    setting_supported,
+    FALSE,
+    FALSE
+  ),
+  not_supported = c(
+    !standardization_supported,
+    !scale_supported,
+    !capture_supported,
+    !tail_supported,
+    !setting_supported,
+    !dual_inconclusive,
+    !timing_inconclusive
+  ),
+  inconclusive = c(
+    FALSE,
+    FALSE,
+    FALSE,
+    FALSE,
+    FALSE,
+    dual_inconclusive,
+    timing_inconclusive
+  ),
+  key_evidence = c(
+    ifelse(standardization_supported, "Common or marginal standardization shrank at least one current probability gap by >=25%.", "Standardization did not shrink probability gaps by >=25%."),
+    ifelse(scale_supported, "At least one contrast had closer ABG-VBG agreement on OR scale than risk-difference scale.", "OR-scale agreement was not consistently closer than probability-scale agreement."),
+    ifelse(capture_supported, "Detected missingness/capture summaries show >5 percentage-point or SMD-scale differences.", "Detected missingness/capture summaries did not show >5-point differences."),
+    ifelse(tail_supported, "At least one clinical/quantile bin had ESS <100 or weighted events <10.", "Tail bins did not trigger the ESS/event-count support flag."),
+    ifelse(setting_supported, "Within-modality weighted event-rate range exceeded 10 percentage points for at least one setting variable.", "Within-modality setting-specific weighted event-rate ranges were <=10 percentage points."),
+    ifelse(dual_inconclusive, "Dual-tested subset was unavailable in this render subset.", "Dual-tested subset event rates were generated for direct review."),
+    ifelse(timing_inconclusive, "Timestamp fields were unavailable or ambiguous.", "Timing fields were available for direct review.")
+  ),
+  recommended_next_step = c(
+    "If supported, consider whether manuscript probability curves should use common or marginal standardization in a future methodological ticket.",
+    "Use risk differences/RRs beside ORs when communicating procedure outcomes.",
+    "If supported, audit NIV/IMV source-field construction and coding-density definitions before changing models.",
+    "If supported, avoid overinterpreting tail probability gaps and consider trimming/support annotations.",
+    "If supported, consider setting-stratified or setting-interaction sensitivity models.",
+    "Compare dual-tested event-rate patterns against primary ABG/VBG gaps before attributing discordance to modality.",
+    "If timestamps become available, restrict to blood gases clearly preceding NIV/IMV."
+  )
+)
+write_csv_safely(
+  discordance_interpretation_summary,
+  results_path("discordance_interpretation_summary.csv"),
+  row_names = FALSE
+)
+record_discordance_status(
+  "interpretation_summary",
+  "completed",
+  "Hypothesis-level interpretation summary was generated.",
+  "Results/discordance_interpretation_summary.csv"
+)
+
+status_df_pre_manifest <- write_discordance_status()
+
+discordance_required_artifacts <- c(
+  "discordance_validation_status.csv",
+  "discordance_current_summary.csv",
+  "discordance_gap_metrics.csv",
+  "discordance_xref_common_prob_curves.csv",
+  "discordance_marginal_standardized_prob_curves.csv",
+  "discordance_marginal_standardization_status.csv",
+  "discordance_standardization_summary.csv",
+  "discordance_scale_summary.csv",
+  "discordance_missingness_outcome_fields.csv",
+  "discordance_procedure_capture_proxies.csv",
+  "discordance_missing_indicator_balance.csv",
+  "discordance_missingness_capture_summary.csv",
+  "discordance_tail_support_summary.csv",
+  "discordance_tail_support_by_bin.csv",
+  "discordance_setting_sensitivity.csv",
+  "discordance_setting_rate_ranges.csv",
+  "discordance_dual_tested_sensitivity.csv",
+  "discordance_first_encounter_sensitivity.csv",
+  "discordance_timing_sensitivity.csv",
+  "discordance_timing_status.csv",
+  "discordance_interpretation_summary.csv",
+  "figs/discordance_probability_standardization_niv_imv.png",
+  "figs/discordance_tail_support_niv_imv.png",
+  "discordance_artifact_manifest.csv"
+)
+
+discordance_artifact_manifest <- tibble::tibble(
+  artifact_path = discordance_required_artifacts,
+  required = TRUE,
+  kind = dplyr::case_when(
+    grepl("^figs/", artifact_path) ~ "figure",
+    grepl("manifest|status", artifact_path) ~ "validation",
+    TRUE ~ "csv"
+  ),
+  exists = vapply(
+    artifact_path,
+    function(path) {
+      if (identical(path, "discordance_artifact_manifest.csv")) return(TRUE)
+      file.exists(results_path(path))
+    },
+    logical(1L)
+  ),
+  purpose = "NIV/IMV probability-OR discordance diagnostic artifact."
+)
+write_csv_safely(
+  discordance_artifact_manifest,
+  results_path("discordance_artifact_manifest.csv"),
+  row_names = FALSE
+)
+
+missing_discordance_artifacts <- discordance_artifact_manifest |>
+  dplyr::filter(.data$required, !.data$exists) |>
+  dplyr::pull(artifact_path)
+if (length(missing_discordance_artifacts)) {
+  stop(
+    "Discordance artifact completeness check failed: ",
+    paste(missing_discordance_artifacts, collapse = ", ")
+  )
+}
+record_discordance_status(
+  "artifact_manifest",
+  "completed",
+  "All required discordance artifacts were present.",
+  "Results/discordance_artifact_manifest.csv"
+)
+status_df <- write_discordance_status()
+
+required_status_failures <- status_df |>
+  dplyr::filter(!.data$optional, .data$status != "completed")
+if (nrow(required_status_failures)) {
+  stop(
+    "Required discordance component(s) did not complete: ",
+    paste(required_status_failures$component, collapse = ", ")
+  )
+}
+
+render_table_pdf(
+  discordance_interpretation_summary |>
+    dplyr::mutate(
+      supported = ifelse(supported, "yes", "no"),
+      not_supported = ifelse(not_supported, "yes", "no"),
+      inconclusive = ifelse(inconclusive, "yes", "no")
+    ),
+  caption = "Summary of plausible explanations for NIV/IMV probability-OR discordance",
+  file_stub = "discordance_interpretation_summary_display",
+  wide = TRUE,
+  digits = 2,
+  max_cols = 5,
+  landscape = TRUE
+)
+
+cat(
+  "Summary of plausible explanations for NIV/IMV probability-OR discordance\n\n",
+  "- Required discordance diagnostics completed in run mode `", RUN_MODE, "` with `pilot_frac = ", PILOT_FRAC, "`.\n",
+  "- Optional timing, first-encounter, dual-tested, and site-specific diagnostics may be marked skipped when required fields or rows are unavailable.\n",
+  "- Detailed artifacts are written under `Results/discordance_*` and `Results/figs/discordance_*`.\n",
+  sep = ""
+)
+```
+
 ```{r diagnostics-completeness}
 #| include: true
 # Purpose: diagnostics completeness.
@@ -15582,7 +17438,27 @@ expected_diag <- c(
   "mice_pred_width_preflight.csv", "mice_chain_diagnostics.csv",
   "mice_batches_log.csv", "missingness-by-strata.csv",
   "missingness-drivers.csv", "missingness-pattern.csv", "plot_drop_log.csv",
-  "mice_smoketest.log"
+  "mice_smoketest.log",
+  "discordance_validation_status.csv", "discordance_artifact_manifest.csv",
+  "discordance_current_summary.csv", "discordance_gap_metrics.csv",
+  "discordance_xref_common_prob_curves.csv",
+  "discordance_marginal_standardized_prob_curves.csv",
+  "discordance_marginal_standardization_status.csv",
+  "discordance_standardization_summary.csv", "discordance_scale_summary.csv",
+  "discordance_missingness_outcome_fields.csv",
+  "discordance_procedure_capture_proxies.csv",
+  "discordance_missing_indicator_balance.csv",
+  "discordance_missingness_capture_summary.csv",
+  "discordance_tail_support_summary.csv",
+  "discordance_tail_support_by_bin.csv",
+  "discordance_setting_sensitivity.csv",
+  "discordance_setting_rate_ranges.csv",
+  "discordance_dual_tested_sensitivity.csv",
+  "discordance_first_encounter_sensitivity.csv",
+  "discordance_timing_sensitivity.csv", "discordance_timing_status.csv",
+  "discordance_interpretation_summary.csv",
+  "figs/discordance_probability_standardization_niv_imv.png",
+  "figs/discordance_tail_support_niv_imv.png"
 )
 missing_files <- expected_diag[!file.exists(results_path(expected_diag))]
 stopifnot(length(missing_files) == 0)

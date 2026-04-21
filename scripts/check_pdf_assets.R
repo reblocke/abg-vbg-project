@@ -158,7 +158,9 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
     "Table S2. Crude associations",
     "Table S3. GBM IPSW-weighted associations",
     "Table S4. Missingness of baseline covariates",
-    "Table S5. Multiple-imputation diagnostic summary"
+    "Table S5. Multiple-imputation diagnostic summary",
+    "Analysis of the discordance between predicted probabilities and OR for NIV and IMV",
+    "Summary of plausible explanations for NIV/IMV probability-OR discordance"
   )
   found <- vapply(required_snippets, grepl, logical(1L), x = pdf_text, fixed = TRUE)
   for (idx in seq_along(required_snippets)) {
@@ -179,7 +181,10 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
     "render_validation_manuscript_assets",
     "table_s1_inclusion_criteria",
     "table_s4_missingness_primary_analysis",
-    "table_s5_mi_diagnostic_summary"
+    "table_s5_mi_diagnostic_summary",
+    "predict_spline_prob_from_compact",
+    "discordance_validation_status",
+    "discordance_interpretation_summary"
   )
   source_found <- vapply(required_source_snippets, grepl, logical(1L), x = pdf_text, fixed = TRUE)
   for (idx in seq_along(required_source_snippets)) {
