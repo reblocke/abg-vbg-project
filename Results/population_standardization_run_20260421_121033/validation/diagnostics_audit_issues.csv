@@ -1,0 +1,2 @@
+"severity","component","evidence_file","evidence_snippet","why_it_matters","recommended_fix","run_id","run_ts"
+"high","Outcome","Results/model_fit_diagnostics.csv","sep_flag TRUE for 172 / 692 fits","High rate of separation/near-separation can bias ORs and CIs.","Inspect flagged outcomes; consider penalized fits or check data sparsity.","20260421_121048","2026-04-21 12:10:48.40139"

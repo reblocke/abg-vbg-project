@@ -2,11 +2,11 @@
 
 ## Executive Summary
 - Overall status: FAIL
-- Run mode: pilot; pilot_frac: 0.1; m: 20; maxit: 5
-- Runtime total (sec): 332.050
+- Run mode: pilot; pilot_frac: 0.01; m: 20; maxit: 5
+- Runtime total (sec): 198.512
 - MI batch status: batches=70; m_batch=2; failures=0
-- Balance: ABG max|SMD|=0.098; VBG max|SMD|=0.045
-- Separation flags: 425 / 692
+- Balance: ABG max|SMD|=0.108; VBG max|SMD|=0.079
+- Separation flags: 540 / 692
 
 ## Artifact Inventory (Found / Missing)
 
@@ -35,39 +35,40 @@
 
 ## Runtime Top Steps
 
-- mi_single_pass: 193.540 sec
-- mice_batch_10: 15.732 sec
-- mice_batch_6: 13.879 sec
-- mice_batch_8: 13.795 sec
-- mice_batch_1: 13.699 sec
-- mice_batch_3: 13.673 sec
-- mice_batch_5: 13.636 sec
-- mice_batch_9: 13.635 sec
-- mice_batch_7: 13.618 sec
-- mice_batch_4: 13.493 sec
+- mi_single_pass: 182.927 sec
+- mice_batch_6: 1.634 sec
+- mice_batch_10: 1.595 sec
+- mice_batch_7: 1.578 sec
+- mice_batch_2: 1.560 sec
+- mice_batch_8: 1.559 sec
+- mice_batch_1: 1.546 sec
+- mice_batch_4: 1.539 sec
+- mice_batch_3: 1.535 sec
+- mice_batch_9: 1.520 sec
 
 ## MI Health
 
 - Smoke test failed: FALSE
-- Predictor width max mm_cols: 34.000
+- Predictor width max mm_cols: 33.000
 - Chain diagnostics issue: FALSE (numeric_names=FALSE; drift_tail_na_frac=0.000)
 - MI warnings rows: 0
 
 ## Balance
 
-- ABG max |SMD|: 0.098
-- VBG max |SMD|: 0.045
+- ABG max |SMD|: 0.108
+- VBG max |SMD|: 0.079
 
 ## Outcome Fits
 
 Top separation counts (analysis_variant/group/outcome):
 - mi_ipw / ABG / death_60d: 40
-- mi_unweighted / ABG / death_60d: 40
 - mi_ipw / VBG / death_60d: 40
 - mi_unweighted / VBG / death_60d: 40
+- mi_ipw / ABG / hypercap_resp_failure: 40
+- mi_unweighted / ABG / hypercap_resp_failure: 40
 - mi_ipw / VBG / hypercap_resp_failure: 40
-- mi_unweighted / VBG / hypercap_resp_failure: 40
 
 ## Issues (prioritized)
 
-- [high] Outcome: sep_flag TRUE for 425 / 692 fits (Results/model_fit_diagnostics.csv)
+- [high] Balance: ABG max|SMD|=0.108 (Results/balance_target_imp_summary.csv)
+- [high] Outcome: sep_flag TRUE for 540 / 692 fits (Results/model_fit_diagnostics.csv)

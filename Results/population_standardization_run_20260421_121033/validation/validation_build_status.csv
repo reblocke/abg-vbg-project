@@ -1,0 +1,7 @@
+"component","status","detail","run_id","run_ts"
+"overall_build","FAIL","Final validation status derived from artifact checks, glyph audit, duplicate audit, and diagnostics audit.","20260421_121048","2026-04-21 12:10:48.40139"
+"artifact_registry","PASS","0 missing required generated artifact rows.","20260421_121048","2026-04-21 12:10:48.40139"
+"external_manual_assets","PASS","0 declared external/manual rows.","20260421_121048","2026-04-21 12:10:48.40139"
+"glyph_audit","PASS","0 unsafe manuscript glyph rows.","20260421_121048","2026-04-21 12:10:48.40139"
+"duplicate_audit","PASS","0 conflicting duplicate/numbering rows.","20260421_121048","2026-04-21 12:10:48.40139"
+"diagnostics_audit","FAIL","1 high / 0 medium / 0 low diagnostics issues.","20260421_121048","2026-04-21 12:10:48.40139"

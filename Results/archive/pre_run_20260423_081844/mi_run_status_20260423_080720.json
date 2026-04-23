@@ -1,0 +1,15 @@
+{
+  "render_ts": "20260423_080720",
+  "status": "completed",
+  "pdf_exists": true,
+  "wrapper_trailer_present": true,
+  "wrapper_status": 0,
+  "postflight_passed": true,
+  "live_render_detected": false,
+  "log_path": "/Users/reblocke/Research/abg-vbg-project/Results/render_logs/render_20260423_080720.log",
+  "pdf_path": "/Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-4-21.pdf",
+  "postmortem_path": "/Users/reblocke/Research/abg-vbg-project/Results/render_logs/postmortem_20260423_080720.md",
+  "last_batch": 10,
+  "last_stage": "checkpoint_saved",
+  "has_mice_returned_for_last_batch": true
+}

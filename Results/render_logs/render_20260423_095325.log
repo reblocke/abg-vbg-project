@@ -1,0 +1,437 @@
+[render:start] 2026-04-23 09:53:25 -0600
+[render:qmd] /Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-4-21.qmd
+[render:log] /Users/reblocke/Research/abg-vbg-project/Results/render_logs/render_20260423_095325.log
+[render:pdf_target] /Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-4-21.pdf
+[render:wrapper_pid] 27336
+[render:args] -P run_mode:pilot -P pilot_frac:0.01
+[render:archive] moved /Users/reblocke/Research/abg-vbg-project/Results/mice_batches_log.csv -> /Users/reblocke/Research/abg-vbg-project/Results/archive/pre_run_20260423_095325/mice_batches_log.csv
+[render:archive] moved /Users/reblocke/Research/abg-vbg-project/Results/mice_combine_log.csv -> /Users/reblocke/Research/abg-vbg-project/Results/archive/pre_run_20260423_095325/mice_combine_log.csv
+[render:archive] moved /Users/reblocke/Research/abg-vbg-project/Results/mi_batch_context.rds -> /Users/reblocke/Research/abg-vbg-project/Results/archive/pre_run_20260423_095325/mi_batch_context.rds
+[render:archive] moved /Users/reblocke/Research/abg-vbg-project/Results/mi_batch_checkpoints -> /Users/reblocke/Research/abg-vbg-project/Results/archive/pre_run_20260423_095325/mi_batch_checkpoints
+[render:archive] moved /Users/reblocke/Research/abg-vbg-project/Results/mi_run_status_20260423_093836.json -> /Users/reblocke/Research/abg-vbg-project/Results/archive/pre_run_20260423_095325/mi_run_status_20260423_093836.json
+[render:archive] moved /Users/reblocke/Research/abg-vbg-project/Results/render_logs/postmortem_20260423_093836.md -> /Users/reblocke/Research/abg-vbg-project/Results/archive/pre_run_20260423_095325/render_logs/postmortem_20260423_093836.md
+[render:archive] moved /Users/reblocke/Research/abg-vbg-project/Results/render_logs/rss_trace_20260423_093836.csv -> /Users/reblocke/Research/abg-vbg-project/Results/archive/pre_run_20260423_095325/render_logs/rss_trace_20260423_093836.csv
+[render:cleanup] removed stale /Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-4-21.tex
+[render:cleanup] removed stale /Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG-analysis-2026-4-21.pdf
+[render:root] /Users/reblocke/Research/abg-vbg-project
+[render:preflight] check_env
+Starting environment preflight...
+The following package(s) are out of sync [lockfile != library]:
+
+# CRAN -----------------------------------------------------------------------
+- lattice    [0.22-7 != 0.22-9]
+- survival   [3.8-3 != 3.8-6]
+
+See `?renv::status` for advice on resolving these issues. 
+Warning: Environment preflight warning: renv reports lockfile/library drift on this machine, but all declared direct dependencies are installed. Continue to the dependency audit and pilot render, then run `Rscript --vanilla -e "source('renv/activate.R'); renv::snapshot(prompt = FALSE)"` after the validated render to record the working state.
+Environment preflight passed with lockfile-drift warning.
+[render:preflight] check_dependencies
+Dependency audit targets:
+- /Users/reblocke/Research/abg-vbg-project/Code Drafts/ABG-VBG analysis 2026-4-21.qmd
+- /Users/reblocke/Research/abg-vbg-project/scripts/check_env.R
+- /Users/reblocke/Research/abg-vbg-project/scripts/check_dependencies.R
+
+Dependency audit note (renv::dependencies only):
+- rmarkdown
+- shiny
+
+Dependency audit passed for 45 declared direct packages.
+[render:quarto] begin
+[render:cwd] /Users/reblocke/Research/abg-vbg-project
+[render:rss_trace] /Users/reblocke/Research/abg-vbg-project/Results/render_logs/rss_trace_20260423_095325.csv
+[render:rss_sampler_pid] 27450
+[render:timing] /usr/bin/time -l
+[render:quarto_pid] 27459
+[render:r_pid] 27502
+- The project is out-of-sync -- use `renv::status()` for details.
+
+
+processing file: ABG-VBG-analysis-2026-4-21.rmarkdown
+1/303                                          
+2/303 [todo-notes]                             
+3/303                                          
+4/303 [setup-table-helpers]                    
+5/303                                          
+6/303 [setup-packages]                         
+7/303                                          
+8/303 [cohort-flow-helpers]                    
+9/303                                          
+10/303 [cohort-flow-figure]                     
+11/303                                          
+12/303 [setup-run-config]                       
+13/303                                          
+14/303 [setup-diagnostics-output]               
+15/303                                          
+16/303 [setup-diagnostics-helpers]              
+17/303                                          
+18/303 [latex-codeblock-risk-scan]              
+19/303                                          
+20/303 [setup-model-diagrams]                   
+21/303                                          
+22/303 [setup-shapviz]                          
+23/303                                          
+24/303 [runtime-hooks]                          
+25/303                                          
+26/303 [seed-escrow]                            
+27/303                                          
+28/303 [gt-pdf-helper]                          
+29/303                                          
+30/303 [stage1-start]                           
+31/303                                          
+32/303 [load-trinetx-data]                      
+33/303                                          
+34/303 [propensity-config]                      
+35/303                                          
+36/303 [build-subset-data]                      
+37/303                                          
+38/303 [schema-normalize]                       
+39/303                                          
+40/303 [machine-resource-controls]              
+41/303                                          
+42/303 [run-metadata]                           
+43/303                                          
+44/303 [codebook-export-full]                   
+45/303                                          
+46/303 [derive-death-60d]                       
+47/303                                          
+48/303 [death-60d-summary]                      
+49/303                                          
+50/303 [derive-table1-cohorts]                  
+51/303                                          
+52/303 [float-barrier-table1abg]                
+53/303                                          
+54/303 [export-table1a-table1b-word]            
+55/303                                          
+56/303 [table1-everyone-abg-vbg]                
+57/303                                          
+58/303 [float-barrier-table1-everyone]          
+59/303                                          
+60/303 [co2-category-definitions]               
+61/303                                          
+62/303 [binary-hypercapnia-check]               
+63/303                                          
+64/303 [tbl2-co2-cohorts]                       
+65/303                                          
+66/303 [float-barrier-table2]                   
+67/303                                          
+68/303 [tbl2-outcome-panel]                     
+69/303                                          
+70/303 [export-table1-tbl2-word]                
+71/303                                          
+72/303 [or-data-three-level-unweighted]         
+73/303                                          
+74/303 [supplement-table-s2-crude]              
+75/303                                          
+76/303 [or-data-three-level-unweighted-post-s2] 
+77/303                                          
+78/303 [or-plot-three-level-unweighted]         
+79/303                                          
+80/303 [co2-binned-rates-unweighted]            
+81/303                                          
+82/303 [rcs-abg-data-prep]                      
+83/303                                          
+84/303 [rcs-abg-unweighted-models]              
+85/303                                          
+86/303 [rcs-vbg-data-prep]                      
+87/303                                          
+88/303 [rcs-vbg-unweighted-models]              
+89/303                                          
+90/303 [float-barrier-spline-unweighted]        
+91/303                                          
+92/303 [encode-encounter-type]                  
+93/303                                          
+94/303 [ipw-abg-weighting]                      
+95/303                                          
+96/303 [ipw-abg-rcs-models]                     
+97/303                                          
+98/303 [ipw-abg-rcs-trimmed]                    
+99/303                                          
+100/303 [ipw-vbg-workflow]                       
+101/303                                          
+102/303 [ipw-three-level-pco2-all]               
+103/303                                          
+104/303 [supplement-table-s3-gbm]                
+105/303                                          
+106/303 [or-data-three-level-weighted-post-s3]   
+107/303                                          
+108/303 [co2-binned-rates-ipw-nonmi]             
+109/303                                          
+110/303 [propensity-histograms-conditional]      
+111/303                                          
+112/303 [propensity-histograms-all]              
+113/303                                          
+114/303 [shap-top10-ipw-gbm]                     
+115/303                                          
+116/303 [loveplot-ipw-gbm]                       
+117/303                                          
+118/303 [shap-top10-ipw-gbm-display]             
+119/303                                          
+120/303 [stage2-cleanup]                         
+121/303                                          
+122/303 [mi-packages]                            
+123/303                                          
+124/303 [mi-settings]                            
+125/303                                          
+126/303 [mi-missing-summary]                     
+127/303                                          
+128/303 [mi-ps-helpers]                          
+129/303                                          
+130/303 [mi-missing-structure]                   
+131/303                                          
+132/303 [float-barrier-missingness]              
+133/303                                          
+134/303 [missingness-drivers]                    
+135/303                                          
+136/303 [mi-prep]                                
+137/303                                          
+138/303 [type-invariants]                        
+139/303                                          
+140/303 [mi-exec]                                
+141/303                                          
+142/303 [mi-mcerror]                             
+143/303                                          
+144/303 [mi-diagnostics]                         
+145/303                                          
+146/303 [mi-missing-pattern]                     
+147/303                                          
+148/303 [mi-imputation-diagnostics]              
+149/303                                          
+150/303 [mi-mcerr-progress]                      
+151/303                                          
+152/303 [mi-missing-audit]                       
+153/303                                          
+154/303 [fail-fast-checks]                       
+155/303                                          
+156/303 [mi-single-pass]                         
+157/303                                          
+158/303 [mi-propensity-abg]                      
+159/303                                          
+160/303 [mi-weight-diagnostics-abg]              
+161/303                                          
+162/303 [target-balance-helpers]                 
+163/303                                          
+164/303 [mi-balance-abg]                         
+165/303                                          
+166/303 [mi-propensity-vbg]                      
+167/303                                          
+168/303 [mi-weight-diagnostics-vbg]              
+169/303                                          
+170/303 [mi-balance-vbg]                         
+171/303                                          
+172/303 [mi-pool-helpers]                        
+173/303                                          
+174/303 [mi-abg-outcomes]                        
+175/303                                          
+176/303 [mi-vbg-outcomes]                        
+177/303                                          
+178/303 [shap-top10-mi-logistic]                 
+179/303                                          
+180/303 [mi_pco2_threelevel]                     
+181/303                                          
+182/303 [mi-co2-cat-checks]                      
+183/303                                          
+184/303 [mi-ipw-abg-threelevel]                  
+185/303                                          
+186/303 [mi-ipw-vbg-threelevel]                  
+187/303                                          
+188/303 [table3-ipw-mi-co2]                      
+189/303                                          
+190/303 [table-summary-adjusted-threelevel]      
+191/303                                          
+192/303 [key-results-cat3-track-prep]            
+193/303                                          
+194/303 [key-results-cat3-crude-abg-vbg]         
+195/303                                          
+196/303 [key-results-cat3-adjusted-abg-vbg]      
+197/303                                          
+198/303 [key-results-cat3-imputed-abg-vbg]       
+199/303                                          
+200/303 [key-results-cat3-main-mi-ipw-abg-vbg]   
+201/303                                          
+202/303 [key-results-cat3-gbm-weighted-abg-vbg]  
+203/303                                          
+204/303 [stage1-cleanup]                         
+205/303                                          
+206/303 [co2-binned-rates-mi-ipw]                
+207/303                                          
+208/303 [manuscript-outputs]                     
+209/303                                          
+210/303 [mi-threelevel-sanity]                   
+211/303                                          
+212/303 [ipw-three-level-pco2-mi-abg-vbg]        
+213/303                                          
+214/303 [ipw-three-level-pco2-mi-abg-vbg-prob]   
+215/303                                          
+216/303 [mi-propensity-histograms-logistic]      
+217/303                                          
+218/303 [loveplot-mi-logistic]                   
+219/303                                          
+220/303 [shap-top10-mi-logistic-display]         
+221/303                                          
+222/303 [float-barrier-mi-or-plot]               
+223/303                                          
+224/303 [ipw-rcs-overlay-mi-abg-vbg]             
+225/303                                          
+226/303 [ipw-rcs-overlay-mi-abg-vbg-prob]        
+227/303                                          
+228/303 [key-results-track-prep]                 
+229/303                                          
+230/303 [key-results-spline-crude-abg-vbg]       
+231/303                                          
+232/303 [key-results-spline-adjusted-abg-vbg]    
+233/303                                          
+234/303 [key-results-spline-imputed-abg-vbg]     
+235/303                                          
+236/303 [key-results-spline-main-mi-ipw-abg-vbg] 
+237/303                                          
+238/303 [key-results-spline-gbm-weighted-abg-vbg]
+239/303                                          
+240/303 [float-barrier-mi-spline]                
+241/303                                          
+242/303 [ipw-output-parity]                      
+243/303                                          
+244/303 [key-results-output-audit]               
+245/303                                          
+246/303 [manuscript-supplement-tables-additional]
+247/303                                          
+248/303 [supplement-artifact-manifest]           
+249/303                                          
+250/303 [manuscript-facing-display]              
+251/303                                          
+252/303 [manuscript-asset-audit]                 
+253/303                                          
+254/303 [supplement-artifact-assertions]         
+255/303                                          
+256/303 [diagnostics-inputs]                     
+257/303                                          
+258/303 [diagnostics-missingness]                
+259/303                                          
+260/303 [diagnostics-mi-convergence]             
+261/303                                          
+262/303 [diagnostics-mi-stability]               
+263/303                                          
+264/303 [diagnostics-mi-maxit]                   
+265/303                                          
+266/303 [diagnostics-weights]                    
+267/303                                          
+268/303 [diagnostics-balance]                    
+269/303                                          
+270/303 [diagnostics-outcome]                    
+271/303                                          
+272/303 [diagnostics-summary]                    
+273/303                                          
+274/303 [warnings-summary]                       
+275/303                                          
+276/303 [mi-nonconvergence-summary]              
+277/303                                          
+278/303 [runtime-log-export]                     
+279/303                                          
+280/303 [discordance-diagnostics]                
+281/303                                          
+282/303 [diagnostics-completeness]               
+283/303                                          
+284/303 [diagnostics-audit-run]                  
+285/303                                          
+286/303 [diagnostics-audit-summary]              
+287/303                                          
+288/303 [validation-build-summary]               
+289/303                                          
+290/303 [mi-save-exports]                        
+291/303                                          
+292/303 [mi-session]                             
+293/303                                          
+294/303 [software-statement]                     
+295/303                                          
+296/303 [render-path-hygiene-scan]               
+297/303                                          
+298/303 [pdf-hygiene-scan]                       
+299/303                                          
+300/303 [numbering-hygiene-scan]                 
+301/303                                          
+302/303 [mi-transient-cleanup]                   
+303/303                                          
+output file: ABG-VBG-analysis-2026-4-21.knit.md
+
+pandoc 
+  to: latex
+  output-file: ABG-VBG-analysis-2026-4-21.tex
+  standalone: true
+  pdf-engine: lualatex
+  variables:
+    graphics: true
+    tables: true
+  default-image-extension: pdf
+  toc: true
+  number-sections: true
+  pdf-engine-opts:
+    - '--cnf-line=dest_names_size=300000'
+  
+metadata
+  documentclass: scrartcl
+  classoption:
+    - DIV=11
+    - numbers=noendperiod
+  papersize: letter
+  header-includes:
+    - \KOMAoption{captions}{tableheading}
+    - \usepackage{float}
+    - \usepackage{placeins}
+    - \graphicspath{{../}{./}}
+  block-headings: true
+  title: ABG‑VBG Analysis
+  author: Brian Locke, Anila Mehta
+  editor: visual
+  fontsize: 11pt
+  hyperrefoptions:
+    - draft
+  mainfont: Latin Modern Roman
+  code-block-bg: false
+  geometry:
+    - landscape
+    - margin=0.8in
+  
+
+Rendering PDF
+running lualatex - 1
+  This is LuaHBTeX, Version 1.22.0 (TeX Live 2025) 
+   restricted system commands enabled.
+  
+running lualatex - 2
+  This is LuaHBTeX, Version 1.22.0 (TeX Live 2025) 
+   restricted system commands enabled.
+  
+running lualatex - 3
+  This is LuaHBTeX, Version 1.22.0 (TeX Live 2025) 
+   restricted system commands enabled.
+  
+
+Output created: ABG-VBG-analysis-2026-4-21.pdf
+
+      627.78 real       594.91 user        20.24 sys
+          4271128576  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             3630402  page reclaims
+               19956  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                  15  messages sent
+                  13  messages received
+                   9  signals received
+                8786  voluntary context switches
+             1276978  involuntary context switches
+            38707369  instructions retired
+            19700284  cycles elapsed
+             1376568  peak memory footprint
+[render:postflight] validate_outputs
+[render:postflight] render path and PDF validation passed
+[render:postflight] check_pdf_assets
+[pdf-assets] validation passed: /Users/reblocke/Research/abg-vbg-project/Results/pdf_asset_presence_scan.csv
+[render:quarto] complete
+[render:end] 2026-04-23 10:03:58 -0600
+[render:status] 0
+[render:log] /Users/reblocke/Research/abg-vbg-project/Results/render_logs/render_20260423_095325.log
+[collect_render_postmortem] wrote /Users/reblocke/Research/abg-vbg-project/Results/render_logs/postmortem_20260423_095325.md
+[collect_render_postmortem] wrote /Users/reblocke/Research/abg-vbg-project/Results/mi_run_status_20260423_095325.json

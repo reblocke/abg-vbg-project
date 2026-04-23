@@ -1,4 +1,4 @@
 "component","max_abs_abg_vbg_difference","interpretation","run_id","run_ts"
-"outcome_source_missingness",0.103369769134265,"Difference in missingness among detected NIV/IMV source fields.","20260421_094018","2026-04-21 09:40:18.841212"
-"procedure_capture_proxy",0.078721786107236,"Difference in weighted tested-cohort proxy means.","20260421_094018","2026-04-21 09:40:18.841212"
-"baseline_missing_indicator_balance",0.362829903533536,"Largest post-weighting SMD among baseline missingness indicators.","20260421_094018","2026-04-21 09:40:18.841212"
+"outcome_source_missingness",0.098336891317613,"Difference in missingness among detected NIV/IMV source fields.","20260423_104307","2026-04-23 10:43:07.487173"
+"procedure_capture_proxy",0.0687769562043348,"Difference in weighted tested-cohort proxy means.","20260423_104307","2026-04-23 10:43:07.487173"
+"baseline_missing_indicator_balance",0.332903550230409,"Largest post-weighting SMD among baseline missingness indicators.","20260423_104307","2026-04-23 10:43:07.487173"

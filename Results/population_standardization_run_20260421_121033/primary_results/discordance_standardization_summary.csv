@@ -1,0 +1,7 @@
+"outcome","co2_level","gap_current_ref","gap_common_ref","gap_marginal_standardized","standardization_sample_cap","m_used","m_total","min_required","interpretation","run_id","run_ts"
+"IMV","High",0.0315109517903194,0.0432570832744202,0.0607507369465925,1000,20,20,18,"Standardization did not materially shrink the current probability gap.","20260421_121048","2026-04-21 12:10:48.40139"
+"IMV","Low",0.0555144641400909,0.0672090647640412,0.0817227969242383,1000,20,20,18,"Standardization did not materially shrink the current probability gap.","20260421_121048","2026-04-21 12:10:48.40139"
+"IMV","Normal",0.0380844036638246,0.0491029838788561,0.0641865131433552,1000,20,20,18,"Standardization did not materially shrink the current probability gap.","20260421_121048","2026-04-21 12:10:48.40139"
+"NIV","High",0.0840665409730391,0.0134548538216055,0.00564304244393667,1000,20,20,18,"Common reference shrinks the current probability gap.","20260421_121048","2026-04-21 12:10:48.40139"
+"NIV","Low",0.0649529352500412,0.0127194339621208,0.00625544652032477,1000,20,20,18,"Common reference shrinks the current probability gap.","20260421_121048","2026-04-21 12:10:48.40139"
+"NIV","Normal",0.0636028637046568,0.0110018368592122,0.00493168336597424,1000,20,20,18,"Common reference shrinks the current probability gap.","20260421_121048","2026-04-21 12:10:48.40139"

@@ -1,0 +1,5 @@
+"component","value","evidence_status","interpretation","overall_classification","run_id","run_ts"
+"overall_marginal_standardized_gap",0.0856127643723108,"residual_gap_present","Maximum absolute IMV ABG-VBG gap after common-source marginal standardization.","residual_imv_gap_persists_within_settings","20260423_104307","2026-04-23 10:43:07.487173"
+"within_setting_standardized_gap",0.106685884612407,"within_setting_persists","Maximum absolute IMV ABG-VBG gap after restricting the standardization source to feasible settings.","residual_imv_gap_persists_within_settings","20260423_104307","2026-04-23 10:43:07.487173"
+"setting_rate_range",0.167578174501503,"setting_heterogeneity_present","Maximum within-modality IMV weighted event-rate range across setting variables.","residual_imv_gap_persists_within_settings","20260423_104307","2026-04-23 10:43:07.487173"
+"site_sensitivity_range",NA,"site_signal_unavailable_or_not_large","Maximum site-level IMV ABG-VBG weighted event-rate range among feasible sites.","residual_imv_gap_persists_within_settings","20260423_104307","2026-04-23 10:43:07.487173"
