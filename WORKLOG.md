@@ -10,6 +10,44 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Outcomes:
 - Next steps:
 
+## 2026-04-23 10:58 MDT
+- Task: Reorder paired ABG/VBG categorical tables outcome-first, restore manuscript-equivalent Rubin pooling in discordance marginal-standardized curves, and update the one-time figure/table audit acceptance wording before a fresh PR review cycle.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `Results/figure_table_codex_manual_audit.md`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep='')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01` (first attempt failed in `discordance-diagnostics` because the new manuscript-vs-discordance alignment join used relabeled `outcome_var` keys)
+  - targeted `python`/`Rscript --vanilla` checks of `Results/discordance_marginal_standardized_alignment.csv`, `Results/table_2_weighted_categorical_outcomes.csv`, `Results/table_s2_crude_threelevel.csv`, `Results/table_s3_gbm_threelevel.csv`, `Results/table_summary_adjusted_threelevel.csv`, and `Results/table_summary_key_results_cat3.csv`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01` (accepted rerun)
+  - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+  - `pdftotext -layout "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf" ...` targeted checks for the weighted Table 2 categorical panels, Tables S2/S3, and the MI propensity-overlap subtitle
+- Outcomes:
+  - Added `arrange_key_results_outcome_group()` and applied outcome-first / modality-second ordering to the paired ABG/VBG categorical tables and summary CSVs, including the Table 2 weighted categorical panels plus the crude/GBM supplementary three-level tables and combined adjusted summaries.
+  - Updated the MI propensity-overlap subtitle so pilot renders explicitly state that the pilot runtime setting uses `20` imputations while full runs use `80`; the underlying pilot/full MI settings were unchanged.
+  - Replaced the discordance-only probability-scale pooling path with the manuscript common-source marginal-standardization helper path, preserving `eta`, `var_eta`, and Rubin-pooled uncertainty in `discordance_marginal_standardized_prob_curves.csv` and `discordance_imv_setting_standardized.csv`.
+  - Added `Results/discordance_marginal_standardized_alignment.csv` and an internal discordance status check to require exact overlap between the manuscript common-source NIV/IMV curves and the discordance common-source curves on their shared grids.
+  - First pilot render failed intentionally on that new alignment check because the manuscript-side join key used relabeled `outcome_var` values; patched the join to carry raw outcome-variable names before relabeling, then reran successfully.
+  - Accepted 1% pilot:
+    - log: `Results/render_logs/render_20260423_104253.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `618.95` seconds
+    - max resident set size from `/usr/bin/time -l`: `3540172800` bytes
+    - PDF pages: `609`
+  - Post-pilot validation:
+    - `Results/pdf_asset_presence_scan.csv`: `61/61` passed
+    - `Results/discordance_validation_status.csv`: `22` completed, `2` skipped, `0` required failures
+    - `Results/discordance_marginal_standardized_alignment.csv`: `804` overlapping rows with zero differences in `eta`, `var_eta`, `p`, `p_LCL`, and `p_UCL`
+    - PDF text confirmed Table 2 Panel A/Panel B and Tables S2/S3 now read outcome-first with ABG then VBG within each outcome.
+  - Updated `Results/figure_table_codex_manual_audit.md` to the accepted rerun and changed the discordance-display wording so notebook code echo is explicitly excluded from scope rather than silently treated as an unconditional pass.
+- Next steps:
+  - Create a fresh `codex/...` branch, stage only the intended source/worklog/audit files, and open a new PR for broader review.
+  - Leave the broad pilot-generated `Results/` churn, archives, logs, and PDFs unstaged unless explicitly requested.
+
 ## 2026-04-12
 - Date/time: 2026-04-12 09:48 AKDT
 - Task: Assess this machine's readiness for a monitored 1% pilot render and patch repo-level portability issues.
@@ -1304,3 +1342,543 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
   - A monitoring worker was spawned for periodic checks and then shut down after the render completed.
 - Next steps:
   - Use the zip package for discordance troubleshooting. No full-mode rerun was launched.
+
+## 2026-04-21 11:08 MDT
+- Task: Add sentinel-procedure capture follow-up and explicit site-sensitivity artifact handling to the end-of-notebook NIV/IMV discordance diagnostics.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `scripts/check_pdf_assets.R`
+  - `README.md`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - targeted `Rscript --vanilla` sentinel-selection synthetic check
+  - targeted `Rscript --vanilla` site-sensitivity skipped-row check
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-pilot `Rscript --vanilla` validation of discordance status, manifest, PDF scan, sentinel outputs, and site output
+  - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+- Outcomes:
+  - Added the `Sentinel procedure capture checks` subsection inside the existing discordance diagnostic chunk.
+  - Sentinel candidates are detected from processed and raw analytic fields while excluding gas-measurement and NIV/IMV/ventilation outcome fields.
+  - Added the four requested sentinel artifacts:
+    - `Results/discordance_sentinel_procedure_inventory.csv`
+    - `Results/discordance_sentinel_procedure_selection.csv`
+    - `Results/discordance_sentinel_procedure_balance.csv`
+    - `Results/discordance_sentinel_procedure_summary.csv`
+  - Added `Results/discordance_site_sensitivity.csv`, with a skipped/status row when no feasible site/facility field exists.
+  - Registered the new sentinel and site artifacts in the discordance manifest and diagnostics completeness checks.
+  - Updated the interpretation summary with a separate sentinel-procedure capture/completeness row and the requested hypothesis order.
+  - Updated PDF asset checks to require the sentinel subsection and sentinel/site source identifiers.
+  - Updated README discordance artifact documentation.
+  - Static checks passed:
+    - shell syntax for `scripts/render_pdf.sh`
+    - purl/parse check with `parsed_expressions=2016`
+    - dependency audit passed for 44 declared direct packages
+    - environment preflight passed with the existing `lattice` and `survival` lockfile/library drift warning
+  - Successful 1% pilot:
+    - log: `Results/render_logs/render_20260421_105412.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `568.63` seconds
+    - max resident set size from `/usr/bin/time -l`: `3289956352` bytes
+    - PDF pages: `528`
+  - Post-pilot validation:
+    - `Results/discordance_validation_status.csv` had 16 rows with zero required failures.
+    - `Results/discordance_artifact_manifest.csv` had 29 rows with zero missing required artifacts.
+    - `Results/pdf_asset_presence_scan.csv` had 43 rows with zero failures.
+    - Sentinel selection chose 3 concepts in the 1% pilot: CT chest/CTPA (`ctccon`), chest radiograph (`cxr1v`), and TTE/echo (`tte_proc`).
+    - Sentinel balance contained 120 rows; summary contained 9 concepts.
+    - `Results/discordance_site_sensitivity.csv` contained a one-row skipped status because no separate site/facility identifier with 2-50 levels was found.
+  - Pilot-generated PDFs, logs, archives, and `Results/` churn were left unstaged by design.
+- Next steps:
+  - If desired, commit only the source/docs/worklog changes. Full-mode execution remains deferred until explicitly requested.
+
+## 2026-04-21 11:21 MDT
+- Task: Fix sentinel date-field selection so binary sentinel fields cannot be reused as their own timestamp fields.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - targeted `Rscript --vanilla` helper regression check for non-`_proc` self-only fields, direct companions, `_proc` companions, and regex-derived timestamp candidates
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-pilot `Rscript --vanilla` validation of discordance status, manifest, PDF scan, sentinel outputs, site output, and `date_field != binary_field`
+  - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+- Outcomes:
+  - Updated `sentinel_date_field_for()` so direct `*_first_date` / `*_last_date` companions are always considered, but `_proc_first_date` / `_proc_last_date` substitutions are only generated for fields that actually end in `_proc`.
+  - Added defensive filtering so no returned sentinel `date_field` can equal the binary `candidate_field`, and returned date fields must have date/time-like names.
+  - Static checks passed:
+    - shell syntax for `scripts/render_pdf.sh`
+    - purl/parse check with `parsed_expressions=2016`
+    - dependency audit passed for 44 declared direct packages
+    - environment preflight passed with the existing `lattice` and `survival` lockfile/library drift warning
+  - Targeted regression checks passed:
+    - non-`_proc` field with only the binary raw column returned `NA`
+    - non-`_proc` field with `*_first_date` returned that companion
+    - `_proc` field returned `*_proc_first_date`
+    - regex-derived timestamp candidate was still detected
+    - no returned date field equaled the binary field
+  - Successful 1% pilot:
+    - log: `Results/render_logs/render_20260421_110902.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `528.15` seconds
+    - max resident set size from `/usr/bin/time -l`: `3264872448` bytes
+    - PDF pages: `528`
+  - Post-pilot validation:
+    - `Results/discordance_validation_status.csv` had 16 rows with zero required failures.
+    - `Results/discordance_artifact_manifest.csv` had 29 rows with zero missing required artifacts.
+    - `Results/pdf_asset_presence_scan.csv` had 43 rows with zero failures.
+    - `Results/discordance_sentinel_procedure_selection.csv` had zero rows where `date_field == binary_field`.
+    - Sentinel selection remained 3 concepts in the 1% pilot: CT chest/CTPA (`ctccon`), chest radiograph (`cxr1v`), and TTE/echo (`tte_proc`).
+  - Pilot-generated PDFs, logs, archives, and `Results/` churn were left unstaged by design.
+- Next steps:
+  - If desired, commit only source/docs/worklog changes. Full-mode execution remains deferred until explicitly requested.
+
+## 2026-04-23 10:04 MDT
+- Task: Complete a one-time Codex manual figure/table audit of the 1% pilot PDF, iterating until manuscript, supplement, and discordance displays passed.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `DESCRIPTION`
+  - `Results/figure_table_codex_manual_audit.md`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - iterative pilot renders:
+    - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+    - accepted final log: `Results/render_logs/render_20260423_095325.log`
+  - PDF inspection:
+    - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+    - `pdftotext -layout "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf" ...`
+    - `pdftoppm -png -r 140 ...`
+    - `pdfimages -list "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+  - post-render validation:
+    - `Results/pdf_asset_presence_scan.csv`
+    - `Results/discordance_validation_status.csv`
+- Outcomes:
+  - Completed a manual audit of all active manuscript/supplement displays plus the discordance standardization, tail/support, current-summary, interpretation-summary, and IMV heterogeneity displays.
+  - Fixed concrete display defects found during the audit loop:
+    - replaced raw covariate/model-term labels in loveplots and SHAP panels with human-readable labels
+    - replaced raw internal headers in manuscript, supplement, and discordance display tables
+    - wrapped long loveplot titles to prevent Figure S6 clipping
+    - harmonized discordance terminology (`cat3` -> `3-level category`)
+    - replaced raw interpretation-status tokens such as `partially_supported` with readable labels
+    - polished IMV heterogeneity labels, facet names, CO2 ordering, and palette
+    - declared `stringr` in `DESCRIPTION` because display code now uses `stringr::str_wrap()`
+  - Accepted final 1% pilot:
+    - log: `Results/render_logs/render_20260423_095325.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `627.78` seconds
+    - max resident set size from `/usr/bin/time -l`: `4,271,128,576` bytes
+    - PDF pages: `607`
+  - Final validation state:
+    - `Results/pdf_asset_presence_scan.csv`: `61/61` checks passed
+    - `Results/discordance_validation_status.csv`: `21` completed, `2` skipped, `0` required failures
+  - One-time audit record written to `Results/figure_table_codex_manual_audit.md`.
+  - Generated pilot PDFs, logs, archives, and broad `Results/` churn were left unstaged by design.
+- Next steps:
+  - If desired, review `Results/figure_table_codex_manual_audit.md` and then commit only the source/doc/worklog changes.
+  - Any future cleanup of echoed code in the discordance PDF should be treated as a separate notebook-presentation task, not a figure/table-content fix.
+
+## 2026-04-23 08:56 MDT
+- Task: Fix discordance timing parsing, enhanced capture proxy activity counts, and sentinel v2 evidence joins after code review findings.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `scripts/check_pdf_assets.R`
+  - `README.md`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - targeted `Rscript --vanilla` checks for numeric encounter-day timing parsing, activity-aware capture counts, valid day-zero timestamps, and v2 sentinel field-level joins
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-pilot `Rscript --vanilla` checks of `Results/discordance_validation_status.csv`, `Results/pdf_asset_presence_scan.csv`, `Results/discordance_timing_field_map.csv`, `Results/discordance_capture_proxies_enhanced.csv`, `Results/discordance_capture_summary_enhanced.csv`, `Results/discordance_sentinel_procedure_selection_v2.csv`, `Results/discordance_sentinel_procedure_summary_v2.csv`, and `Results/discordance_artifact_manifest.csv`
+  - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+- Outcomes:
+  - Replaced the discordance time parser with a type-aware parser that handles the current numeric gas/procedure date fields as encounter-day offsets using `encounter_date`; character, Date/POSIX, Stata-date, and Unix-time fallbacks remain explicit.
+  - Replaced enhanced capture helpers that counted nonmissing zeros with activity-aware counts. Numeric/logical procedure/code proxies now require positive/TRUE activity, character proxies ignore blank/zero/no-like values, and timestamp proxies count parseable timestamps so day-zero event dates remain valid.
+  - Added `Results/discordance_sentinel_procedure_summary_v2.csv` and updated sentinel v2 interpretation to join evidence by `sentinel_concept`, `binary_field`, and `date_field` instead of borrowing v1 concept-level metrics.
+  - Registered the new v2 sentinel summary artifact in the discordance manifest, diagnostics completeness list, PDF asset source-code scan, and README artifact list.
+  - Static checks passed:
+    - shell syntax for `scripts/render_pdf.sh`
+    - purl/parse check with `parsed_expressions=2243`
+    - dependency audit passed for 44 declared direct packages
+    - environment preflight passed with the existing `lattice` and `survival` lockfile/library drift warning
+  - Targeted helper checks passed for numeric encounter-day parsing, zero-filled binary proxy exclusion, valid day-zero timestamp parsing, and v2 field-keyed sentinel joins.
+  - Successful 1% pilot:
+    - log: `Results/render_logs/render_20260423_084508.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `654.17` seconds
+    - max resident set size from `/usr/bin/time -l`: `4,061,462,528` bytes
+    - PDF pages: `602`
+    - PDF asset scan passed with zero failures.
+  - Post-pilot validation:
+    - `Results/discordance_validation_status.csv` had zero required failures.
+    - `Results/pdf_asset_presence_scan.csv` had zero failures.
+    - `Results/discordance_timing_field_map.csv` reported 24 numeric encounter-day offset rows: 23 parsed and 1 all-missing; no nonmissing numeric timing field remained unparsed.
+    - `Results/discordance_capture_summary_enhanced.csv` no longer treats zero-filled binary/code fields as activity; the remaining large signals come from procedure-density and timestamp-density families.
+    - `Results/discordance_sentinel_procedure_summary_v2.csv` was present, listed in `Results/discordance_artifact_manifest.csv`, and contained selected v2 sentinel rows keyed by selected candidate field.
+- Next steps:
+  - Do not run a 25% or full render for this ticket unless explicitly requested.
+  - Stage only source/docs/worklog changes if committing; generated pilot PDFs, logs, archives, and broad `Results/` churn remain unstaged by design.
+
+## 2026-04-23 08:29 MDT
+- Task: Implement residual IMV discordance follow-up diagnostics and validate with a 1% pilot only.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `scripts/check_pdf_assets.R`
+  - `README.md`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - targeted source checks for new artifact identifiers and common-source manuscript probability mapping
+  - targeted malformed-timestamp parser check
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-pilot artifact/manifest/status/PDF/metadata/sentinel-v2 checks
+- Outcomes:
+  - Kept manuscript-facing probability outputs mapped to `common_source_marginal_standardized`; modality-specific `X_ref` remains diagnostic/sensitivity context.
+  - Harmonized discordance marginal-standardization sample-cap metadata with the manuscript common-source cap policy.
+  - Added conservative interpretation rulebook and status logic; in the successful 1% pilot, missingness/procedure capture and sentinel capture were both `partially_supported`, not treated as proof.
+  - Added IMV-focused within-setting, site-sensitivity/status, and heterogeneity outputs:
+    - `Results/discordance_imv_setting_standardized.csv`
+    - `Results/discordance_imv_site_sensitivity.csv`
+    - `Results/discordance_imv_heterogeneity_summary.csv`
+  - Added enhanced capture/completeness outputs:
+    - `Results/discordance_capture_proxies_enhanced.csv`
+    - `Results/discordance_capture_date_completeness_conditional.csv`
+    - `Results/discordance_capture_summary_enhanced.csv`
+  - Added sentinel v2 inventory/selection and specificity note:
+    - `Results/discordance_sentinel_procedure_inventory_v2.csv`
+    - `Results/discordance_sentinel_procedure_selection_v2.csv`
+    - `Results/discordance_sentinel_specificity_note.md`
+  - Added timing field mapping and restricted timing summary/status:
+    - `Results/discordance_timing_field_map.csv`
+    - `Results/discordance_timing_restricted_summary.csv`
+    - `Results/discordance_timing_status.csv`
+  - Added `Results/discordance_metadata_audit.csv`, `Results/discordance_interpretation_rules.md`, and `Results/discordance_remaining_issues_summary.csv`.
+  - First pilot attempt failed because a raw timing candidate contained non-standard timestamp strings; patched `parse_discordance_time()` to mark malformed fields as unparsed instead of aborting.
+  - Second pilot attempt failed because the metadata audit was too broad; narrowed it to manuscript-facing probability-map rows and display labels.
+  - Third successful pilot exposed duplicated sentinel v2 concepts after inspection; patched selection to choose at most one candidate per sentinel concept and reran the pilot.
+  - Final successful 1% pilot:
+    - log: `Results/render_logs/render_20260423_081844.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `628.17` seconds
+    - max resident set size from `/usr/bin/time -l`: `4,147,036,160` bytes
+    - PDF pages: `597`
+    - `Results/pdf_asset_presence_scan.csv`: 60 rows, zero failures
+    - `Results/discordance_validation_status.csv`: 23 rows, zero required failures
+    - `Results/discordance_artifact_manifest.csv`: 43 rows, all required artifacts present
+    - `Results/discordance_metadata_audit.csv`: 5 rows, zero failures
+    - v2 sentinel selected concepts were unique: chest radiograph, TTE, and CT chest/CTPA.
+  - No 25% or full render was launched; the substantive 25% rerun remains deferred by request.
+- Next steps:
+  - Review the 1% diagnostic outputs for face validity, then run a separate 25% subset render when ready to generate substantive follow-up evidence.
+
+## 2026-04-23 07:20 MDT
+- Task: Fix the full-run MI memory failure mode by replacing large in-memory MI PS/weight retention with exact path-backed caches, then clean failed full-run artifacts for disk space.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - MICE object inspection confirming `Results/mi_abg_vbg_mids.rds` and `Results/mi_batch_checkpoints/imp_acc_after_batch_40.rds` each loaded as `mids` objects with `m = 80` and `nrow(data) = 515286`
+  - Cleanup script writing `Results/full_run_cleanup_manifest_20260423_064717.csv`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-pilot checks of `Results/mi_single_pass_status.csv`, `Results/mi_single_pass_cache_manifest.csv`, `Results/mi_single_pass_memory_log.csv`, `Results/mi_single_pass_storage_equivalence.csv`, `Results/pdf_asset_presence_scan.csv`, `Results/discordance_validation_status.csv`, and `Results/standardization_validation_status.csv`
+- Outcomes:
+  - Patched the `mi-single-pass` section to prepare the PS model frame once per imputation and reuse it for ABG/VBG PS fits.
+  - Replaced retained in-memory `weights_cache` / `ps_cache` vectors with `saveRDS()` / `readRDS()` path-backed access plus length and finite-value validation.
+  - Added per-imputation compact fit checkpoints under `Results/mi_fit_cache/` and reconstruction of the existing downstream fit-bank structures before pooling.
+  - Added audit artifacts:
+    - `Results/mi_single_pass_status.csv`
+    - `Results/mi_single_pass_cache_manifest.csv`
+    - `Results/mi_single_pass_memory_log.csv`
+    - `Results/mi_single_pass_storage_equivalence.csv`
+  - Fixed an initial pilot blocker where the cache validator incorrectly required one-sided IPW weight vectors to be finite outside the tested cohort. The corrected validator requires finite positive weights within the relevant ABG/VBG tested rows, allows `NA` outside those rows, and still rejects infinite weights.
+  - The storage refactor is estimate-preserving by design: RDS-backed PS/weight storage is lossless, compact fit checkpoints store exact `coef`, `vcov`, `terms`, `xlevels`, `contrasts`, and scalar metadata, and no model formulas, covariates, spline settings, truncation rules, or estimands were changed.
+  - Same-run equivalence guardrails passed for all 5 checks in `Results/mi_single_pass_storage_equivalence.csv`:
+    - ABG weight vector RDS reload
+    - VBG weight vector RDS reload
+    - ABG PS vector RDS reload
+    - VBG PS vector RDS reload
+    - compact fit cache RDS reload
+  - Successful final 1% pilot:
+    - log: `Results/render_logs/render_20260423_070614.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `551.45` seconds
+    - max resident set size from `/usr/bin/time -l`: `6999080960` bytes
+    - PDF: `Code Drafts/ABG-VBG-analysis-2026-4-21.pdf`
+    - PDF pages: `560`
+    - PDF asset scan had 52 rows and zero failures.
+    - `Results/mi_single_pass_status.csv` had 100 `started` and 100 `completed` status rows.
+    - `Results/mi_single_pass_cache_manifest.csv` had 100 cache rows: 40 weight vectors, 40 PS vectors, and 20 compact fit caches for the 1% pilot.
+    - `Results/mi_single_pass_memory_log.csv` recorded maximum `gc_vcells_used_mb = 3703.5` and maximum RSS probe `rss_mb = 3007.859`.
+    - `Results/discordance_validation_status.csv` had 14 completed rows and 2 explicit optional skipped rows.
+    - `Results/standardization_validation_status.csv` had 5 completed rows.
+  - A 25% render was briefly started after the first successful pilot but was manually interrupted after the user clarified that only a 1% run was needed; that interruption occurred before the MI section and is not considered a pipeline failure.
+  - Cleanup preserved full-run failure evidence and the latest full MICE object:
+    - preserved evidence: `Results/render_logs/render_20260421_182601.log`, `Results/render_logs/rss_trace_20260421_182601.csv`, `Results/render_logs/postmortem_20260421_182601.md`, and `Results/mi_run_status_20260421_182601.json`
+    - preserved full MICE backup: `Results/preserved_full_run_20260421_182601/mi_abg_vbg_mids_20260421_182601.rds`
+  - Cleanup deleted duplicate/partial space-heavy artifacts recorded in `Results/full_run_cleanup_manifest_20260423_064717.csv`, including archived MICE checkpoints, intermediate current MICE checkpoints, and partial failed-run `Results/mi_weights/` caches.
+  - Disk usage improved from about `17G` in `Results/` and about `11G` free before cleanup to about `794M` in `Results/` and about `27G` free after the final 1% validation.
+- Next steps:
+  - Full render remains deferred until explicitly requested.
+  - If proceeding to another full render, monitor `Results/mi_single_pass_memory_log.csv`, `Results/mi_single_pass_cache_manifest.csv`, and `Results/render_logs/rss_trace_*.csv` in addition to the existing MICE status files.
+  - Stage only source/docs/worklog changes if committing; leave pilot PDFs, logs, archives, cleanup manifests, and broad `Results/` churn unstaged unless explicitly requested.
+
+## 2026-04-23 07:40 MDT
+- Task: Address review finding to release the full normalized MI PS frame before outcome fitting.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - targeted `Rscript --vanilla` source-lifetime check confirming `d_ps` is removed at its final loop reference and the final cleanup no longer lists already-removed PS-only objects
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-pilot checks of `Results/mi_single_pass_status.csv`, `Results/mi_single_pass_storage_equivalence.csv`, `Results/pdf_asset_presence_scan.csv`, `Results/discordance_validation_status.csv`, and `Results/mi_single_pass_memory_log.csv`
+- Outcomes:
+  - Added immediate `rm(d_ps)` plus `gc(full = TRUE)` after the VBG PS model finishes and its memory/status rows are recorded.
+  - Added early cleanup of `fit_abg`, `fit_vbg`, `ps_abg_i`, and `ps_vbg_i` after PS/weight RDS caches and lightweight PS metadata are written.
+  - Removed those already-freed objects from the final end-of-imputation cleanup call.
+  - This is estimate-preserving because downstream code uses copied weight vectors, path-backed PS/weight caches, and lightweight metadata already written before cleanup.
+  - Static checks passed:
+    - shell syntax for `scripts/render_pdf.sh`
+    - purl/parse check with `parsed_expressions=2121`
+    - dependency audit passed for 44 declared direct packages
+    - environment preflight passed with the existing `lattice` and `survival` lockfile/library drift warning
+  - Successful 1% pilot:
+    - log: `Results/render_logs/render_20260423_072613.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `572.79` seconds
+    - max resident set size from `/usr/bin/time -l`: `6281363456` bytes
+    - PDF pages: `560`
+    - PDF asset scan had 52 rows and zero failures.
+    - `Results/mi_single_pass_status.csv` had all expected stages completed: 20 each for imputation, `ps_abg`, `ps_vbg`, `cat3_models`, and `spline_models`.
+    - `Results/mi_single_pass_storage_equivalence.csv` had 5 rows and all `passed = TRUE`.
+    - `Results/discordance_validation_status.csv` had zero required failures.
+    - `Results/mi_single_pass_memory_log.csv` recorded maximum RSS probe `rss_mb = 2844.891` and maximum `gc_vcells_used_mb = 3703.2`.
+- Next steps:
+  - Full render remains deferred until explicitly requested.
+  - Continue leaving pilot PDFs, logs, archives, and broad `Results/` churn unstaged unless explicitly requested.
+
+## 2026-04-21 18:26 MDT
+- Task: Start a monitored full render of the canonical notebook.
+- Files changed:
+  - `scripts/render_pdf.sh`
+  - `WORKLOG.md`
+- Commands run:
+  - `tail -n 80 WORKLOG.md`
+  - `ps aux | rg -i 'render_pdf|quarto|ABG-VBG analysis 2026-4-21|ABG-VBG-analysis'`
+  - `bash -n scripts/render_pdf.sh`
+  - initial full launch: `./scripts/render_pdf.sh`
+  - relaunch after wrapper fix: `./scripts/render_pdf.sh`
+- Outcomes:
+  - Confirmed no prior render process was active before launch.
+  - The first full-mode launch failed immediately before Quarto started because `scripts/render_pdf.sh` expanded an empty `QUARTO_ARGS[@]` under `set -u`.
+  - Patched `scripts/render_pdf.sh` so full mode with no extra Quarto parameters calls `quarto render ... --to pdf` without expanding an empty array; `bash -n` passed after the patch.
+  - Relaunched the full render successfully:
+    - active session: `83334`
+    - wrapper PID: `24087`
+    - log: `Results/render_logs/render_20260421_182601.log`
+    - RSS trace: `Results/render_logs/rss_trace_20260421_182601.csv`
+    - early progress: Quarto reached `30/303` chunks at the first live check.
+  - Created/updated the `monitor-full-render` thread heartbeat to check progress every 30 minutes and report elapsed time, ETA, memory, disk, stage, and validation status.
+  - Disk free space at launch was low at approximately `10 GiB`; monitor prompts explicitly include disk-pressure checks.
+- Next steps:
+  - Let the heartbeat monitor the active full render.
+  - If the run completes, inspect `Results/pdf_asset_presence_scan.csv`, standardization validation, and discordance validation; update this worklog and delete the heartbeat.
+  - If the run fails, summarize the postmortem/status evidence, update this worklog, delete the heartbeat, and do not auto-retry another full run.
+
+## 2026-04-21 12:51 MDT
+- Task: Create a one-time zip bundle for the successful 25% population-standardization subset run.
+- Files/output changed:
+  - `Results/population_standardization_run_20260421_121033/`
+  - `Results/population_standardization_run_20260421_121033.zip`
+  - `WORKLOG.md`
+- Commands run:
+  - one-time shell packaging of source snapshot, rendered PDF/TeX, standardization outputs, preserved conditional `X_ref` outputs, discordance outputs, manuscript-facing affected assets, primary probability/OR context outputs, figures, render/RSS/MICE/runtime logs, and validation scans
+  - `unzip -t Results/population_standardization_run_20260421_121033.zip`
+  - `find Results/population_standardization_run_20260421_121033 -maxdepth 2 -type f`
+- Outcomes:
+  - Created `Results/population_standardization_run_20260421_121033.zip`.
+  - Bundle contains 115 files.
+  - Unpacked bundle size: `11M`.
+  - Zip size: `5.2M`.
+  - ZIP integrity check passed with no compressed-data errors.
+  - Included a bundle-local `README.txt` and `MANIFEST.txt`.
+- Next steps:
+  - Use the zip package for review/troubleshooting of the 25% standardization and discordance outputs. No recurrent packaging script was added.
+
+## 2026-04-21 12:43 MDT
+- Task: Implement common-source marginal standardization for manuscript-facing predicted probabilities and run requested 1% plus 25% validation/substantive subset renders.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `scripts/check_pdf_assets.R`
+  - `README.md`
+  - `WORKLOG.md`
+- Generated outputs of interest:
+  - `Results/probability_generation_inventory.csv`
+  - `Results/prob_curve_marginal_standardized_abg.csv`
+  - `Results/prob_curve_marginal_standardized_vbg.csv`
+  - `Results/prob_cat3_marginal_standardized_abg.csv`
+  - `Results/prob_cat3_marginal_standardized_vbg.csv`
+  - `Results/prob_curve_conditional_xref_abg.csv`
+  - `Results/prob_curve_conditional_xref_vbg.csv`
+  - `Results/prob_cat3_conditional_xref_abg.csv`
+  - `Results/prob_cat3_conditional_xref_vbg.csv`
+  - `Results/manuscript_probability_output_map.csv`
+  - `Results/probability_method_comparison_summary.csv`
+  - `Results/probability_method_comparison_curves.csv`
+  - `Results/figs/probability_method_comparison.png`
+  - `Results/standardization_prediction_status.csv`
+  - `Results/standardization_prediction_summary.csv`
+  - `Results/standardization_validation_status.csv`
+  - `Results/render_logs/render_20260421_120028.log`
+  - `Results/render_logs/render_20260421_121033.log`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - targeted `Rscript --vanilla` threshold check for the 90% marginal-prediction success rule
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-1% `Rscript --vanilla` validation of standardization status, prediction thresholds, PDF asset scan, and manuscript probability map
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.25`
+  - post-25% `Rscript --vanilla` parsing of standardization outputs, probability method comparison, and discordance interpretation artifacts
+  - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+- Outcomes:
+  - Added reusable common-source marginal-standardization helpers for compact fitted models:
+    - `build_common_std_source_df()`
+    - `predict_prob_curve_marginal_standardized()`
+    - `predict_prob_cat3_marginal_standardized()`
+    - shared compact-model prediction helpers for `terms`/`xlevels`/`contrasts` reuse.
+  - Preserved the prior modality-specific reference-profile probability outputs as explicitly labeled conditional debug/sensitivity CSVs.
+  - Replaced manuscript-facing primary probability objects feeding Figure 2, Table 2, Figure S4, `mi_spline_prob_curve_*`, `mi_cat3_prob_curve_*`, `cat3_key_results_long.csv`, and `table_summary_key_results_cat3.csv` with common-source marginal standardized predictions.
+  - Updated main Figure 2, Table 2, Figure S4, related visible probability plots, asset registry notes, README, and PDF asset checks to state that manuscript-facing predicted probabilities are marginally standardized to the common eligible source-population covariate distribution.
+  - Added comparison diagnostics for conditional modality-specific `X_ref`, common reference profile, and common-source marginal standardized predictions:
+    - `Results/probability_method_comparison_summary.csv`
+    - `Results/probability_method_comparison_curves.csv`
+    - `Results/figs/probability_method_comparison.png`
+  - Initial 1% validation exposed two top-to-bottom ordering bugs in the new comparison summary (`nearest_curve_value()` and `safe_relative_gap()` were defined later in the notebook). Both were fixed locally inside the new standardization block before successful validation.
+  - Static checks passed:
+    - shell syntax for `scripts/render_pdf.sh`
+    - purl/parse check with `parsed_expressions=2097`
+    - dependency audit passed for 44 declared direct packages
+    - environment preflight passed with the existing `lattice` and `survival` lockfile/library drift warning
+  - Successful 1% pilot:
+    - log: `Results/render_logs/render_20260421_120028.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `582.54` seconds
+    - max resident set size from `/usr/bin/time -l`: `5597265920` bytes
+    - PDF asset postflight passed with zero failures.
+    - Standardization validation had 5 completed rows and zero failures.
+    - All 16 marginal prediction families completed `20/20` imputations with `min_required = 18`.
+  - Successful 25% subset render:
+    - log: `Results/render_logs/render_20260421_121033.log`
+    - run_id: `20260421_121048`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `1916.89` seconds
+    - max resident set size from `/usr/bin/time -l`: `6290079744` bytes
+    - PDF pages: `551`
+    - PDF asset scan had 52 rows and zero failures.
+    - Standardization validation had 5 completed rows and zero failures.
+    - Standardization prediction summary had 16 rows and zero threshold failures.
+    - Discordance validation had 16 rows and zero failures.
+    - Manuscript probability output map marked 9 manuscript-facing probability artifacts as updated to `common_source_marginal_standardized`.
+    - The 25% standardization source contained `128,521` available rows per imputation and used the intended `5,000` row deterministic cap.
+  - Substantive 25% discordance signal:
+    - For spline NIV probabilities, common-reference and marginal standardization materially shrank the ABG-VBG probability gap: normal-gap `0.0636` current conditional -> `0.0110` common-reference -> `0.0049` marginal standardized; low-gap `0.0650` -> `0.0127` -> `0.0063`; high-gap `0.0841` -> `0.0135` -> `0.0056`.
+    - For spline IMV probabilities, standardization did not shrink the gap and in this 25% run increased the common-source marginal gap: normal-gap `0.0381` current conditional -> `0.0491` common-reference -> `0.0642` marginal standardized; low-gap `0.0555` -> `0.0672` -> `0.0817`; high-gap `0.0315` -> `0.0433` -> `0.0608`.
+    - The final discordance interpretation summary marked reference-profile/standardization, setting/workflow, missingness/procedure capture, and sentinel capture as supported; scale/noncollapsibility, tail/support, and intrinsic modality-specific structure were not supported; timing remained inconclusive due unavailable/ambiguous timestamp fields.
+  - Generated pilot PDFs, logs, archives, and broad `Results/` churn were left unstaged by design.
+- Next steps:
+  - Review the 25% `Results/probability_method_comparison_summary.csv` and `Results/discordance_standardization_summary.csv` before manuscript text changes.
+  - If desired, commit only source/docs/worklog changes; leave pilot/subset-generated artifacts unstaged unless explicitly requested.
+
+## 2026-04-22 23:26 MDT
+- Task: Monitor the full render launched from `Results/render_logs/render_20260421_182601.log` and record its terminal failure.
+- Files changed:
+  - `WORKLOG.md`
+- Commands/artifacts reviewed:
+  - `Results/render_logs/render_20260421_182601.log`
+  - `Results/render_logs/rss_trace_20260421_182601.csv`
+  - `Results/render_logs/postmortem_20260421_182601.md`
+  - `Results/mi_run_status_20260421_182601.json`
+  - `Results/mice_batches_log.csv`
+  - `Results/mice_combine_log.csv`
+- Outcome:
+  - Full render failed with wrapper status `1`; no full PDF was produced.
+  - Failure occurred in chunk `156/303 [mi-single-pass]` after MICE itself completed successfully.
+  - MICE completed all `80/80` imputations; final checkpoint was batch 40 with `m_done_after = 80`, saved at `2026-04-22 17:11:56 MDT`.
+  - The terminal error was: `MI PS model failed (ABG, imp 72): vector memory limit of 16.0 Gb reached, see mem.maxVSize()`.
+  - The failing function was `fit_abg_one()` inside `mi-single-pass`.
+  - Recent pre-failure artifacts show `mi-single-pass` had written MI weight/propensity files through imputation 71.
+  - RSS trace last recorded R RSS was about `5.15 GiB`, with peak `6.65 GiB`; the R vector heap limit, not disk, was the reported blocker.
+  - Disk at failure was about `12 GiB` free at `95%` capacity.
+- Next steps:
+  - Do not auto-retry another full run.
+  - Diagnose and patch the `mi-single-pass` memory path before any future full rerun, likely by avoiding repeated full-size PS refits or by adding resumable/streaming cleanup around per-imputation fit artifacts.
+
+## 2026-04-21 11:35 MDT
+- Task: Fix sentinel date-field borrowing so derived sentinel candidates cannot use another candidate's timestamp/date field.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `WORKLOG.md`
+- Commands run:
+  - targeted `Rscript --vanilla` helper regression check for candidate-specific date stems, `_0`, `_dur`, `_duration`, `_proc`, self-only fields, candidate-specific timestamp fields, and borrowed-date negative cases
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-pilot `Rscript --vanilla` validation of discordance status, manifest, PDF scan, sentinel selection, and sentinel inventory date-field mappings
+  - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"`
+- Outcomes:
+  - Added `sentinel_date_stems()` to restrict timestamp/date lookup to the exact candidate stem plus derived base stems for `_0`, `_dur`, and `_duration`.
+  - Updated `sentinel_date_field_for()` to remove broad concept-level timestamp fallback and use only candidate-specific date/time fields present in `subset_data_raw`.
+  - Targeted regression checks passed:
+    - `cxr2v_0` with `cxr1v_first_date` and `cxr2v_first_date` returned `cxr2v_first_date`.
+    - `ctccon_0` and `ctccon_dur` returned `ctccon_first_date`.
+    - `tte_proc_0` returned `tte_proc_first_date`.
+    - a self-only non-date field returned `NA`.
+    - a candidate-specific timestamp such as `cxr2v_completed_timestamp` remained eligible.
+    - a candidate with only another candidate's date returned `NA`.
+  - Static checks passed:
+    - shell syntax for `scripts/render_pdf.sh`
+    - purl/parse check with `parsed_expressions=2017`
+    - dependency audit passed for 44 declared direct packages
+    - environment preflight passed with the existing `lattice` and `survival` lockfile/library drift warning
+  - Successful 1% pilot:
+    - log: `Results/render_logs/render_20260421_112422.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `594.80` seconds
+    - max resident set size from `/usr/bin/time -l`: `3178790912` bytes
+    - PDF pages: `528`
+  - Post-pilot validation:
+    - `Results/discordance_validation_status.csv` had 16 rows with zero required failures.
+    - `Results/discordance_artifact_manifest.csv` had 29 rows with zero missing required artifacts.
+    - `Results/pdf_asset_presence_scan.csv` had 43 rows with zero failures.
+    - `Results/discordance_sentinel_procedure_selection.csv` had zero rows where `date_field == binary_field`.
+    - Known borrowed date mappings were absent from sentinel selection and inventory.
+    - Corrected inventory mappings included `cxr2v_0 -> cxr2v_first_date`, `ctccon_0 -> ctccon_first_date`, `ctccon_dur -> ctccon_first_date`, and `tte_proc_0 -> tte_proc_first_date`.
+  - Pilot-generated PDFs, logs, archives, and `Results/` churn were left unstaged by design.
+- Next steps:
+  - If desired, commit only source/docs/worklog changes. Full-mode execution remains deferred until explicitly requested.
