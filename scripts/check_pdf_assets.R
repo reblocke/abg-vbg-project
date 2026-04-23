@@ -160,7 +160,12 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
     "Table S4. Missingness of baseline covariates",
     "Table S5. Multiple-imputation diagnostic summary",
     "Analysis of the discordance between predicted probabilities and OR for NIV and IMV",
-    "Summary of plausible explanations for NIV/IMV probability-OR discordance"
+    "Sentinel procedure capture checks",
+    "Summary of plausible explanations for NIV/IMV probability-OR discordance",
+    "Enhanced capture proxies, sentinel v2 specificity notes, IMV setting heterogeneity, timing field mapping, and metadata audits",
+    "The final remaining-issues summary separates resolved or strongly clarified findings from unresolved residual IMV",
+    "marginally standardized to the common eligible source-population covariate distribution",
+    "Predicted probability methods for NIV and IMV"
   )
   found <- vapply(required_snippets, grepl, logical(1L), x = pdf_text, fixed = TRUE)
   for (idx in seq_along(required_snippets)) {
@@ -183,7 +188,24 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
     "table_s4_missingness_primary_analysis",
     "table_s5_mi_diagnostic_summary",
     "predict_spline_prob_from_compact",
+    "build_common_std_source_df",
+    "predict_prob_curve_marginal_standardized",
+    "predict_prob_cat3_marginal_standardized",
+    "probability_generation_inventory",
+    "manuscript_probability_output_map",
+    "probability_method_comparison_summary",
+    "standardization_validation_status",
     "discordance_validation_status",
+    "discordance_sentinel_procedure_inventory",
+    "discordance_sentinel_procedure_summary",
+    "discordance_site_sensitivity",
+    "discordance_capture_proxies_enhanced",
+    "discordance_sentinel_procedure_selection_v2",
+    "discordance_sentinel_procedure_summary_v2",
+    "discordance_timing_field_map",
+    "discordance_imv_heterogeneity_summary",
+    "discordance_metadata_audit",
+    "discordance_remaining_issues_summary",
     "discordance_interpretation_summary"
   )
   source_found <- vapply(required_source_snippets, grepl, logical(1L), x = pdf_text, fixed = TRUE)
@@ -208,12 +230,12 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
     list(
       check = "figure_2_note_below_display",
       anchor = "Figure 2. Primary MI-logistic IPSW-weighted spline associations",
-      snippet = "Note: These curves come from the primary MI-logistic IPSW analysis"
+      snippet = "Predicted probability curves are marginally standardized to the common eligible source-population covariate distribution"
     ),
     list(
       check = "figure_s4_note_below_display",
       anchor = "Figure S4. MI-logistic IPSW-weighted categorical associations",
-      snippet = "Note: MI-pooled, MI-logistic IPSW-adjusted categorical odds ratios"
+      snippet = "Predicted probabilities are pooled on the link scale and marginally standardized to the common eligible source-population covariate distribution"
     ),
     list(
       check = "figure_s5_note_below_display",
