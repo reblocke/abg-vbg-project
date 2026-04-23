@@ -50,6 +50,7 @@ Imports:
     rms,
     scales,
     skimr,
+    stringr,
     survey,
     tibble,
     tidyr,

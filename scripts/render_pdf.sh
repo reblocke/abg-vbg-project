@@ -13,7 +13,10 @@ if [[ $# -gt 0 && "${1}" != -* ]]; then
 else
   QMD_PATH="${QMD_DEFAULT}"
 fi
-QUARTO_ARGS=("$@")
+QUARTO_ARGS=()
+if [[ $# -gt 0 ]]; then
+  QUARTO_ARGS=("$@")
+fi
 RESULTS_DIR="${ROOT_DIR}/Results"
 LOG_DIR="${RESULTS_DIR}/render_logs"
 RUN_TS="$(date '+%Y%m%d_%H%M%S')"
@@ -285,7 +288,11 @@ start_rss_sampler "${RSS_TRACE_PATH}" "$$" "${QMD_PATH}"
 
 RENDER_STATUS=0
 set +e
-run_with_timing "$(detect_timing_mode)" quarto render "${QMD_PATH}" --to pdf "${QUARTO_ARGS[@]}"
+if [[ ${#QUARTO_ARGS[@]} -gt 0 ]]; then
+  run_with_timing "$(detect_timing_mode)" quarto render "${QMD_PATH}" --to pdf "${QUARTO_ARGS[@]}"
+else
+  run_with_timing "$(detect_timing_mode)" quarto render "${QMD_PATH}" --to pdf
+fi
 RENDER_STATUS=$?
 set -e
 if [[ ${RENDER_STATUS} -ne 0 ]]; then
