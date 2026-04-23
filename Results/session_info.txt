@@ -19,20 +19,20 @@ attached base packages:
 other attached packages:
  [1] WeightIt_1.5.1      visdat_0.6.0        tidyr_1.3.2        
  [4] tibble_3.3.1        survey_4.4-8        survival_3.8-6     
- [7] skimr_2.2.2         scales_1.4.0        rms_8.1-0          
-[10] Hmisc_5.2-5         rlang_1.1.7         renv_1.1.7         
-[13] ragg_1.5.0          purrr_1.2.1         progressr_0.18.0   
-[16] pdftools_3.7.0      patchwork_1.3.2     officer_0.7.3      
-[19] naniar_1.1.0        mitools_2.4         miceadds_3.18-36   
-[22] mice_3.19.0         Matrix_1.7-4        lubridate_1.9.5    
-[25] labelled_2.16.0     knitr_1.51          kableExtra_1.4.0   
-[28] here_1.0.2          haven_2.5.5         gtsummary_2.5.0    
-[31] gt_1.3.0            ggplot2_4.0.2       ggdag_0.2.13       
-[34] gbm_2.2.3           future.apply_1.20.1 future_1.69.0      
-[37] fs_1.6.6            flextable_0.9.10    fastshap_0.1.1     
-[40] dplyr_1.2.0         digest_0.6.39       dagitty_0.3-4      
-[43] consort_1.2.2       codebookr_0.1.8     cobalt_4.6.2       
-[46] broom_1.0.12       
+ [7] stringr_1.6.0       skimr_2.2.2         scales_1.4.0       
+[10] rms_8.1-0           Hmisc_5.2-5         rlang_1.1.7        
+[13] renv_1.1.7          ragg_1.5.0          purrr_1.2.1        
+[16] progressr_0.18.0    pdftools_3.7.0      patchwork_1.3.2    
+[19] officer_0.7.3       naniar_1.1.0        mitools_2.4        
+[22] miceadds_3.18-36    mice_3.19.0         Matrix_1.7-4       
+[25] lubridate_1.9.5     labelled_2.16.0     knitr_1.51         
+[28] kableExtra_1.4.0    here_1.0.2          haven_2.5.5        
+[31] gtsummary_2.5.0     gt_1.3.0            ggplot2_4.0.2      
+[34] ggdag_0.2.13        gbm_2.2.3           future.apply_1.20.1
+[37] future_1.69.0       fs_1.6.6            flextable_0.9.10   
+[40] fastshap_0.1.1      dplyr_1.2.0         digest_0.6.39      
+[43] dagitty_0.3-4       consort_1.2.2       codebookr_0.1.8    
+[46] cobalt_4.6.2        broom_1.0.12       
 
 loaded via a namespace (and not attached):
   [1] polspline_1.1.25        polyclip_1.10-7         rpart_4.1.24           
@@ -64,12 +64,12 @@ loaded via a namespace (and not attached):
  [79] tzdb_0.5.0              uuid_1.2-2              checkmate_2.3.4        
  [82] nlme_3.1-168            curl_7.0.0              nloptr_2.2.1           
  [85] cachem_1.1.0            repr_1.1.7              zoo_1.8-15             
- [88] stringr_1.6.0           foreign_0.8-91          pillar_1.11.1          
- [91] vctrs_0.7.1             jomo_2.7-6              cluster_2.1.8.2        
- [94] htmlTable_2.4.3         evaluate_1.0.5          magick_2.9.0           
- [97] tinytex_0.58            readr_2.1.6             mvtnorm_1.3-3          
-[100] cli_3.6.5               compiler_4.5.3          labeling_0.4.3         
-[103] forcats_1.0.1           stringi_1.8.7           viridisLite_0.4.3      
-[106] glmnet_4.1-10           V8_8.0.1                quantreg_6.1           
-[109] fontquiver_0.2.1        hms_1.1.4               rbibutils_2.4.1        
-[112] memoise_2.0.1           igraph_2.2.1           
+ [88] foreign_0.8-91          pillar_1.11.1           vctrs_0.7.1            
+ [91] jomo_2.7-6              cluster_2.1.8.2         htmlTable_2.4.3        
+ [94] evaluate_1.0.5          magick_2.9.0            tinytex_0.58           
+ [97] readr_2.1.6             mvtnorm_1.3-3           cli_3.6.5              
+[100] compiler_4.5.3          labeling_0.4.3          forcats_1.0.1          
+[103] stringi_1.8.7           viridisLite_0.4.3       glmnet_4.1-10          
+[106] V8_8.0.1                quantreg_6.1            fontquiver_0.2.1       
+[109] hms_1.1.4               rbibutils_2.4.1         memoise_2.0.1          
+[112] igraph_2.2.1           

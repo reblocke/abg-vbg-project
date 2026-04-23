@@ -1,0 +1,4 @@
+"component","max_abs_abg_vbg_difference","interpretation","run_id","run_ts"
+"outcome_source_missingness",0.102559928674676,"Difference in missingness among detected NIV/IMV source fields.","20260421_121048","2026-04-21 12:10:48.40139"
+"procedure_capture_proxy",0.0765866093931923,"Difference in weighted tested-cohort proxy means.","20260421_121048","2026-04-21 12:10:48.40139"
+"baseline_missing_indicator_balance",0.372519312644149,"Largest post-weighting SMD among baseline missingness indicators.","20260421_121048","2026-04-21 12:10:48.40139"

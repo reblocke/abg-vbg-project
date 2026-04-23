@@ -1,0 +1,2 @@
+"outcome","group","n_candidate_gas_time_fields","n_candidate_procedure_time_fields","status","reason","run_id","run_ts"
+NA,NA,20,4,"candidate_fields_detected","Field naming is not specific enough for an automated before-procedure restriction.","20260421_121048","2026-04-21 12:10:48.40139"
