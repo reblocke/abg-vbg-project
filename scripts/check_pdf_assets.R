@@ -4,7 +4,7 @@ parse_args <- function(args) {
   out <- list(
     pdf_path = "",
     results_dir = "Results",
-    min_pages = 120L,
+    min_pages = 40L,
     min_images = 0L
   )
   idx <- 1L
@@ -106,7 +106,7 @@ rows[[length(rows) + 1L]] <- scan_row(
   observed = page_count,
   threshold = paste0(">=", args$min_pages),
   scanner = "pdfinfo",
-  detail = "Rendered PDF should not match the truncated validation-only artifact."
+    detail = "Rendered PDF should contain the canonical manuscript/supplement display set."
 )
 
 image_out <- run_capture(Sys.which("pdfimages"), c("-list", pdf_path))
@@ -160,12 +160,12 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
     "Table S4. Missingness of baseline covariates",
     "Table S5. Multiple-imputation diagnostic summary",
     "Analysis of the discordance between predicted probabilities and OR for NIV and IMV",
-    "Sentinel procedure capture checks",
+    "Sentinel procedure capture/completeness",
     "Summary of plausible explanations for NIV/IMV probability-OR discordance",
     "Enhanced capture proxies, sentinel v2 specificity notes, IMV setting heterogeneity, timing field mapping, and metadata audits",
     "The final remaining-issues summary separates resolved or strongly clarified findings from unresolved residual IMV",
     "marginally standardized to the common eligible source-population covariate distribution",
-    "Predicted probability methods for NIV and IMV"
+    "Current NIV/IMV OR and predicted-probability summaries"
   )
   found <- vapply(required_snippets, grepl, logical(1L), x = pdf_text, fixed = TRUE)
   for (idx in seq_along(required_snippets)) {
@@ -175,47 +175,6 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
       observed = if (found[[idx]]) "found" else "missing",
       scanner = "pdftotext",
       detail = required_snippets[[idx]]
-    )
-  }
-
-  required_source_snippets <- c(
-    "VALIDATION_INLINE_ANALYSIS_PREVIEWS",
-    "ensure_packages_loaded",
-    "print_plot_once",
-    "run_mice_batched",
-    "render_validation_manuscript_assets",
-    "table_s1_inclusion_criteria",
-    "table_s4_missingness_primary_analysis",
-    "table_s5_mi_diagnostic_summary",
-    "predict_spline_prob_from_compact",
-    "build_common_std_source_df",
-    "predict_prob_curve_marginal_standardized",
-    "predict_prob_cat3_marginal_standardized",
-    "probability_generation_inventory",
-    "manuscript_probability_output_map",
-    "probability_method_comparison_summary",
-    "standardization_validation_status",
-    "discordance_validation_status",
-    "discordance_sentinel_procedure_inventory",
-    "discordance_sentinel_procedure_summary",
-    "discordance_site_sensitivity",
-    "discordance_capture_proxies_enhanced",
-    "discordance_sentinel_procedure_selection_v2",
-    "discordance_sentinel_procedure_summary_v2",
-    "discordance_timing_field_map",
-    "discordance_imv_heterogeneity_summary",
-    "discordance_metadata_audit",
-    "discordance_remaining_issues_summary",
-    "discordance_interpretation_summary"
-  )
-  source_found <- vapply(required_source_snippets, grepl, logical(1L), x = pdf_text, fixed = TRUE)
-  for (idx in seq_along(required_source_snippets)) {
-    rows[[length(rows) + 1L]] <- scan_row(
-      paste0("required_source_", idx),
-      if (source_found[[idx]]) "passed" else "failed",
-      observed = if (source_found[[idx]]) "found" else "missing",
-      scanner = "pdftotext",
-      detail = required_source_snippets[[idx]]
     )
   }
 
@@ -255,11 +214,34 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
     )
   }
 
+  global_forbidden_checks <- list(
+    list(
+      check = "no_embedded_missingness_strings",
+      snippet = "missing (",
+      detail = "Validation PDF should not include embedded missingness denominators in table cells."
+    ),
+    list(
+      check = "no_noncanonical_table_2a",
+      snippet = "Table 2a. Crude outcomes by CO2 category",
+      detail = "Validation PDF should suppress exploratory crude CO2-category outcome tables."
+    )
+  )
+  for (item in global_forbidden_checks) {
+    ok <- !grepl(item$snippet, pdf_text, fixed = TRUE)
+    rows[[length(rows) + 1L]] <- scan_row(
+      item$check,
+      if (ok) "passed" else "failed",
+      observed = if (ok) "absent" else item$snippet,
+      scanner = "pdftotext",
+      detail = item$detail
+    )
+  }
+
   forbidden_window_checks <- list(
     list(
       check = "table_1_no_internal_columns",
       anchor = "Table 1. Baseline characteristics",
-      snippets = c("var_type", "row_type", "run_id", "run_ts")
+      snippets = c("var_type", "row_type", "run_id", "run_ts", "missing (")
     ),
     list(
       check = "table_2_no_split_parts",

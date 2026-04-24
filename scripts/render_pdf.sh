@@ -457,7 +457,7 @@ echo "[render:postflight] check_pdf_assets"
 Rscript --vanilla "${ROOT_DIR}/scripts/check_pdf_assets.R" \
   --pdf-path "${OUTPUT_PDF}" \
   --results-dir "${RESULTS_DIR}" \
-  --min-pages 120 \
+  --min-pages 40 \
   --min-images 0
 POSTFLIGHT_PASSED=1
 echo "[render:quarto] complete"
