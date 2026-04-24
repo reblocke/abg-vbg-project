@@ -1474,6 +1474,28 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Next steps:
   - If desired, commit only source/docs/worklog changes. Full-mode execution remains deferred until explicitly requested.
 
+## 2026-04-24 07:36 MDT
+- Task: Synchronize `renv.lock` with the validated local R library state.
+- Files changed:
+  - `renv.lock`
+  - `WORKLOG.md`
+- Commands run:
+  - `Rscript --vanilla -e "source('renv/activate.R'); renv::snapshot(prompt = FALSE)"`
+  - `git diff -- renv.lock`
+  - `Rscript --vanilla -e "source('renv/activate.R'); renv::status()"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+- Outcomes:
+  - `renv::snapshot()` changed only the two known drifted recommended packages:
+    - `lattice`: `0.22-7` -> `0.22-9`
+    - `survival`: `3.8-3` -> `3.8-6`
+  - `renv::status()` now reports `No issues found -- the project is in a consistent state.`
+  - Environment preflight now passes without the prior `lattice`/`survival` lockfile-library drift warning.
+  - Dependency audit passed for 45 declared direct packages; the existing `renv::dependencies` notes for `rmarkdown` and `shiny` remain informational.
+  - No render was run for this dependency-hygiene ticket; the lockfile now records the package versions already used by recent successful validation renders.
+- Next steps:
+  - Stage and commit only `renv.lock` and `WORKLOG.md`; leave generated render artifacts and broader dirty `Results/` churn unstaged.
+
 ## 2026-04-23 10:04 MDT
 - Task: Complete a one-time Codex manual figure/table audit of the 1% pilot PDF, iterating until manuscript, supplement, and discordance displays passed.
 - Files changed:
