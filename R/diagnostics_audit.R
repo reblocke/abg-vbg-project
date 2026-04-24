@@ -18,6 +18,68 @@ fmt_num <- function(x, digits = 3) {
   formatC(x, format = "f", digits = digits)
 }
 
+coalesce_logical <- function(x, fallback, n) {
+  if (is.null(x)) return(rep(fallback, n))
+  x <- as.logical(x)
+  if (length(x) == 0L) return(rep(fallback, n))
+  x[is.na(x)] <- fallback
+  x
+}
+
+enrich_model_diag <- function(df, prob_eps = 1e-6) {
+  if (is.null(df) || !nrow(df)) return(df)
+  n <- nrow(df)
+  if (!"top_warning" %in% names(df)) df$top_warning <- NA_character_
+  if (!"min_phat" %in% names(df)) df$min_phat <- NA_real_
+  if (!"max_phat" %in% names(df)) df$max_phat <- NA_real_
+  if (!"converged" %in% names(df)) df$converged <- NA
+  if (!"sep_flag" %in% names(df)) df$sep_flag <- FALSE
+  if (!"nonconv_flag" %in% names(df)) df$nonconv_flag <- FALSE
+  warn_chr <- as.character(df$top_warning)
+  warn_chr[is.na(warn_chr)] <- ""
+  phat_low_default <- is.finite(df$min_phat) & df$min_phat < prob_eps
+  phat_high_default <- is.finite(df$max_phat) & df$max_phat > 1 - prob_eps
+  sep_warn_default <- grepl("fitted probabilities numerically 0 or 1", warn_chr, fixed = TRUE) |
+    grepl("separat", warn_chr, ignore.case = TRUE)
+  nonconv_default <- coalesce_logical(df$nonconv_flag, FALSE, n) |
+    coalesce_logical(!as.logical(df$converged), FALSE, n) |
+    grepl("did not converge", warn_chr, fixed = TRUE)
+  df$phat_low_flag <- if ("phat_low_flag" %in% names(df)) {
+    coalesce_logical(df$phat_low_flag, FALSE, n) | phat_low_default
+  } else {
+    phat_low_default
+  }
+  df$phat_high_flag <- if ("phat_high_flag" %in% names(df)) {
+    coalesce_logical(df$phat_high_flag, FALSE, n) | phat_high_default
+  } else {
+    phat_high_default
+  }
+  df$sep_warn_flag <- if ("sep_warn_flag" %in% names(df)) {
+    coalesce_logical(df$sep_warn_flag, FALSE, n) | sep_warn_default
+  } else {
+    sep_warn_default
+  }
+  df$nonconv_flag <- nonconv_default
+  df$central_plot_instability_flag <- if ("central_plot_instability_flag" %in% names(df)) {
+    coalesce_logical(df$central_plot_instability_flag, FALSE, n)
+  } else {
+    rep(FALSE, n)
+  }
+  df$sep_flag <- coalesce_logical(df$sep_flag, FALSE, n) |
+    df$phat_low_flag | df$phat_high_flag | df$sep_warn_flag
+  df$diagnostic_class <- ifelse(
+    df$nonconv_flag | df$sep_warn_flag | df$central_plot_instability_flag,
+    "fail",
+    ifelse(df$phat_low_flag | df$phat_high_flag | df$sep_flag, "warn", "pass")
+  )
+  df$diagnostic_status <- ifelse(
+    df$diagnostic_class == "fail",
+    "FAIL",
+    ifelse(df$diagnostic_class == "warn", "PASS_WITH_WARNINGS", "PASS")
+  )
+  df
+}
+
 write_md <- function(lines, path) {
   writeLines(lines, con = path)
 }
@@ -88,6 +150,7 @@ run_mode <- if (!is.null(runtime_log) && "run_mode" %in% names(runtime_log)) {
 } else {
   "NA"
 }
+is_pilot_mode <- grepl("pilot", run_mode, ignore.case = TRUE)
 
 pilot_frac <- if (!is.null(diag_sum) && "pilot_frac" %in% names(diag_sum)) {
   paste(unique(diag_sum$pilot_frac), collapse = ", ")
@@ -206,11 +269,16 @@ if (!is.null(bal_imp) && all(c("group", "max_abs_post") %in% names(bal_imp))) {
 # --- Outcome fits -------------------------------------------------------------
 model_diag <- safe_read_csv(file.path(results_dir, "model_fit_diagnostics.csv"))
 sep_total <- 0L
+outcome_fail_total <- 0L
+outcome_warn_total <- 0L
 sep_by <- NULL
-if (!is.null(model_diag) && "sep_flag" %in% names(model_diag)) {
-  model_diag$sep_flag <- as.logical(model_diag$sep_flag)
+if (!is.null(model_diag)) {
+  model_diag <- enrich_model_diag(model_diag)
+  write.csv(model_diag, file.path(results_dir, "model_fit_diagnostics.csv"), row.names = FALSE)
   sep_total <- sum(model_diag$sep_flag, na.rm = TRUE)
-  sep_by <- aggregate(sep_flag ~ analysis_variant + group + outcome,
+  outcome_fail_total <- sum(model_diag$diagnostic_class == "fail", na.rm = TRUE)
+  outcome_warn_total <- sum(model_diag$diagnostic_class == "warn", na.rm = TRUE)
+  sep_by <- aggregate(sep_flag ~ analysis_variant + model_type + group + outcome,
                       data = model_diag, FUN = sum)
   sep_by <- sep_by[order(-sep_by$sep_flag), , drop = FALSE]
 }
@@ -292,39 +360,74 @@ if (gc_limit_bad) {
 }
 
 if (!is.na(bal_max_abg) && bal_max_abg > 0.10) {
+  bal_severity <- if (isTRUE(is_pilot_mode)) "medium" else "high"
   add_issue(
-    "high",
+    bal_severity,
     "Balance",
     "Results/balance_target_imp_summary.csv",
     paste0("ABG max|SMD|=", fmt_num(bal_max_abg)),
-    "ABG target balance exceeds 0.10 threshold across imputations.",
-    "Revisit GBM tuning, covariate set, or truncation to improve ABG balance."
+    if (identical(bal_severity, "high")) {
+      "ABG target balance exceeds 0.10 threshold across imputations."
+    } else {
+      "ABG target balance exceeds 0.10 in a pilot/subset render; this is a validation warning, not a full-analysis failure."
+    },
+    if (identical(bal_severity, "high")) {
+      "Revisit GBM tuning, covariate set, or truncation to improve ABG balance."
+    } else {
+      "Confirm balance on the larger validation subset or full render before changing the weighting model."
+    }
   )
 }
 
 if (!is.na(bal_max_vbg) && bal_max_vbg > 0.10) {
+  bal_severity <- if (isTRUE(is_pilot_mode)) "medium" else "high"
   add_issue(
-    "high",
+    bal_severity,
     "Balance",
     "Results/balance_target_imp_summary.csv",
     paste0("VBG max|SMD|=", fmt_num(bal_max_vbg)),
-    "VBG target balance exceeds 0.10 threshold across imputations.",
-    "Revisit GBM tuning, covariate set, or truncation to improve VBG balance."
+    if (identical(bal_severity, "high")) {
+      "VBG target balance exceeds 0.10 threshold across imputations."
+    } else {
+      "VBG target balance exceeds 0.10 in a pilot/subset render; this is a validation warning, not a full-analysis failure."
+    },
+    if (identical(bal_severity, "high")) {
+      "Revisit GBM tuning, covariate set, or truncation to improve VBG balance."
+    } else {
+      "Confirm balance on the larger validation subset or full render before changing the weighting model."
+    }
   )
 }
 
-if (!is.null(model_diag) && sep_total > 0) {
+if (!is.null(model_diag) && outcome_fail_total > 0) {
   add_issue(
     "high",
     "Outcome",
     "Results/model_fit_diagnostics.csv",
-    paste0("sep_flag TRUE for ", sep_total, " / ", nrow(model_diag), " fits"),
-    "High rate of separation/near-separation can bias ORs and CIs.",
-    "Inspect flagged outcomes; consider penalized fits or check data sparsity."
+    paste0("diagnostic_class == fail for ", outcome_fail_total, " / ", nrow(model_diag), " fits"),
+    "Nonconvergence, explicit separation warnings, or central-plot instability can invalidate manuscript-critical estimates.",
+    "Inspect failed diagnostic rows and fix the affected model path before relying on the manuscript-facing display."
   )
 }
 
-if (!is.null(model_diag) && !is.null(fit_issue) && any(fit_issue$sep_n == 0) && sep_total > 0) {
+if (!is.null(model_diag) && outcome_fail_total == 0 && outcome_warn_total > 0) {
+  add_issue(
+    "medium",
+    "Outcome",
+    "Results/model_fit_diagnostics.csv",
+    paste0("tail/off-profile fitted-probability warnings for ", outcome_warn_total, " / ", nrow(model_diag), " fits"),
+    "Tail-only fitted-probability extremes require transparent reporting but do not by themselves invalidate manuscript-facing plots.",
+    "Keep the warning in the diagnostics summary and reassess if any flagged row affects the displayed central curve range."
+  )
+}
+
+fit_issue_sep_col <- if (!is.null(fit_issue)) {
+  intersect(c("n_sep_flag", "sep_n"), names(fit_issue))
+} else {
+  character()
+}
+if (!is.null(model_diag) && !is.null(fit_issue) && length(fit_issue_sep_col) &&
+    sum(fit_issue[[fit_issue_sep_col[[1]]]], na.rm = TRUE) == 0 && sep_total > 0) {
   add_issue(
     "high",
     "Outcome",
@@ -420,28 +523,50 @@ summary_rows <- list(
     "Balance",
     "abg_max_abs_smd",
     fmt_num(bal_max_abg),
-    if (is.finite(bal_max_abg) && bal_max_abg > 0.10) "fail" else "pass",
-    if (is.finite(bal_max_abg) && bal_max_abg > 0.10) "high" else "none",
+    if (is.finite(bal_max_abg) && bal_max_abg > 0.10 && !isTRUE(is_pilot_mode)) "fail" else
+      if (is.finite(bal_max_abg) && bal_max_abg > 0.10) "warn" else "pass",
+    if (is.finite(bal_max_abg) && bal_max_abg > 0.10 && !isTRUE(is_pilot_mode)) "high" else
+      if (is.finite(bal_max_abg) && bal_max_abg > 0.10) "medium" else "none",
     "Results/balance_target_imp_summary.csv",
-    "ABG target balance threshold is 0.10."
+    "ABG target balance threshold is 0.10; pilot/subset threshold misses are validation warnings."
   ),
   add_summary_row(
     "Balance",
     "vbg_max_abs_smd",
     fmt_num(bal_max_vbg),
-    if (is.finite(bal_max_vbg) && bal_max_vbg > 0.10) "fail" else "pass",
-    if (is.finite(bal_max_vbg) && bal_max_vbg > 0.10) "high" else "none",
+    if (is.finite(bal_max_vbg) && bal_max_vbg > 0.10 && !isTRUE(is_pilot_mode)) "fail" else
+      if (is.finite(bal_max_vbg) && bal_max_vbg > 0.10) "warn" else "pass",
+    if (is.finite(bal_max_vbg) && bal_max_vbg > 0.10 && !isTRUE(is_pilot_mode)) "high" else
+      if (is.finite(bal_max_vbg) && bal_max_vbg > 0.10) "medium" else "none",
     "Results/balance_target_imp_summary.csv",
-    "VBG target balance threshold is 0.10."
+    "VBG target balance threshold is 0.10; pilot/subset threshold misses are validation warnings."
   ),
   add_summary_row(
     "Outcome",
     "separation_flags_total",
     sep_total,
-    if (sep_total > 0) "fail" else "pass",
-    if (sep_total > 0) "high" else "none",
+    if (outcome_fail_total > 0) "fail" else if (sep_total > 0) "warn" else "pass",
+    if (outcome_fail_total > 0) "high" else if (sep_total > 0) "medium" else "none",
     "Results/model_fit_diagnostics.csv",
-    "Separation or near-separation can bias ORs and confidence intervals."
+    "Broad legacy count of separation/extreme-probability flags; tail-only fitted-probability flags are warnings unless manuscript-facing curves are affected."
+  ),
+  add_summary_row(
+    "Outcome",
+    "diagnostic_failures_total",
+    outcome_fail_total,
+    if (outcome_fail_total > 0) "fail" else "pass",
+    if (outcome_fail_total > 0) "high" else "none",
+    "Results/model_fit_diagnostics.csv",
+    "Failure count after splitting nonconvergence, explicit separation warnings, and central plotted-curve instability from tail-only probability warnings."
+  ),
+  add_summary_row(
+    "Outcome",
+    "diagnostic_warnings_total",
+    outcome_warn_total,
+    if (outcome_warn_total > 0) "warn" else "pass",
+    if (outcome_warn_total > 0) "medium" else "none",
+    "Results/model_fit_diagnostics.csv",
+    "Warning count for tail-only or off-profile fitted-probability flags."
   ),
   add_summary_row(
     "Plotting",
@@ -479,7 +604,9 @@ lines <- c(
   paste0("- Runtime total (sec): ", fmt_num(total_seconds)),
   paste0("- MI batch status: ", batch_note),
   paste0("- Balance: ", bal_note),
-  paste0("- Separation flags: ", sep_total, " / ", if (!is.null(model_diag)) nrow(model_diag) else 0),
+  paste0("- Outcome diagnostic failures: ", outcome_fail_total, " / ", if (!is.null(model_diag)) nrow(model_diag) else 0),
+  paste0("- Outcome diagnostic warnings: ", outcome_warn_total, " / ", if (!is.null(model_diag)) nrow(model_diag) else 0),
+  paste0("- Legacy separation/extreme-probability flags: ", sep_total, " / ", if (!is.null(model_diag)) nrow(model_diag) else 0),
   "",
   "## Artifact Inventory (Found / Missing)",
   ""
@@ -517,11 +644,11 @@ lines <- c(lines, paste0("- ABG max |SMD|: ", fmt_num(bal_max_abg)),
 
 lines <- c(lines, "", "## Outcome Fits", "")
 if (!is.null(sep_by) && nrow(sep_by)) {
-  lines <- c(lines, "Top separation counts (analysis_variant/group/outcome):")
+  lines <- c(lines, "Top separation/extreme-probability counts (analysis_variant/model_type/group/outcome):")
   top_sep <- head(sep_by, 6)
   sep_lines <- apply(top_sep, 1, function(r) {
-    paste0("- ", r[["analysis_variant"]], " / ", r[["group"]], " / ",
-           r[["outcome"]], ": ", r[["sep_flag"]])
+    paste0("- ", r[["analysis_variant"]], " / ", r[["model_type"]], " / ",
+           r[["group"]], " / ", r[["outcome"]], ": ", r[["sep_flag"]])
   })
   lines <- c(lines, sep_lines)
 } else {

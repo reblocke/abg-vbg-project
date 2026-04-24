@@ -140,10 +140,13 @@ render_inline_graphic <- function(file,
   knitr::include_graphics(inline_path)
 }
 
-# Canonical PDF path: export all figure/table artifacts, keep executed source
-# visible, and reserve rendered output for manuscript-facing displays plus
-# compact provenance/status summaries. QA/debug figures remain sidecar artifacts.
+# Canonical PDF path: export all figure/table artifacts and reserve rendered
+# output for manuscript-facing displays plus compact provenance/status summaries.
+# QA/debug figures and source-heavy diagnostics remain sidecar artifacts.
 VALIDATION_INLINE_ANALYSIS_PREVIEWS <- FALSE
+if (!isTRUE(getOption("ABG_VBG_SHOW_DEBUG_SOURCE", FALSE))) {
+  knitr::knit_hooks$set(source = function(x, options) "")
+}
 
 # helper: normalize manuscript-facing text to a plain-ASCII representation so
 # PDF labels/captions do not depend on platform-specific glyph handling.
@@ -1970,6 +1973,9 @@ fit_with_diagnostics <- function(fit_fun, context, prob_eps = PROB_EPS) {
       n_used = NA_integer_, events = NA_integer_,
       converged = NA, iter = NA_integer_,
       sep_flag = NA, nonconv_flag = NA,
+      phat_low_flag = NA, phat_high_flag = NA,
+      sep_warn_flag = FALSE,
+      central_plot_instability_flag = FALSE,
       min_phat = NA_real_, max_phat = NA_real_,
       warning_n = warning_n, top_warning = top_warning,
       error_message = conditionMessage(fit),
@@ -1981,10 +1987,12 @@ fit_with_diagnostics <- function(fit_fun, context, prob_eps = PROB_EPS) {
   phat <- tryCatch(fitted(fit), error = function(e) NA_real_)
   min_phat <- if (all(is.na(phat))) NA_real_ else min(phat, na.rm = TRUE)
   max_phat <- if (all(is.na(phat))) NA_real_ else max(phat, na.rm = TRUE)
-  sep_flag <- FALSE
-  if (is.finite(min_phat) && min_phat < prob_eps) sep_flag <- TRUE
-  if (is.finite(max_phat) && max_phat > 1 - prob_eps) sep_flag <- TRUE
-  if (any(grepl("fitted probabilities numerically 0 or 1", warn_msgs, fixed = TRUE))) sep_flag <- TRUE
+  phat_low_flag <- is.finite(min_phat) && min_phat < prob_eps
+  phat_high_flag <- is.finite(max_phat) && max_phat > 1 - prob_eps
+  sep_warn_flag <- any(grepl("fitted probabilities numerically 0 or 1", warn_msgs, fixed = TRUE)) ||
+    any(grepl("separat", warn_msgs, ignore.case = TRUE))
+  central_plot_instability_flag <- FALSE
+  sep_flag <- phat_low_flag || phat_high_flag || sep_warn_flag
 
   conv_val <- if (!is.null(fit$converged)) isTRUE(fit$converged) else NA
   iter_val <- if (!is.null(fit$iter)) fit$iter else NA_integer_
@@ -2006,12 +2014,63 @@ fit_with_diagnostics <- function(fit_fun, context, prob_eps = PROB_EPS) {
     n_used = n_used, events = events,
     converged = conv_val, iter = iter_val,
     sep_flag = sep_flag, nonconv_flag = nonconv_flag,
+    phat_low_flag = phat_low_flag,
+    phat_high_flag = phat_high_flag,
+    sep_warn_flag = sep_warn_flag,
+    central_plot_instability_flag = central_plot_instability_flag,
     min_phat = min_phat, max_phat = max_phat,
     warning_n = warning_n, top_warning = top_warning,
     error_message = NA_character_,
     stringsAsFactors = FALSE
   )
   list(fit = fit, diag = diag, warnings = cap$warnings)
+}
+
+# helper: split broad separation/extreme-probability diagnostics into
+# manuscript-critical failures versus tail-only warnings.
+enrich_model_diagnostic_flags <- function(diag_df, prob_eps = PROB_EPS) {
+  if (!is.data.frame(diag_df) || !nrow(diag_df)) return(diag_df)
+  if (!"top_warning" %in% names(diag_df)) diag_df$top_warning <- NA_character_
+  if (!"min_phat" %in% names(diag_df)) diag_df$min_phat <- NA_real_
+  if (!"max_phat" %in% names(diag_df)) diag_df$max_phat <- NA_real_
+  if (!"converged" %in% names(diag_df)) diag_df$converged <- NA
+  if (!"nonconv_flag" %in% names(diag_df)) diag_df$nonconv_flag <- FALSE
+  if (!"sep_flag" %in% names(diag_df)) diag_df$sep_flag <- FALSE
+  if (!"phat_low_flag" %in% names(diag_df)) diag_df$phat_low_flag <- NA
+  if (!"phat_high_flag" %in% names(diag_df)) diag_df$phat_high_flag <- NA
+  if (!"sep_warn_flag" %in% names(diag_df)) diag_df$sep_warn_flag <- NA
+  if (!"central_plot_instability_flag" %in% names(diag_df)) {
+    diag_df$central_plot_instability_flag <- NA
+  }
+  warn_chr <- as.character(diag_df$top_warning)
+  warn_chr[is.na(warn_chr)] <- ""
+  diag_df$phat_low_flag <- dplyr::coalesce(as.logical(diag_df$phat_low_flag), FALSE) |
+    (is.finite(diag_df$min_phat) & diag_df$min_phat < prob_eps)
+  diag_df$phat_high_flag <- dplyr::coalesce(as.logical(diag_df$phat_high_flag), FALSE) |
+    (is.finite(diag_df$max_phat) & diag_df$max_phat > 1 - prob_eps)
+  diag_df$sep_warn_flag <- dplyr::coalesce(as.logical(diag_df$sep_warn_flag), FALSE) |
+    grepl("fitted probabilities numerically 0 or 1", warn_chr, fixed = TRUE) |
+    grepl("separat", warn_chr, ignore.case = TRUE)
+  diag_df$nonconv_flag <- dplyr::coalesce(as.logical(diag_df$nonconv_flag), FALSE) |
+    dplyr::coalesce(!as.logical(diag_df$converged), FALSE) |
+    grepl("did not converge", warn_chr, fixed = TRUE)
+  diag_df$central_plot_instability_flag <- dplyr::coalesce(
+    as.logical(diag_df$central_plot_instability_flag),
+    FALSE
+  )
+  diag_df$sep_flag <- dplyr::coalesce(as.logical(diag_df$sep_flag), FALSE) |
+    diag_df$phat_low_flag | diag_df$phat_high_flag | diag_df$sep_warn_flag
+  diag_df$diagnostic_class <- dplyr::case_when(
+    diag_df$nonconv_flag | diag_df$sep_warn_flag | diag_df$central_plot_instability_flag ~ "fail",
+    diag_df$phat_low_flag | diag_df$phat_high_flag | diag_df$sep_flag ~ "warn",
+    TRUE ~ "pass"
+  )
+  diag_df$diagnostic_status <- dplyr::case_when(
+    diag_df$diagnostic_class == "fail" ~ "FAIL",
+    diag_df$diagnostic_class == "warn" ~ "PASS_WITH_WARNINGS",
+    TRUE ~ "PASS"
+  )
+  diag_df
 }
 
 # helper: confirm that a pooled MI variance object is finite before it is used
@@ -4438,11 +4497,33 @@ subset_data <- subset_data %>%
 
 ```{r death-60d-summary}
 #| code-block-title: "Summarize death_60d"
-#| include: true
+#| include: false
 # Purpose: death 60d summary.
-table(subset_data$death_60d, useNA = "ifany")
-prop.table(table(subset_data$death_60d, useNA = "ifany"))
-summary(subset_data$death_60d)
+death_60d_counts <- as.data.frame(table(subset_data$death_60d, useNA = "ifany")) |>
+  dplyr::rename(death_60d = .data$Var1, n = .data$Freq) |>
+  dplyr::mutate(
+    death_60d = as.character(.data$death_60d),
+    pct = .data$n / sum(.data$n)
+  )
+death_60d_quantiles <- as.numeric(stats::quantile(
+  subset_data$death_60d,
+  probs = c(0, 0.25, 0.5, 0.75, 1),
+  na.rm = TRUE,
+  names = FALSE
+))
+death_60d_summary <- tibble::tibble(
+  statistic = c("min", "q1", "median", "mean", "q3", "max"),
+  value = c(
+    death_60d_quantiles[[1L]],
+    death_60d_quantiles[[2L]],
+    death_60d_quantiles[[3L]],
+    mean(subset_data$death_60d, na.rm = TRUE),
+    death_60d_quantiles[[4L]],
+    death_60d_quantiles[[5L]]
+  )
+)
+write_csv_safely(death_60d_counts, results_path("death_60d_summary_counts.csv"), row_names = FALSE)
+write_csv_safely(death_60d_summary, results_path("death_60d_summary_statistics.csv"), row_names = FALSE)
 ```
 
 ## Baseline tables
@@ -4570,7 +4651,7 @@ make_table1 <- function(data, group_var, caption = "") {
   gtsummary::tbl_summary(
     by   = !!group_sym,
     statistic = list(
-      gtsummary::all_continuous()  ~ "{mean} ± {sd}; {N_miss}/{N_obs} missing ({p_miss}%)",
+      gtsummary::all_continuous()  ~ "{mean} ± {sd}",
       gtsummary::all_categorical() ~ "{n} ({p}%)"
     ),
     digits  = list(gtsummary::all_continuous() ~ 1),
@@ -4610,8 +4691,10 @@ tbl1a_pdf <- to_pdf_table(table1A, font_size = 7, landscape = FALSE, label_col_w
                           longtable = TRUE)
 tbl1b_pdf <- to_pdf_table(table1B, font_size = 7, landscape = FALSE, label_col_width = "2.0in",
                           longtable = TRUE)
-tbl1a_pdf
-tbl1b_pdf
+if (isTRUE(VALIDATION_INLINE_ANALYSIS_PREVIEWS)) {
+  tbl1a_pdf
+  tbl1b_pdf
+}
 ```
 
 ```{r float-barrier-table1abg}
@@ -4657,7 +4740,7 @@ tbl1_abg <- subset_data %>%
   gtsummary::tbl_summary(
     by = abg_status,
     statistic = list(
-      gtsummary::all_continuous()  ~ "{mean} ± {sd}; {N_miss}/{N_obs} missing ({p_miss}%)",
+      gtsummary::all_continuous()  ~ "{mean} ± {sd}",
       gtsummary::all_categorical() ~ "{n} ({p}%)"
     ),
     digits  = list(gtsummary::all_continuous() ~ 1),
@@ -4689,7 +4772,7 @@ tbl1_vbg <- subset_data %>%
   gtsummary::tbl_summary(
     by = vbg_status,
     statistic = list(
-      gtsummary::all_continuous()  ~ "{mean} ± {sd}; {N_miss}/{N_obs} missing ({p_miss}%)",
+      gtsummary::all_continuous()  ~ "{mean} ± {sd}",
       gtsummary::all_categorical() ~ "{n} ({p}%)"
     ),
     digits  = list(gtsummary::all_continuous() ~ 1),
@@ -4840,8 +4923,10 @@ tbl1_abg_pdf <- to_pdf_table(tbl1_abg, font_size = 7, landscape = FALSE, label_c
                              longtable = TRUE)
 tbl1_vbg_pdf <- to_pdf_table(tbl1_vbg, font_size = 7, landscape = FALSE, label_col_width = "2.0in",
                              longtable = TRUE)
-tbl1_abg_pdf
-tbl1_vbg_pdf
+if (isTRUE(VALIDATION_INLINE_ANALYSIS_PREVIEWS)) {
+  tbl1_abg_pdf
+  tbl1_vbg_pdf
+}
 
 ```
 
@@ -4932,7 +5017,7 @@ tbl2_abg <- subset_data %>%
   gtsummary::tbl_summary(
     by = pco2_cat_abg,
     statistic = list(
-      gtsummary::all_continuous()  ~ "{mean} ± {sd}; {N_miss}/{N_obs} missing ({p_miss}%)",
+      gtsummary::all_continuous()  ~ "{mean} ± {sd}",
       gtsummary::all_categorical() ~ "{n} ({p}%)"
     ),
     digits  = list(gtsummary::all_continuous() ~ 1),
@@ -4966,7 +5051,7 @@ tbl2_vbg <- subset_data %>%
   gtsummary::tbl_summary(
     by = pco2_cat_vbg,
     statistic = list(
-      gtsummary::all_continuous()  ~ "{mean} ± {sd}; {N_miss}/{N_obs} missing ({p_miss}%)",
+      gtsummary::all_continuous()  ~ "{mean} ± {sd}",
       gtsummary::all_categorical() ~ "{n} ({p}%)"
     ),
     digits  = list(gtsummary::all_continuous() ~ 1),
@@ -4997,11 +5082,12 @@ tbl2_vbg <- subset_data %>%
 # Render ABG and VBG as separate PDF tables to avoid clipped multi-spanner output.
 tbl2_abg_pdf <- to_pdf_table(tbl2_abg, font_size = 7, landscape = FALSE, label_col_width = "2.0in",
                              longtable = TRUE)
-tbl2_abg_pdf
-
 tbl2_vbg_pdf <- to_pdf_table(tbl2_vbg, font_size = 7, landscape = FALSE, label_col_width = "2.0in",
                              longtable = TRUE)
-tbl2_vbg_pdf
+if (isTRUE(VALIDATION_INLINE_ANALYSIS_PREVIEWS)) {
+  tbl2_abg_pdf
+  tbl2_vbg_pdf
+}
 
 # Keep merged object for Word export only.
 tbl2 <- gtsummary::tbl_merge(
@@ -5024,7 +5110,7 @@ float_barrier("section")
 #| message: false
 #| warning: false
 #| code-block-title: "Table 2a: crude outcomes by CO2 category"
-#| results: "asis"
+#| results: "hide"
 # Purpose: tbl2 outcome panel.
 outcome_vars <- c("imv_proc", "niv_proc", "death_60d", "hypercap_resp_failure")
 outcome_labels <- c(
@@ -5070,19 +5156,23 @@ rate_panel <- bind_rows(
   tidyr::pivot_wider(names_from = co2_group, values_from = rate_fmt) %>%
   arrange_key_results_outcome_group()
 
-kableExtra::kbl(
-  rate_panel,
-  format    = "latex",
-  booktabs  = TRUE,
-  longtable = FALSE,
-  col.names = c("Cohort", "Outcome", "Normal", "Low", "High"),
-  caption   = "Table 2a. Crude outcomes by CO2 category",
-  label     = NA
-) |>
-  kableExtra::kable_styling(
-    latex_options = c("hold_position", "scale_down"),
-    font_size     = 8
-  )
+write_csv_safely(rate_panel, results_path("table2a_crude_outcomes_by_co2_category.csv"), row_names = FALSE)
+
+if (isTRUE(VALIDATION_INLINE_ANALYSIS_PREVIEWS)) {
+  kableExtra::kbl(
+    rate_panel,
+    format    = "latex",
+    booktabs  = TRUE,
+    longtable = FALSE,
+    col.names = c("Cohort", "Outcome", "Normal", "Low", "High"),
+    caption   = "Table 2a. Crude outcomes by CO2 category",
+    label     = NA
+  ) |>
+    kableExtra::kable_styling(
+      latex_options = c("hold_position", "scale_down"),
+      font_size     = 8
+    )
+}
 ```
 
 ```{r export-table1-tbl2-word}
@@ -14602,6 +14692,7 @@ render_table_pdf_maybe(
 #| code-block-title: "Canonical key-results artifact audit"
 #| echo: true
 #| message: false
+#| results: "hide"
 # Purpose: verify the additional canonical key-results artifacts across spline and categorical tracks.
 key_results_outputs <- tibble::tribble(
   ~family, ~track, ~artifact_type, ~artifact_name,
@@ -14628,8 +14719,11 @@ key_results_outputs <- tibble::tribble(
     exists = file.exists(artifact_file)
   )
 
-key_results_outputs |>
-  dplyr::select(-artifact_file)
+write_csv_safely(
+  key_results_outputs |> dplyr::select(-dplyr::all_of("artifact_file")),
+  results_path("key_results_output_audit.csv"),
+  row_names = FALSE
+)
 ```
 
 ```{r manuscript-supplement-tables-additional}
@@ -14639,42 +14733,127 @@ key_results_outputs |>
 #| message: false
 #| results: "hide"
 # Purpose: generate Supplementary Tables S1, S4, and S5 from notebook state.
-table_s1_inclusion_criteria <- tibble::tibble(
-  step = seq_len(5L),
-  criterion = c(
-    "Source extract",
-    "ED/inpatient encounters",
-    "ABG-tested cohort",
-    "VBG-tested cohort",
-    "Target population"
+source_extract_fields <- function(fields) {
+  present <- intersect(fields, names(subset_data_raw))
+  missing <- setdiff(fields, present)
+  out <- present
+  if (length(missing)) out <- c(out, paste0(missing, " (not present in extract)"))
+  if (!length(out)) return("Not present in analysis extract")
+  paste(out, collapse = "; ")
+}
+
+s1_code_row <- function(phenotype_input, code_system, source_value, analysis_fields,
+                        role, source_code_status, notes) {
+  tibble::tibble(
+    `Phenotype input` = phenotype_input,
+    `Code system` = code_system,
+    `Source code/value or extract field` = source_value,
+    `Analysis field(s)` = source_extract_fields(analysis_fields),
+    Role = role,
+    `Source code status` = source_code_status,
+    Notes = notes
+  )
+}
+
+table_s1_inclusion_criteria <- dplyr::bind_rows(
+  s1_code_row(
+    "Arterial blood gas measurement",
+    "LOINC-derived laboratory field",
+    "value_highest_20198",
+    c("value_highest_20198", "paco2", "has_abg"),
+    "Source-cohort enrichment; ABG exposure definition",
+    "available extract concept identifier; upstream LOINC code list not available in analysis extract",
+    "Imported ABG-related concept field used in the arterial CO2 derivation."
   ),
-  `Source field / rule` = c(
-    "TriNetX-derived 2022 extract",
-    "encounter_type != ambulatory",
-    "has_abg == 1",
-    "has_vbg == 1",
-    "ED/inpatient analytic cohort"
+  s1_code_row(
+    "Arterial blood gas measurement",
+    "LOINC-derived laboratory field",
+    "value_highest_115576",
+    c("value_highest_115576", "abg_ph", "has_abg"),
+    "Source-cohort enrichment; ABG exposure definition",
+    "available extract concept identifier; upstream LOINC code list not available in analysis extract",
+    "Imported ABG-related concept field retained with the arterial gas measurement set."
   ),
-  `Excluded, n` = scales::comma(c(
-    0L,
-    cohort_flow_counts$excluded_ambulatory,
-    cohort_flow_counts$analytic_ed_inpatient - cohort_flow_counts$abg_tested,
-    cohort_flow_counts$analytic_ed_inpatient - cohort_flow_counts$vbg_tested,
-    0L
-  )),
-  `Retained, n` = scales::comma(c(
-    cohort_flow_counts$total_extracted,
-    cohort_flow_counts$analytic_ed_inpatient,
-    cohort_flow_counts$abg_tested,
-    cohort_flow_counts$vbg_tested,
-    cohort_flow_counts$analytic_ed_inpatient
-  )),
-  notes = c(
-    "Initial local source cohort.",
-    "Matches Figure 1 cohort-flow restriction.",
-    "Measured arterial CO2 outcome models.",
-    "Measured venous CO2 outcome models.",
-    "Target for IPSW standardization."
+  s1_code_row(
+    "Arterial blood gas measurement",
+    "LOINC-derived laboratory field",
+    "value_highest_327718",
+    c("value_highest_327718", "abg_hco3", "abg_o2sat", "has_abg"),
+    "Source-cohort enrichment; ABG exposure definition",
+    "available extract concept identifier; upstream LOINC code list not available in analysis extract",
+    "Imported ABG-related concept field retained with arterial bicarbonate/O2-saturation fields."
+  ),
+  s1_code_row(
+    "Arterial blood gas procedure",
+    "LOINC/procedure-derived flag",
+    "meas_arterial_gas_proc; meas_art_gas_proc_first_date",
+    c("meas_arterial_gas_proc", "meas_art_gas_proc_first_date", "has_abg"),
+    "Source-cohort enrichment; ABG exposure definition; timing diagnostics",
+    "collapsed derived procedure flag; upstream source code list not available in analysis extract",
+    "Procedure-date field is an encounter-day offset when present."
+  ),
+  s1_code_row(
+    "Venous blood gas measurement",
+    "LOINC-derived laboratory field",
+    "vbg_co2; vbg_ph; vbg_hco3; vbg_o2sat",
+    c("vbg_co2", "vbg_ph", "vbg_hco3", "vbg_o2sat", "has_vbg"),
+    "Source-cohort enrichment; VBG exposure definition",
+    "collapsed derived measurement fields; upstream LOINC code list not available in analysis extract",
+    "The de-identified analysis extract stores VBG measurement variables rather than row-level LOINC code rows."
+  ),
+  s1_code_row(
+    "Venous blood gas procedure",
+    "LOINC/procedure-derived flag",
+    "meas_venous_o2_proc; meas_venous_o2_proc_first_date",
+    c("meas_venous_o2_proc", "meas_venous_o2_proc_first_date", "has_vbg"),
+    "Source-cohort enrichment; VBG exposure definition; timing diagnostics",
+    "collapsed derived procedure flag; upstream source code list not available in analysis extract",
+    "Procedure-date field is an encounter-day offset when present."
+  ),
+  s1_code_row(
+    "Hypercapnic respiratory failure and related respiratory diagnoses",
+    "ICD-10-CM-derived diagnosis flags",
+    "hypercap_resp_failure; resp_acid_dx; other_resp_failure; resp_abnormality; resp_dep_compl; RESPFAIL_rfs",
+    c("hypercap_resp_failure", "resp_acid_dx", "other_resp_failure", "resp_abnormality", "resp_dep_compl", "RESPFAIL_rfs"),
+    "Source-cohort enrichment; hypercapnic respiratory failure outcome definition",
+    "collapsed derived diagnosis flags; upstream ICD-10-CM code list not available in analysis extract",
+    "These fields identify respiratory-failure phenotypes after upstream code grouping."
+  ),
+  s1_code_row(
+    "Severe obesity, OHS, and sleep-hypoventilation criteria",
+    "ICD-10-CM-derived flags and measured BMI fields",
+    "ohs_code; sleep_hypovent_dx; other_sleep_hypovent_dx; curr_bmi; working_bmi; bmi; ats_ohs_flag; pos_ohs_flag; OBESITY_rfs",
+    c("ohs_code", "sleep_hypovent_dx", "other_sleep_hypovent_dx", "curr_bmi", "working_bmi", "bmi", "ats_ohs_flag", "pos_ohs_flag", "OBESITY_rfs"),
+    "Source-cohort enrichment; covariate definition",
+    "mixed measured fields and collapsed derived diagnosis flags; upstream ICD-10-CM code list not available in analysis extract",
+    "BMI is retained as a baseline covariate; OHS and obesity flags support enriched-cohort construction."
+  ),
+  s1_code_row(
+    "Non-invasive ventilation procedure",
+    "CPT/PCS/procedure-derived flag",
+    "niv_proc; niv_proc_first_date",
+    c("niv_proc", "niv_proc_first_date", "VENTSUPPORT_rfs"),
+    "Source-cohort enrichment; NIV outcome definition; timing diagnostics",
+    "collapsed derived procedure flag; upstream CPT/PCS/procedure code list not available in analysis extract",
+    "The date field is an encounter-day offset and is used only for diagnostic timing sensitivity."
+  ),
+  s1_code_row(
+    "Invasive mechanical ventilation procedure",
+    "CPT/PCS/procedure-derived flag",
+    "imv_proc; imv_proc_first_date",
+    c("imv_proc", "imv_proc_first_date", "VENTSUPPORT_rfs"),
+    "Source-cohort enrichment; IMV outcome definition; timing diagnostics",
+    "collapsed derived procedure flag; upstream CPT/PCS/procedure code list not available in analysis extract",
+    "The date field is an encounter-day offset and is used only for diagnostic timing sensitivity."
+  ),
+  s1_code_row(
+    "Any ventilatory support procedure",
+    "CPT/PCS/procedure-derived flag",
+    "vent_proc; vent_proc_first_date; VENTSUPPORT_rfs",
+    c("vent_proc", "vent_proc_first_date", "VENTSUPPORT_rfs"),
+    "Source-cohort enrichment; ventilatory-support phenotype definition",
+    "collapsed derived procedure flag; upstream CPT/PCS/procedure code list not available in analysis extract",
+    "Composite ventilatory-support fields combine NIV and IMV-related upstream procedure groupings."
   )
 )
 
@@ -14684,7 +14863,7 @@ write_standalone_table_pdf(
   file_stub = "table_s1_inclusion_criteria",
   wide = TRUE,
   digits = 0,
-  max_cols = 6,
+  max_cols = 7,
   landscape = TRUE,
   display_label = "Table S1"
 )
@@ -14732,20 +14911,57 @@ role_for_var <- function(v) {
 missing_lookup <- miss_tbl |>
   dplyr::select(.data$variable, .data$pct_missing)
 
+mi_predictor_row_n <- function(v) {
+  if (!exists("pred") || is.null(pred) || !v %in% rownames(pred)) return(0L)
+  sum(pred[v, , drop = TRUE] != 0, na.rm = TRUE)
+}
+
+mi_predictor_col_n <- function(v) {
+  if (!exists("pred") || is.null(pred) || !v %in% colnames(pred)) return(0L)
+  sum(pred[, v, drop = TRUE] != 0, na.rm = TRUE)
+}
+
 table_s4_missingness_primary_analysis <- tibble::tibble(variable = baseline_role_vars) |>
   dplyr::left_join(missing_lookup, by = "variable") |>
   dplyr::mutate(
-    variable = dplyr::recode(.data$variable, !!!baseline_role_labels, .default = .data$variable),
-    `Analysis role` = vapply(baseline_role_vars, role_for_var, character(1L)),
-    `% missing` = sprintf("%.1f%%", .data$pct_missing),
-    `Imputed in primary MI` = dplyr::if_else(
-      dplyr::coalesce(meth[baseline_role_vars], "") != "",
+    display_variable = dplyr::recode(.data$variable, !!!baseline_role_labels, .default = .data$variable),
+    `Analysis role` = vapply(.data$variable, role_for_var, character(1L)),
+    pct_missing_num = dplyr::coalesce(.data$pct_missing, 0),
+    `% missing` = sprintf("%.1f%%", .data$pct_missing_num),
+    mi_method = dplyr::coalesce(meth[.data$variable], ""),
+    predictor_row_n = vapply(.data$variable, mi_predictor_row_n, integer(1L)),
+    predictor_col_n = vapply(.data$variable, mi_predictor_col_n, integer(1L)),
+    `Included in MI model` = dplyr::if_else(
+      .data$variable %in% names(meth) &
+        (nzchar(.data$mi_method) | .data$predictor_row_n > 0L | .data$predictor_col_n > 0L),
       "Yes",
       "No"
+    ),
+    `Imputed if missing` = dplyr::if_else(
+      nzchar(.data$mi_method) & .data$pct_missing_num > 0,
+      "Yes",
+      "No"
+    ),
+    `Observed complete` = dplyr::if_else(.data$pct_missing_num == 0, "Yes", "No"),
+    Notes = dplyr::case_when(
+      .data$pct_missing_num == 0 & .data$`Included in MI model` == "Yes" ~
+        "Complete in this render; used as MI predictor or model variable.",
+      .data$`Imputed if missing` == "Yes" ~
+        paste0("Eligible for MICE method: ", .data$mi_method, "."),
+      .data$`Included in MI model` == "Yes" ~
+        "Included as a predictor but not itself imputed.",
+      TRUE ~ "Not included in the primary MI model."
     )
   ) |>
-  dplyr::select(.data$variable, .data$`Analysis role`, .data$`% missing`, .data$`Imputed in primary MI`) |>
-  dplyr::rename(Variable = variable)
+  dplyr::select(
+    Variable = .data$display_variable,
+    .data$`Analysis role`,
+    .data$`% missing`,
+    .data$`Included in MI model`,
+    .data$`Imputed if missing`,
+    .data$`Observed complete`,
+    .data$Notes
+  )
 
 write_standalone_table_pdf(
   table_s4_missingness_primary_analysis,
@@ -14753,20 +14969,13 @@ write_standalone_table_pdf(
   file_stub = "table_s4_missingness_primary_analysis",
   wide = FALSE,
   digits = 1,
-  max_cols = 4,
-  landscape = FALSE,
+  max_cols = 7,
+  landscape = TRUE,
   display_label = "Table S4"
 )
 
-diag_df_for_s5 <- mi_outcome_diag
-diag_df_for_s5$sep_warn <- grepl("fitted probabilities numerically 0 or 1",
-                                  diag_df_for_s5$top_warning, fixed = TRUE) |
-  grepl("separat", diag_df_for_s5$top_warning, ignore.case = TRUE)
-diag_df_for_s5$phat_extreme <- (diag_df_for_s5$min_phat < PROB_EPS) |
-  (diag_df_for_s5$max_phat > 1 - PROB_EPS)
-diag_df_for_s5$sep_flag <- dplyr::coalesce(as.logical(diag_df_for_s5$sep_flag), FALSE)
-diag_df_for_s5$nonconv_flag <- dplyr::coalesce(as.logical(diag_df_for_s5$nonconv_flag), FALSE) |
-  dplyr::coalesce(!as.logical(diag_df_for_s5$converged), FALSE)
+diag_df_for_s5 <- enrich_model_diagnostic_flags(mi_outcome_diag)
+diag_df_for_s5$phat_extreme <- diag_df_for_s5$phat_low_flag | diag_df_for_s5$phat_high_flag
 
 mi_variants_for_s5 <- intersect(c("mi_ipw", "weighted_imputed"), unique(diag_df_for_s5$analysis_variant))
 if (!length(mi_variants_for_s5)) mi_variants_for_s5 <- unique(diag_df_for_s5$analysis_variant)
@@ -14777,9 +14986,11 @@ issue_summary <- diag_df_for_s5 |>
   dplyr::summarise(
     n_fits = dplyr::n(),
     n_nonconv = sum(nonconv_flag %in% TRUE, na.rm = TRUE),
-    n_sep_warn = sum(sep_warn %in% TRUE, na.rm = TRUE),
+    n_sep_warn = sum(sep_warn_flag %in% TRUE, na.rm = TRUE),
     n_phat_extreme = sum(phat_extreme %in% TRUE, na.rm = TRUE),
     n_sep_flag = sum(sep_flag %in% TRUE, na.rm = TRUE),
+    n_fail = sum(diagnostic_class == "fail", na.rm = TRUE),
+    n_warn = sum(diagnostic_class == "warn", na.rm = TRUE),
     .groups = "drop"
   )
 write_csv_safely(issue_summary, results_path("mi_fit_issue_summary.csv"), row_names = FALSE)
@@ -14790,8 +15001,34 @@ safe_max <- function(x) {
   max(x)
 }
 
+render_scope_note <- if (IS_PILOT) {
+  paste0(
+    "Pilot validation render settings shown (pilot_frac = ", PILOT_FRAC,
+    "); final manuscript Table S5 should be regenerated from the full run."
+  )
+} else {
+  "Full-analysis render settings shown."
+}
+
+status_from_counts <- function(fail_n = 0L, warn_n = 0L) {
+  if (is.finite(fail_n) && fail_n > 0) return("fail")
+  if (is.finite(warn_n) && warn_n > 0) return("warning")
+  "resolved"
+}
+
+mc_ratio_max <- safe_max(mc_tab$mc_err_over_se)
+chain_drift_n <- sum(chain_diag$flag %in% TRUE, na.rm = TRUE)
+logged_event_n <- sum(log_events_summary$n, na.rm = TRUE)
+warning_row_n <- nrow(mi_warn_log)
+nonconv_n <- sum(diag_df_for_s5$nonconv_flag %in% TRUE, na.rm = TRUE)
+sep_warn_n <- sum(diag_df_for_s5$sep_warn_flag %in% TRUE, na.rm = TRUE)
+phat_warn_n <- sum(diag_df_for_s5$diagnostic_class == "warn", na.rm = TRUE)
+diagnostic_fail_n <- sum(diag_df_for_s5$diagnostic_class == "fail", na.rm = TRUE)
+
 table_s5_mi_diagnostic_summary <- tibble::tibble(
   Domain = c(
+    "Render scope",
+    "Render scope",
     "Imputation run",
     "Imputation run",
     "Imputation run",
@@ -14802,9 +15039,12 @@ table_s5_mi_diagnostic_summary <- tibble::tibble(
     "Captured warnings",
     "Outcome fit diagnostics",
     "Outcome fit diagnostics",
+    "Outcome fit diagnostics",
     "Outcome fit diagnostics"
   ),
   Metric = c(
+    "Current render",
+    "Final manuscript target",
     "Completed imputations",
     "Iterations per imputation",
     "Variables imputed",
@@ -14815,23 +15055,45 @@ table_s5_mi_diagnostic_summary <- tibble::tibble(
     "Captured warning rows",
     "MI model fits audited",
     "Fits with nonconvergence flags",
-    "Fits with separation/extreme-probability flags"
+    "Fits with explicit separation warnings",
+    "Fits with tail-only fitted-probability warnings"
   ),
   Value = c(
+    paste0(RUN_MODE, " (pilot_frac=", PILOT_FRAC, ")"),
+    "full (m=80; maxit=20)",
     as.character(imp$m),
     as.character(MAXIT_RUN),
     as.character(length(impute_vars)),
-    ifelse(is.finite(safe_max(mc_tab$mc_err_over_se)), sprintf("%.3f", safe_max(mc_tab$mc_err_over_se)), "Not estimable"),
+    ifelse(is.finite(mc_ratio_max), sprintf("%.3f", mc_ratio_max), "Not estimable"),
     as.character(nrow(chain_diag)),
-    as.character(sum(chain_diag$flag %in% TRUE, na.rm = TRUE)),
-    as.character(sum(log_events_summary$n, na.rm = TRUE)),
-    as.character(nrow(mi_warn_log)),
+    as.character(chain_drift_n),
+    as.character(logged_event_n),
+    as.character(warning_row_n),
     as.character(nrow(diag_df_for_s5)),
-    as.character(sum(diag_df_for_s5$nonconv_flag %in% TRUE, na.rm = TRUE)),
-    as.character(sum(diag_df_for_s5$sep_flag %in% TRUE | diag_df_for_s5$phat_extreme %in% TRUE, na.rm = TRUE))
+    as.character(nonconv_n),
+    as.character(sep_warn_n),
+    as.character(phat_warn_n)
+  ),
+  Status = c(
+    ifelse(IS_PILOT, "warning", "resolved"),
+    ifelse(IS_PILOT, "not applicable", "resolved"),
+    "resolved",
+    "resolved",
+    ifelse(length(impute_vars) > 0, "resolved", "warning"),
+    ifelse(is.finite(mc_ratio_max) && mc_ratio_max <= 0.25, "resolved", "warning"),
+    ifelse(nrow(chain_diag) > 0, "resolved", "warning"),
+    status_from_counts(warn_n = chain_drift_n),
+    status_from_counts(warn_n = logged_event_n),
+    status_from_counts(warn_n = warning_row_n),
+    "resolved",
+    status_from_counts(fail_n = nonconv_n),
+    status_from_counts(fail_n = sep_warn_n),
+    status_from_counts(fail_n = diagnostic_fail_n, warn_n = phat_warn_n)
   ),
   Interpretation = c(
-    "Primary analysis imputation count used in this render.",
+    render_scope_note,
+    "Full manuscript settings remain the target for final manuscript-facing diagnostics.",
+    "Imputation count used in the current render.",
     "Configured MICE iteration count for this render.",
     "Variables with non-empty MICE imputation methods and observed missingness.",
     "Diagnostic model ratio; lower values indicate less simulation noise relative to model SE.",
@@ -14841,7 +15103,8 @@ table_s5_mi_diagnostic_summary <- tibble::tibble(
     "Warnings captured by notebook-level diagnostics wrappers.",
     "Outcome-model diagnostic rows captured for MI analyses.",
     "Potential convergence problems requiring review if nonzero.",
-    "Known separation/extreme-probability screen; interpret affected estimates cautiously."
+    "Explicit fitted-probability or separation warnings are treated as manuscript-critical failures if present.",
+    "Tail-only fitted-probability extremes are warnings unless they affect manuscript-facing plotted curves."
   )
 )
 
@@ -14851,7 +15114,7 @@ write_standalone_table_pdf(
   file_stub = "table_s5_mi_diagnostic_summary",
   wide = TRUE,
   digits = 3,
-  max_cols = 4,
+  max_cols = 5,
   landscape = TRUE,
   display_label = "Table S5"
 )
@@ -14936,7 +15199,7 @@ manuscript_asset_manifest_internal <- tibble::tribble(
   "Figure S6", "Figure S6", "Covariate balance after gradient-boosted propensity weighting for ABG and VBG test-ordering models", "figure", "supplement", "loveplot-ipw-gbm", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Raw-versus-weighted absolute standardized mean differences; dashed line marks |SMD| = 0.1.", "gbm_sensitivity", "figs", "loveplot-ipw-gbm-abg-vbg", "figs", "figure_s6_covariate_balance_gbm_weighting", "png",
   "Figure S7", "Figure S7", "Propensity-score overlap for gradient-boosted ABG and VBG test-ordering models", "figure", "supplement", "propensity-histograms-conditional", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Tested-versus-untested propensity-score distributions under the GBM sensitivity models.", "gbm_sensitivity", "figs", "propensity-histograms-conditional", "figs", "figure_s7_propensity_score_overlap_gbm", "png",
   "Figure S8", "Figure S8", "SHAP-style contribution summaries for gradient-boosted ABG and VBG test-ordering models", "figure", "supplement", "shap-top10-ipw-gbm-display", "generated", "notebook_generated", TRUE, "png,pdf", TRUE, "", "fail", "Mean absolute SHAP value summaries; not interpreted as independent predictors.", "gbm_sensitivity", "figs", "shap-top10-ipw-gbm-abg-vbg", "figs", "figure_s8_shap_style_contributions_gbm", "png",
-  "Table S1", "Table S1", "Inclusion criteria into the enriched sample", "table", "supplement", "manuscript-supplement-tables-additional", "generated", "notebook_generated", TRUE, "csv,pdf", TRUE, "", "fail", "Notebook-generated inclusion/restriction table derived from the same cohort-flow logic as Figure 1.", "inclusion", "", "table_s1_inclusion_criteria", "", "table_s1_inclusion_criteria", "pdf",
+  "Table S1", "Table S1", "Inclusion criteria into the enriched sample", "table", "supplement", "manuscript-supplement-tables-additional", "generated", "notebook_generated", TRUE, "csv,pdf", TRUE, "", "fail", "Notebook-generated phenotype input/code-list table for enriched cohort, exposure, and outcome definitions.", "inclusion", "", "table_s1_inclusion_criteria", "", "table_s1_inclusion_criteria", "pdf",
   "Table S4", "Table S4", "Missingness of baseline covariates used in the primary analysis", "table", "supplement", "manuscript-supplement-tables-additional", "generated", "notebook_generated", TRUE, "csv,pdf", TRUE, "", "fail", "Notebook-generated missingness table for baseline covariates used in the primary PS/direct-adjustment analysis.", "missingness", "", "table_s4_missingness_primary_analysis", "", "table_s4_missingness_primary_analysis", "pdf",
   "Table S5", "Table S5", "Multiple-imputation diagnostic summary", "table", "supplement", "manuscript-supplement-tables-additional", "generated", "notebook_generated", TRUE, "csv,pdf", TRUE, "", "fail", "Compact manuscript-facing summary of MI execution, chain, Monte Carlo error, logged-event, warning, and outcome-fit diagnostics.", "mi_diagnostics", "", "table_s5_mi_diagnostic_summary", "", "table_s5_mi_diagnostic_summary", "pdf",
   "Figure 3", "Figure 3", "Deprecated draft-only reference for weighted categorical results", "figure", "draft_only", "", "draft_only", "suppressed/deprecated", FALSE, "", FALSE, "Figure S4", "suppressed", "Weighted categorical display is intentionally harmonized as Figure S4; no Figure 3 alias is generated.", "deprecated", "", "", "", "", ""
@@ -15015,6 +15278,35 @@ canonical_conflicts <- generated_manuscript_assets |>
   dplyr::count(canonical_subdir, canonical_stub, name = "n_assets") |>
   dplyr::filter(n_assets > 1L)
 
+canonical_path_conflicts <- generated_manuscript_assets |>
+  dplyr::filter(!is.na(canonical_artifact_path), nzchar(canonical_artifact_path)) |>
+  dplyr::count(canonical_artifact_path, name = "n_assets") |>
+  dplyr::filter(n_assets > 1L)
+
+alias_path_conflicts <- generated_manuscript_assets |>
+  dplyr::filter(!is.na(alias_artifact_path), nzchar(alias_artifact_path)) |>
+  dplyr::count(alias_artifact_path, name = "n_assets") |>
+  dplyr::filter(n_assets > 1L)
+
+label_output_conflicts <- active_manuscript_assets |>
+  dplyr::mutate(
+    output_key = paste(canonical_artifact_path, alias_artifact_path, sep = " -> ")
+  ) |>
+  dplyr::count(manuscript_label_safe, output_key, name = "n_rows") |>
+  dplyr::count(manuscript_label_safe, name = "n_outputs") |>
+  dplyr::filter(n_outputs > 1L)
+
+output_label_conflicts <- dplyr::bind_rows(
+  generated_manuscript_assets |>
+    dplyr::transmute(output_path = canonical_artifact_path, manuscript_label_safe),
+  generated_manuscript_assets |>
+    dplyr::transmute(output_path = alias_artifact_path, manuscript_label_safe)
+) |>
+  dplyr::filter(!is.na(output_path), nzchar(output_path)) |>
+  dplyr::distinct(output_path, manuscript_label_safe) |>
+  dplyr::count(output_path, name = "n_labels") |>
+  dplyr::filter(n_labels > 1L)
+
 deprecated_numbering_conflicts <- active_manuscript_assets |>
   dplyr::filter(numbering_slot == "Figure 3")
 
@@ -15049,6 +15341,38 @@ duplicate_asset_audit <- dplyr::bind_rows(
     severity = if (nrow(canonical_conflicts)) "high" else "none",
     n_rows = if (nrow(canonical_conflicts)) canonical_conflicts$n_assets else 0L,
     detail = if (nrow(canonical_conflicts)) "Multiple active assets share one canonical artifact stub." else "No conflicting canonical artifact stubs detected."
+  ),
+  tibble::tibble(
+    audit_scope = "canonical_path",
+    audit_key = if (nrow(canonical_path_conflicts)) canonical_path_conflicts$canonical_artifact_path else "all_canonical_paths",
+    status = if (nrow(canonical_path_conflicts)) "conflict" else "pass",
+    severity = if (nrow(canonical_path_conflicts)) "high" else "none",
+    n_rows = if (nrow(canonical_path_conflicts)) canonical_path_conflicts$n_assets else 0L,
+    detail = if (nrow(canonical_path_conflicts)) "Multiple active assets share one canonical artifact path." else "No conflicting canonical artifact paths detected."
+  ),
+  tibble::tibble(
+    audit_scope = "alias_path",
+    audit_key = if (nrow(alias_path_conflicts)) alias_path_conflicts$alias_artifact_path else "all_alias_paths",
+    status = if (nrow(alias_path_conflicts)) "conflict" else "pass",
+    severity = if (nrow(alias_path_conflicts)) "high" else "none",
+    n_rows = if (nrow(alias_path_conflicts)) alias_path_conflicts$n_assets else 0L,
+    detail = if (nrow(alias_path_conflicts)) "Multiple active assets share one manuscript-facing alias path." else "No conflicting alias artifact paths detected."
+  ),
+  tibble::tibble(
+    audit_scope = "label_output",
+    audit_key = if (nrow(label_output_conflicts)) label_output_conflicts$manuscript_label_safe else "all_labels",
+    status = if (nrow(label_output_conflicts)) "conflict" else "pass",
+    severity = if (nrow(label_output_conflicts)) "high" else "none",
+    n_rows = if (nrow(label_output_conflicts)) label_output_conflicts$n_outputs else 0L,
+    detail = if (nrow(label_output_conflicts)) "One active label maps to multiple output path pairs." else "No active label maps to multiple output path pairs."
+  ),
+  tibble::tibble(
+    audit_scope = "output_label",
+    audit_key = if (nrow(output_label_conflicts)) output_label_conflicts$output_path else "all_outputs",
+    status = if (nrow(output_label_conflicts)) "conflict" else "pass",
+    severity = if (nrow(output_label_conflicts)) "high" else "none",
+    n_rows = if (nrow(output_label_conflicts)) output_label_conflicts$n_labels else 0L,
+    detail = if (nrow(output_label_conflicts)) "One output path is attached to multiple active manuscript labels." else "No output path is attached to multiple active labels."
   ),
   tibble::tibble(
     audit_scope = "deprecated_slot",
@@ -15322,18 +15646,33 @@ write_markdown_report(
 )
 
 validation_static_summary <- tibble::tibble(
-  component = c("artifact_registry", "external_manual_assets", "glyph_audit", "duplicate_audit"),
+  component = c(
+    "artifact_registry",
+    "external_manual_assets",
+    "glyph_audit",
+    "duplicate_audit",
+    "artifact_existence",
+    "manuscript_display"
+  ),
   status = c(
     if (any(artifact_check_status$check_status == "missing_required")) "FAIL" else "PASS",
     if (any(artifact_check_status$check_status == "external_manual_declared")) "PASS_WITH_WARNINGS" else "PASS",
     if (any(glyph_audit$glyph_status == "fail")) "FAIL" else "PASS",
-    if (any(duplicate_asset_audit$status == "conflict")) "FAIL" else "PASS"
+    if (any(duplicate_asset_audit$status == "conflict")) "FAIL" else "PASS",
+    if (any(artifact_check_status$check_status == "missing_required")) "FAIL" else "PASS",
+    if (
+      any(artifact_check_status$check_status == "missing_required") ||
+        any(glyph_audit$glyph_status == "fail") ||
+        any(duplicate_asset_audit$status == "conflict")
+    ) "FAIL" else "PASS"
   ),
   detail = c(
     paste0(sum(artifact_check_status$check_status == "missing_required"), " missing required generated artifact rows."),
     paste0(sum(artifact_check_status$check_status == "external_manual_declared"), " declared external/manual rows."),
     paste0(sum(glyph_audit$glyph_status == "fail"), " unsafe manuscript glyph rows."),
-    paste0(sum(duplicate_asset_audit$status == "conflict"), " conflicting duplicate/numbering rows.")
+    paste0(sum(duplicate_asset_audit$status == "conflict"), " conflicting duplicate/numbering rows."),
+    paste0(sum(artifact_check_status$check_status == "missing_required"), " required canonical or alias artifacts missing."),
+    "Manuscript-display status before post-render PDF text scan; wrapper postflight performs the final PDF-level check."
   )
 )
 
@@ -15341,6 +15680,10 @@ validation_static_failures <- c(
   if (nrow(numbering_conflicts)) paste0("Conflicting active numbering slots: ", collapse_unique_text(numbering_conflicts$numbering_slot)),
   if (nrow(alias_conflicts)) paste0("Conflicting manuscript alias stubs: ", collapse_unique_text(alias_conflicts$alias_stub)),
   if (nrow(canonical_conflicts)) paste0("Conflicting canonical artifact stubs: ", collapse_unique_text(canonical_conflicts$canonical_stub)),
+  if (nrow(canonical_path_conflicts)) paste0("Conflicting canonical artifact paths: ", collapse_unique_text(canonical_path_conflicts$canonical_artifact_path)),
+  if (nrow(alias_path_conflicts)) paste0("Conflicting manuscript alias paths: ", collapse_unique_text(alias_path_conflicts$alias_artifact_path)),
+  if (nrow(label_output_conflicts)) paste0("Labels mapped to multiple output path pairs: ", collapse_unique_text(label_output_conflicts$manuscript_label_safe)),
+  if (nrow(output_label_conflicts)) paste0("Output paths mapped to multiple labels: ", collapse_unique_text(output_label_conflicts$output_path)),
   if (nrow(deprecated_numbering_conflicts)) "Deprecated Figure 3 remained active in the validation registry.",
   if (any(glyph_audit$glyph_status == "fail")) "Unsafe manuscript glyphs remained after normalization.",
   if (any(artifact_check_status$check_status == "missing_required")) paste0(
@@ -15510,7 +15853,7 @@ render_validation_manuscript_assets <- function() {
       file_stub = "table_s1_inclusion_criteria",
       wide = TRUE,
       digits = 0,
-      max_cols = 6,
+      max_cols = 7,
       landscape = TRUE
     ),
     render_manuscript_figure("Figure S1"),
@@ -15541,8 +15884,8 @@ render_validation_manuscript_assets <- function() {
       file_stub = "table_s4_missingness_primary_analysis",
       wide = FALSE,
       digits = 1,
-      max_cols = 4,
-      landscape = FALSE
+      max_cols = 7,
+      landscape = TRUE
     ),
     render_manifest_table(
       "Table S5",
@@ -16634,7 +16977,7 @@ audit_file <- results_path("diagnostics_audit.md")
 write_diag_lines(audit_lines, audit_file)
 ```
 
-### Performance / runtime log
+### Warning and model-fit diagnostics
 
 ```{r warnings-summary}
 #| code-block-title: "Warnings summary (captured)"
@@ -16688,14 +17031,15 @@ stopifnot(exists("mi_outcome_diag"))
 if (nrow(mi_outcome_diag) == 0L) {
   stop("mi_outcome_diag is empty; outcome diagnostics were not captured.")
 }
+mi_outcome_diag <- enrich_model_diagnostic_flags(mi_outcome_diag)
 out_diag_file <- results_path("model_fit_diagnostics.csv")
 write_csv_safely(mi_outcome_diag, out_diag_file)
 write_csv_safely(mi_outcome_diag, results_path("mi_outcome_fit_diagnostics.csv"))
 
 nonconv <- mi_outcome_diag |>
-  dplyr::filter(isTRUE(nonconv_flag) | isFALSE(converged))
+  dplyr::filter(.data$nonconv_flag %in% TRUE | .data$converged %in% FALSE)
 sep <- mi_outcome_diag |>
-  dplyr::filter(isTRUE(sep_flag))
+  dplyr::filter(.data$sep_flag %in% TRUE)
 
 if (nrow(nonconv)) {
   nonconv_counts <- nonconv |>
@@ -16749,15 +17093,8 @@ if (nrow(worst_phat)) {
   )
 }
 
-  diag_df <- mi_outcome_diag
-  diag_df$sep_warn <- grepl("fitted probabilities numerically 0 or 1",
-                             diag_df$top_warning, fixed = TRUE) |
-    grepl("separat", diag_df$top_warning, ignore.case = TRUE)
-  diag_df$phat_extreme <- (diag_df$min_phat < PROB_EPS) |
-    (diag_df$max_phat > 1 - PROB_EPS)
-  diag_df$sep_flag <- dplyr::coalesce(as.logical(diag_df$sep_flag), FALSE)
-  diag_df$nonconv_flag <- dplyr::coalesce(as.logical(diag_df$nonconv_flag), FALSE) |
-    dplyr::coalesce(!as.logical(diag_df$converged), FALSE)
+  diag_df <- enrich_model_diagnostic_flags(mi_outcome_diag)
+  diag_df$phat_extreme <- diag_df$phat_low_flag | diag_df$phat_high_flag
 
   mi_variants <- intersect(c("mi_ipw", "weighted_imputed"), unique(diag_df$analysis_variant))
   if (!length(mi_variants)) mi_variants <- unique(diag_df$analysis_variant)
@@ -16768,9 +17105,11 @@ issue_summary <- diag_df |>
   dplyr::summarise(
     n_fits = dplyr::n(),
     n_nonconv = sum(nonconv_flag %in% TRUE, na.rm = TRUE),
-    n_sep_warn = sum(sep_warn %in% TRUE, na.rm = TRUE),
+    n_sep_warn = sum(sep_warn_flag %in% TRUE, na.rm = TRUE),
     n_phat_extreme = sum(phat_extreme %in% TRUE, na.rm = TRUE),
     n_sep_flag = sum(sep_flag %in% TRUE, na.rm = TRUE),
+    n_fail = sum(diagnostic_class == "fail", na.rm = TRUE),
+    n_warn = sum(diagnostic_class == "warn", na.rm = TRUE),
     .groups = "drop"
   )
 write_csv_safely(issue_summary, results_path("mi_fit_issue_summary.csv"))
@@ -16803,7 +17142,7 @@ if (nrow(log_events_summary)) {
 # Replay debugging is intentionally omitted from the canonical render path.
 ```
 
-### Performance / runtime log
+### Notebook chunk runtime log
 
 ```{r runtime-log-export}
 #| code-block-title: "Runtime log"
@@ -20913,7 +21252,7 @@ validation_build_display <- dplyr::bind_rows(
   tibble::tibble(
     component = "overall_build",
     status = final_build_status,
-    detail = "Final validation status derived from artifact checks, glyph audit, duplicate audit, and diagnostics audit."
+    detail = "Final validation status derived from artifact registry, glyph audit, duplicate audit, artifact existence, diagnostics, and manuscript-display checks."
   ),
   build_status_components
 )

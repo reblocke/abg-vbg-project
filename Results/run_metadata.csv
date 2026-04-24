@@ -1,2 +1,2 @@
 "run_id","run_mode","pilot_frac","mi_ram_gb","mi_ram_gb_source","mi_batch_threshold","mi_batch_start","mi_batch_start_source","full_n","sampled_n","subset_n","run_ts"
-"20260423_111150","pilot",0.25,16,"auto:Darwin",5000,2,"auto:auto:Darwin",833476,208369,128521,"2026-04-23 11:11:50.486947"
+"20260424_063653","pilot",0.01,16,"auto:Darwin",5000,2,"auto:auto:Darwin",833476,8335,5175,"2026-04-24 06:36:53.744157"

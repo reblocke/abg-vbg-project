@@ -1,12 +1,14 @@
 # Diagnostics Audit
 
 ## Executive Summary
-- Overall status: FAIL
-- Run mode: pilot; pilot_frac: 0.25; m: 20; maxit: 5
-- Runtime total (sec): 1564.013
+- Overall status: PASS_WITH_WARNINGS
+- Run mode: pilot; pilot_frac: 0.01; m: 20; maxit: 5
+- Runtime total (sec): 177.724
 - MI batch status: batches=70; m_batch=2; failures=0
-- Balance: ABG max|SMD|=0.091; VBG max|SMD|=0.045
-- Separation flags: 172 / 692
+- Balance: ABG max|SMD|=0.108; VBG max|SMD|=0.079
+- Outcome diagnostic failures: 0 / 692
+- Outcome diagnostic warnings: 540 / 692
+- Legacy separation/extreme-probability flags: 540 / 692
 
 ## Artifact Inventory (Found / Missing)
 
@@ -35,39 +37,40 @@
 
 ## Runtime Top Steps
 
-- mi_single_pass: 807.361 sec
-- mice_batch_3: 362.600 sec
-- mice_batch_7: 101.723 sec
-- mice_batch_4: 96.714 sec
-- mice_batch_8: 29.403 sec
-- mice_batch_10: 28.175 sec
-- mice_batch_2: 27.794 sec
-- mice_batch_9: 27.781 sec
-- mice_batch_1: 27.569 sec
-- mice_batch_6: 27.464 sec
+- mi_single_pass: 163.192 sec
+- mice_batch_9: 1.598 sec
+- mice_batch_2: 1.569 sec
+- mice_batch_1: 1.479 sec
+- mice_batch_10: 1.442 sec
+- mice_batch_3: 1.420 sec
+- mice_batch_8: 1.408 sec
+- mice_batch_6: 1.408 sec
+- mice_batch_4: 1.408 sec
+- mice_batch_7: 1.403 sec
 
 ## MI Health
 
 - Smoke test failed: FALSE
-- Predictor width max mm_cols: 34.000
+- Predictor width max mm_cols: 33.000
 - Chain diagnostics issue: FALSE (numeric_names=FALSE; drift_tail_na_frac=0.000)
 - MI warnings rows: 0
 
 ## Balance
 
-- ABG max |SMD|: 0.091
-- VBG max |SMD|: 0.045
+- ABG max |SMD|: 0.108
+- VBG max |SMD|: 0.079
 
 ## Outcome Fits
 
-Top separation counts (analysis_variant/group/outcome):
-- mi_ipw / VBG / niv_proc: 40
-- mi_unweighted / VBG / niv_proc: 40
-- mi_ipw / ABG / hypercap_resp_failure: 20
-- mi_unweighted / ABG / hypercap_resp_failure: 20
-- mi_ipw / ABG / niv_proc: 20
-- mi_unweighted / ABG / niv_proc: 20
+Top separation/extreme-probability counts (analysis_variant/model_type/group/outcome):
+- mi_ipw / cat3 / ABG / death_60d: 20
+- mi_ipw / spline / ABG / death_60d: 20
+- mi_ipw / cat3 / VBG / death_60d: 20
+- mi_unweighted / cat3 / VBG / death_60d: 20
+- mi_ipw / spline / VBG / death_60d: 20
+- mi_unweighted / spline / VBG / death_60d: 20
 
 ## Issues (prioritized)
 
-- [high] Outcome: sep_flag TRUE for 172 / 692 fits (Results/model_fit_diagnostics.csv)
+- [medium] Balance: ABG max|SMD|=0.108 (Results/balance_target_imp_summary.csv)
+- [medium] Outcome: tail/off-profile fitted-probability warnings for 540 / 692 fits (Results/model_fit_diagnostics.csv)

@@ -10,6 +10,141 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Outcomes:
 - Next steps:
 
+## 2026-04-24 06:47 MDT
+- Task: Reconcile the downloaded full-data discordance follow-up ticket against the current notebook, implement any missing pieces, and validate with a 1% pilot render plus output parsing.
+- Files changed:
+  - `WORKLOG.md`
+- Commands run:
+  - reviewed `/Users/reblocke/Downloads/ABG VBG Discordance Follow-up Apr 21 2026.md`
+  - coverage scan for the end-of-notebook discordance section and required `discordance_*` artifact writes in `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - required-artifact existence check for the ticket's minimum discordance CSVs and figures
+  - `bash -n scripts/render_pdf.sh`
+  - QMD purl/parse check for `Code Drafts/ABG-VBG analysis 2026-4-21.qmd` (`parsed_expressions=2272`)
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"` (passed with the existing `lattice`/`survival` lockfile drift warning)
+  - `Rscript --vanilla scripts/check_dependencies.R` (passed for 45 declared direct packages)
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-render parsing of `Results/discordance_validation_status.csv`, `Results/discordance_artifact_manifest.csv`, `Results/pdf_asset_presence_scan.csv`, `Results/validation_build_status.csv`, and the rendered PDF text
+- Outcomes:
+  - The current notebook already contains the requested top-level section `Analysis of the discordance between predicted probabilities and OR for NIV and IMV`; no additional source patch was needed for the downloaded ticket.
+  - The section covers the ticket's required diagnostic families: current NIV/IMV discordance, common-reference and common-source marginal standardization, scale/noncollapsibility, missingness/capture proxies, sentinel procedures, tail support, setting/site/dual-tested sensitivity, timing sensitivity, and interpretation summary.
+  - Successful 1% pilot:
+    - log: `Results/render_logs/render_20260424_063642.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `558.33` seconds
+    - max resident set size from `/usr/bin/time -l`: `6421446656` bytes
+    - PDF pages: `41`
+    - run_id in discordance artifacts: `20260424_063653`
+  - Discordance validation:
+    - required ticket artifacts checked: `25`
+    - missing required ticket artifacts: `0`
+    - `Results/discordance_validation_status.csv`: `24` rows, `21` required completed, `2` optional skipped, `0` required failures
+    - `Results/discordance_artifact_manifest.csv`: `45` rows, `0` required missing
+    - current summary has both outcomes (`IMV`, `NIV`) and both modalities (`ABG`, `VBG`)
+    - gap metrics include both OR and probability summaries
+    - sentinel selection has `3` selected procedures in the primary selection table and `3` selected v2 sentinel candidates
+    - timing status is `completed`
+    - interpretation summary includes `supported`, `partially_supported`, and `not_supported` classifications
+  - PDF/output checks:
+    - `Results/pdf_asset_presence_scan.csv`: `35` rows, `0` failures
+    - `Results/validation_build_status.csv`: artifact registry, external/manual assets, glyph audit, duplicate audit, artifact existence, and manuscript display all `PASS`; diagnostics audit and overall build `PASS_WITH_WARNINGS`
+    - PDF text includes the discordance section heading, current NIV/IMV summary, sentinel procedure capture/completeness, and final plausible-explanations summary.
+  - Disk after render: about `22 GiB` free; `Results/` size about `1.6 GiB`.
+- Next steps:
+  - No 25% or full render was run for this ticket.
+  - If committing, stage only intended source/handoff files and any deliberately tracked output artifacts; leave broad render-output churn unstaged unless explicitly requested.
+
+## 2026-04-24 06:24 MDT
+- Task: Address code-review findings on validation PDF debug output suppression and Supplementary Table 1 code-definition content; validate with a 1% pilot only.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `scripts/check_pdf_assets.R`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - QMD purl/parse check for `Code Drafts/ABG-VBG analysis 2026-4-21.qmd` (`parsed_expressions=2272`)
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"` (passed with the existing `lattice`/`survival` lockfile drift warning)
+  - `Rscript --vanilla scripts/check_dependencies.R` (passed for 45 declared direct packages)
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-render `pdftotext` scan for `Table 2a. Crude outcomes by CO2 category`, raw `death_60d` summary markers, and debug chunk labels
+  - post-render inspection of `Results/table_s1_inclusion_criteria.csv`, `Results/pdf_asset_presence_scan.csv`, `Results/validation_build_status.csv`, and `Results/discordance_validation_status.csv`
+- Outcomes:
+  - `death-60d-summary` now runs with `include: false` and writes `Results/death_60d_summary_counts.csv` plus `Results/death_60d_summary_statistics.csv` instead of printing raw console summaries into the validation PDF.
+  - `tbl2-outcome-panel` now writes `Results/table2a_crude_outcomes_by_co2_category.csv` and renders the exploratory Table 2a only when `VALIDATION_INLINE_ANALYSIS_PREVIEWS` is explicitly enabled.
+  - `key-results-output-audit` now writes `Results/key_results_output_audit.csv` without printing a raw tibble into the validation PDF.
+  - Supplementary Table 1 now has 11 row-level entries with columns for phenotype input, code system, source code/value or extract field, analysis fields, role, source-code status, and notes.
+  - S1 includes the available extract identifiers `value_highest_20198`, `value_highest_115576`, and `value_highest_327718`; for upstream LOINC/ICD-10-CM/CPT/PCS lists not present in the analysis extract, rows explicitly say the table is using collapsed derived flags rather than fabricated source codes.
+  - `scripts/check_pdf_assets.R` now treats the noncanonical `Table 2a. Crude outcomes by CO2 category` caption as forbidden in validation PDF text.
+  - Successful 1% pilot only:
+    - log: `Results/render_logs/render_20260424_061506.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `546.45` seconds
+    - max resident set size from `/usr/bin/time -l`: `6271598592` bytes
+    - PDF pages: `41`
+  - Post-render validation:
+    - `pdftotext` found none of the forbidden Table 2a, raw death-summary, or debug-audit markers.
+    - `Results/pdf_asset_presence_scan.csv`: 35 rows, 0 failed.
+    - `Results/validation_build_status.csv`: 8 rows, 0 failures; `overall_build = PASS_WITH_WARNINGS` due diagnostic warnings only.
+    - `Results/discordance_validation_status.csv`: 24 rows, 0 failure rows.
+- Next steps:
+  - No 25% render was run for this ticket by request.
+  - If upstream source-code lists become available outside the de-identified analysis extract, update Supplementary Table 1 to replace the explicit collapsed-derived limitations with those exact code values.
+
+## 2026-04-24 01:20 MDT
+- Task: Implement remaining render/workbook cleanup after the 25% validation run and validate with a 1% pilot followed by a 25% validation render.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `R/diagnostics_audit.R`
+  - `scripts/check_pdf_assets.R`
+  - `scripts/render_pdf.sh`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - QMD purl/parse check for `Code Drafts/ABG-VBG analysis 2026-4-21.qmd` (`parsed_expressions=2268` after final source edits)
+  - `git diff --check -- "Code Drafts/ABG-VBG analysis 2026-4-21.qmd" R/diagnostics_audit.R scripts/check_pdf_assets.R scripts/render_pdf.sh WORKLOG.md`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.25`
+  - post-render checks with `pdfinfo`, `pdftotext`, `Results/pdf_asset_presence_scan.csv`, `Results/discordance_validation_status.csv`, `Results/validation_build_status.csv`, `Results/diagnostics_audit_summary.csv`, `Results/duplicate_asset_audit.csv`, `Results/model_fit_diagnostics.csv`, `Results/table1_combined.csv`, `Results/table_s1_inclusion_criteria.csv`, `Results/table_s4_missingness_primary_analysis.csv`, and `Results/table_s5_mi_diagnostic_summary.csv`
+- Outcomes:
+  - Supplementary Table 1 now uses a notebook-local enriched-sample phenotype/code-list table with LOINC-derived ABG/VBG measurement inputs, respiratory-failure diagnosis flags, obesity/OHS/BMI-related criteria, and NIV/IMV/ventilatory-support procedure fields, while preserving the existing supplement numbering.
+  - Table 1 exports are clean: `Results/table1_combined.csv` has 29 rows with zero embedded `missing` strings and zero decimal denominator strings.
+  - Supplementary Table 4 now separates `Included in MI model`, `Imputed if missing`, and `Observed complete`; the final 25% output has zero 0%-missing variables marked as imputed.
+  - Supplementary Table 5 now labels render scope (`pilot (pilot_frac=0.25)` versus final `full (m=80; maxit=20)`) and uses compact diagnostic statuses (`resolved`, `warning`, `not applicable`).
+  - Diagnostic flags are split into fitted-probability low/high, explicit separation warning, nonconvergence, and central plotted-curve instability fields. The final 25% diagnostics had 692 model-fit rows, 0 diagnostic failures, and 172 warning rows; overall diagnostics status is `PASS_WITH_WARNINGS`.
+  - Final build status separates artifact/display checks from analytic warnings: `Results/validation_build_status.csv` reports `artifact_registry`, `external_manual_assets`, `glyph_audit`, `duplicate_audit`, `artifact_existence`, and `manuscript_display` as `PASS`; `diagnostics_audit` and `overall_build` are `PASS_WITH_WARNINGS`.
+  - Validation PDF debug cleanup:
+    - noncanonical Table 1A/1B and baseline-by-CO2-category preview tables no longer print into the validation PDF;
+    - the PDF no longer contains embedded `missing (` cell text, duplicate `Performance / runtime log` headings, or visible source-code markers such as `VALIDATION_INLINE_ANALYSIS_PREVIEWS`;
+    - `scripts/check_pdf_assets.R` now includes a global `no_embedded_missingness_strings` PDF text check.
+  - Successful final 1% pilot:
+    - log: `Results/render_logs/render_20260424_003653.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `515.02` seconds
+    - max resident set size from `/usr/bin/time -l`: `7619887104` bytes
+    - PDF pages: `41`
+    - `Results/pdf_asset_presence_scan.csv` passed with zero failed checks, including `no_embedded_missingness_strings`.
+  - Successful final 25% validation render:
+    - log: `Results/render_logs/render_20260424_004544.log`
+    - wrapper status: `0`
+    - start: `2026-04-24 00:45:44 -0600`
+    - end: `2026-04-24 01:17:18 -0600`
+    - elapsed time from `/usr/bin/time -l`: `1890.21` seconds
+    - max resident set size from `/usr/bin/time -l`: `7109918720` bytes
+    - swaps: `0`
+    - PDF pages: `41`
+  - Final 25% validation checks:
+    - `Results/pdf_asset_presence_scan.csv`: 34 rows, 0 failed; `no_embedded_missingness_strings` and `table_1_no_internal_columns` passed.
+    - `Results/discordance_validation_status.csv`: 24 rows, 0 required failures; 21 required completed, 1 optional completed, 2 optional skipped.
+    - `Results/duplicate_asset_audit.csv`: 0 failures across numbering slots, canonical paths, alias paths, label-output mappings, output-label mappings, deprecated slots, and plot registry.
+    - `Results/diagnostics_audit_summary.csv`: `overall_status = PASS_WITH_WARNINGS`; ABG max absolute SMD `0.091`, VBG max absolute SMD `0.045`, and 172 tail/off-profile outcome warnings with 0 diagnostic failures.
+    - Disk remained stable at about `23 GiB` free; final `Results/` size was about `1.6 GiB`, with archived prior runs accounting for about `993 MiB`.
+  - The intentional full-cohort counts in the cohort-flow diagram were left unchanged.
+  - Generated PDFs, logs, archives, and broad `Results/` churn remain unstaged by design unless explicitly requested.
+- Next steps:
+  - If preparing a PR/commit, stage only intended source/handoff changes plus any explicitly desired tracked output artifacts; leave broad render-output churn unstaged unless requested.
+  - Before final manuscript use, regenerate Supplementary Table 5 from a full run so pilot validation settings are not used as final MI diagnostics.
+
 ## 2026-04-23 13:05 MDT
 - Task: Run and monitor the requested 25% subset render for `Code Drafts/ABG-VBG analysis 2026-4-21.qmd` through completion, including MI/resource tracking and postflight validation.
 - Files changed:

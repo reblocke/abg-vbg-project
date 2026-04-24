@@ -1,3 +1,3 @@
 "check_status","severity","allowed_missing","n_rows","run_id","run_ts"
-"present","none",FALSE,68,"20260423_111150","2026-04-23 11:11:50.486947"
-"suppressed_draft_only","none",TRUE,1,"20260423_111150","2026-04-23 11:11:50.486947"
+"present","none",FALSE,68,"20260424_063653","2026-04-24 06:36:53.744157"
+"suppressed_draft_only","none",TRUE,1,"20260424_063653","2026-04-24 06:36:53.744157"

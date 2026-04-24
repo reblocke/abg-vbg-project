@@ -1,6 +1,6 @@
 # Manuscript sync report
 
-- Run ID: 20260423_111150
+- Run ID: 20260424_063653
 - Active validation assets: 17
 - Generated validation assets: 17
 - External/manual assets: 0
