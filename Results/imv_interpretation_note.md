@@ -1,6 +1,6 @@
 # IMV Interpretation Note
 
-The current render retains a residual IMV marginal-standardized ABG-VBG probability gap of approximately 0.0856.
+The current render retains a residual IMV marginal-standardized ABG-VBG probability gap of approximately 0.0822.
 
 For manuscript interpretation, retain the standardized IMV probabilities as diagnostics/supplemental context but avoid implying that the residual probability gap is fully explained unless setting, capture, sentinel, and timing diagnostics converge.
 

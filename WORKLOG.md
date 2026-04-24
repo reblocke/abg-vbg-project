@@ -10,6 +10,41 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Outcomes:
 - Next steps:
 
+## 2026-04-23 13:05 MDT
+- Task: Run and monitor the requested 25% subset render for `Code Drafts/ABG-VBG analysis 2026-4-21.qmd` through completion, including MI/resource tracking and postflight validation.
+- Files changed:
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.25`
+  - heartbeat monitoring checks of `Results/render_logs/render_20260423_111138.log`, `Results/render_logs/rss_trace_20260423_111138.csv`, `Results/render_logs/postmortem_20260423_111138.md`, `Results/mi_run_status_20260423_111138.json`, `Results/mice_batches_log.csv`, `Results/mice_combine_log.csv`, `Results/mi_single_pass_status.csv`, `Results/mi_single_pass_memory_log.csv`, `Results/pdf_asset_presence_scan.csv`, `Results/discordance_validation_status.csv`, `pdfinfo`, and `df -h .`
+- Outcomes:
+  - Successful 25% subset render:
+    - log: `Results/render_logs/render_20260423_111138.log`
+    - wrapper status: `0`
+    - start: `2026-04-23 11:11:38 -0600`
+    - end: `2026-04-23 12:39:09 -0600`
+    - elapsed time from `/usr/bin/time -l`: `5246.46` seconds
+    - max resident set size from `/usr/bin/time -l`: `7997603840` bytes
+    - PDF pages: `609`
+  - The render cleared all `303/303` notebook chunks, completed LaTeX with three `lualatex` passes, and passed wrapper postflight plus the PDF asset scan.
+  - MI completed all `20/20` pilot imputations. The MI batch postmortem ended at batch `10` / `m_done_after = 20`; the final accumulated checkpoint was `Results/mi_batch_checkpoints/imp_acc_after_batch_10.rds`.
+  - Resource monitoring remained acceptable throughout:
+    - RSS trace peak for the live R process: `7,589,424` KB
+    - last sampled R RSS before the sampler stopped: `4,740,256` KB
+    - internal MI memory log ended near `5.3` GB during imputation 20
+    - disk remained stable at about `24 GiB` free and `89%` used
+  - Validation passed:
+    - `Results/pdf_asset_presence_scan.csv`: `61` rows, all `passed`
+    - `Results/discordance_validation_status.csv`: `24` rows with `22` `completed`, `2` expected `skipped`, and `0` required failures
+    - `Results/mi_run_status_20260423_111138.json`: `status = "completed"`, `postflight_passed = true`
+- Next steps:
+  - Review the new 25% substantive outputs and PDF for interpretation/manuscript updates.
+  - Leave generated `Results/`, logs, and PDF churn unstaged unless a commit is explicitly requested.
+
 ## 2026-04-23 10:58 MDT
 - Task: Reorder paired ABG/VBG categorical tables outcome-first, restore manuscript-equivalent Rubin pooling in discordance marginal-standardized curves, and update the one-time figure/table audit acceptance wording before a fresh PR review cycle.
 - Files changed:

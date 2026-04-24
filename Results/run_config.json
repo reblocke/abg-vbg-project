@@ -1,7 +1,7 @@
 {
-  "run_id": "20260423_104307",
+  "run_id": "20260423_111150",
   "run_mode": "pilot",
-  "pilot_frac": 0.01,
+  "pilot_frac": 0.25,
   "mi_ram_gb": 16,
   "mi_ram_gb_source": "auto:Darwin",
   "mi_batch_threshold": 5000,
@@ -10,6 +10,6 @@
   "data_dir": "/Users/reblocke/Research/abg-vbg-project/data",
   "results_dir": "/Users/reblocke/Research/abg-vbg-project/Results",
   "full_n": 833476,
-  "sampled_n": 8335,
-  "subset_n": 5175
+  "sampled_n": 208369,
+  "subset_n": 128521
 }
