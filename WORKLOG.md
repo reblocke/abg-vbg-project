@@ -10,6 +10,69 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Outcomes:
 - Next steps:
 
+## 2026-05-03 16:10 MDT
+- Task: Fix the full-render memory failure in the discordance first-encounter sensitivity block and validate with a 1% pilot render only.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `WORKLOG.md`
+- Commands run:
+  - targeted full-subset equivalence check comparing the old grouped `slice_head()` row selection to the new narrow/base row selection (`old_n=462478`, `new_n=462478`, `identical_order=TRUE`, `identical_set=TRUE`)
+  - targeted first-encounter count check on the full cached subset (`first_rows=462478`, first-encounter object about `24.7 MiB`)
+  - `bash -n scripts/render_pdf.sh`
+  - QMD purl/parse check for `Code Drafts/ABG-VBG analysis 2026-4-21.qmd` (`parsed_expressions=2275`)
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-render inspection of `Results/pdf_asset_presence_scan.csv`, `Results/discordance_validation_status.csv`, `Results/validation_build_status.csv`, `Results/discordance_first_encounter_sensitivity.csv`, and `Results/memory_snapshots.csv`
+- Outcomes:
+  - The full-render failure was localized to the first-encounter sensitivity calculation in chunk `discordance-diagnostics`: it copied and grouped the full-width `subset_data` object, then used `dplyr::slice_head()` on a grouped data frame. In the failed full run this occurred late in the notebook when Vcells were already near the 16 GiB vector heap limit.
+  - The notebook now builds `common_ref_source` from only `adj_core` columns, removes it after the common-reference profile is created, and rewrites first-encounter sensitivity to use only patient/order/test/outcome columns instead of copying the 576-column `subset_data`.
+  - The new first-encounter path preserves row selection exactly on the cached full subset and adds memory snapshots before and after the sensitivity block.
+  - Successful 1% pilot render:
+    - log: `Results/render_logs/render_20260503_155949.log`
+    - status JSON: `Results/mi_run_status_20260503_155949.json`
+    - wrapper status: `0`
+    - PDF: `Code Drafts/ABG-VBG-analysis-2026-4-21.pdf`
+    - elapsed time from `/usr/bin/time -l`: `550.47` seconds
+    - maximum resident set size from `/usr/bin/time -l`: `7646396416` bytes
+  - Post-render validation:
+    - `Results/pdf_asset_presence_scan.csv`: required main and supplement assets passed, page count `41`, no embedded missingness strings, and no noncanonical `Table 2a` block detected
+    - `Results/discordance_validation_status.csv`: all required discordance components completed; optional site-specific and IMV site sensitivity checks skipped because no feasible site identifier is available
+    - `Results/validation_build_status.csv`: `overall_build=PASS_WITH_WARNINGS`, `manuscript_display=PASS`, `diagnostics_audit=PASS_WITH_WARNINGS`
+    - `Results/discordance_first_encounter_sensitivity.csv` was regenerated with run_id `20260503_160001`
+    - `Results/memory_snapshots.csv` shows no meaningful Vcells growth from `first_encounter_sensitivity` pre to post in the 1% pilot
+  - `pdfinfo` was not available in the interactive shell PATH, but the render wrapper postflight and `Results/pdf_asset_presence_scan.csv` validated the rendered PDF.
+- Next steps:
+  - No full render was run after this patch; the next full render should be started manually.
+  - If a later full render fails, inspect the new postmortem and `Results/memory_snapshots.csv`; the known wide grouped-slice failure path has been removed.
+  - Leave broad generated `Results/` churn unstaged unless explicitly requested.
+
+## 2026-05-03 12:25 MDT
+- Task: Monitor the full-data render launched from `Results/render_logs/render_20260502_154707.log` and record its terminal failure.
+- Files changed:
+  - `WORKLOG.md`
+- Commands/artifacts reviewed:
+  - `Results/render_logs/render_20260502_154707.log`
+  - `Results/render_logs/rss_trace_20260502_154707.csv`
+  - `Results/render_logs/postmortem_20260502_154707.md`
+  - `Results/mi_run_status_20260502_154707.json`
+  - `Results/mice_batches_log.csv`
+  - `Results/mice_combine_log.csv`
+  - disk/RSS/process monitor output during the run
+- Outcomes:
+  - Full render failed; no full PDF or TeX output was produced.
+  - Wrapper status was `1`; postmortem status was `failed_caught_error`.
+  - Failure occurred in chunk `280/303 [discordance-diagnostics]` after MICE completed all `80/80` imputations and after the canonical manuscript/supplement outputs had been regenerated.
+  - Terminal error: `vector memory limit of 16.0 Gb reached, see mem.maxVSize()`.
+  - Backtrace pointed to `dplyr::slice_head()` on a grouped data frame via `dplyr_row_slice.grouped_df()` / `vctrs::vec_slice(as.data.frame(data), i)` inside `discordance-diagnostics` (`ABG-VBG-analysis-2026-4-21.rmarkdown:17236-21028`).
+  - `/usr/bin/time -l` reported `72759.71` seconds real time, maximum resident set size `7735771136` bytes, and wrapper end time `2026-05-03 11:59:49 MDT`.
+  - RSS trace peak for the R process was about `6.8 GiB`; disk was not the direct blocker and was about `14 GiB` free at failure.
+  - The final validation CSVs (`Results/pdf_asset_presence_scan.csv`, `Results/discordance_validation_status.csv`, `Results/validation_build_status.csv`) remained stale from the prior successful pilot, so they were not accepted as full-run validation evidence.
+- Next steps:
+  - Do not auto-retry another full run.
+  - Patch the memory-heavy grouped `slice_head()` path in `discordance-diagnostics`, likely by reducing before grouping/slicing or replacing the grouped full-data slice with a bounded per-stratum/sample implementation.
+  - After patching, validate with the smallest relevant pilot first before considering another full-data render.
+
 ## 2026-04-24 06:47 MDT
 - Task: Reconcile the downloaded full-data discordance follow-up ticket against the current notebook, implement any missing pieces, and validate with a 1% pilot render plus output parsing.
 - Files changed:
