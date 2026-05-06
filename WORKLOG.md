@@ -10,6 +10,418 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Outcomes:
 - Next steps:
 
+## 2026-05-05 23:18 MDT
+- Task: Fix review findings/table QC items and complete escalating render validation through full mode.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `scripts/render_pdf.sh`
+  - `scripts/check_pdf_assets.R`
+  - `WORKLOG.md`
+  - Generated full-render manuscript/results artifacts under `Code Drafts/`, `Results/`, and `Results/exports/`
+- Implementation:
+  - Removed hard `python3` relative-path dependency from clean-bundle creation and added portable `sha256_file()` fallback handling for `shasum`, `sha256sum`, and `openssl`, recording `sha256_unavailable` instead of failing an otherwise successful render.
+  - Made PDF forbidden-heading scans case-insensitive in `scripts/check_pdf_assets.R` while preserving exact glyph/mojibake checks.
+  - Redesigned Table S1 as visible `S1A.`/`S1B.`/`S1C.` stacked narrow panels with canonical `table_s1_inclusion_criteria.*` artifact identity.
+  - Added `Results/table_visual_qc.csv` and `Results/table_visual_qc.md`, integrated objective table clipping failures into the publication-quality audit, and kept uncertain/manual visual review items as warnings.
+  - Added `Results/poster_caption_text.md` and included it in poster QC and the clean collaborator bundle.
+  - Preserved Figure S6 full GBM balance data export while rendering a readable top-worst-variable display.
+  - Removed stale untracked `Results/exports/abg_vbg_25pct_outputs_20260504_225607.zip` and removed `.DS_Store` files under `Results/` after validation.
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla scripts/check_dependencies.R`
+  - `git diff --check -- scripts/render_pdf.sh scripts/check_pdf_assets.R "Code Drafts/ABG-VBG analysis 2026-4-21.qmd" WORKLOG.md`
+  - targeted source scans for no broad table bundle globs, no hard `python3`/`shasum` bundle dependency, no new render modes, and no intentional MICE/discordance/standardization estimand edits
+  - 1% pilot: `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - 1% retry after fixing the wrapper PDF-text case-matching warning: same command
+  - 25% pilot: `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.25`
+  - full render: `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" ./scripts/render_pdf.sh -P run_mode:full`
+  - post-render checks for status JSON, PDF text scan, table visual QC, publication-quality audit, discordance validation, validation build status, poster PNG dimensions, bundle `unzip -tq`, bundle denylist scan, and Table S1 labels via `pdftools::pdf_text()`
+- Outcomes:
+  - Static checks passed; QMD purl/parse reported `parsed_expressions=2404`; environment and dependency checks passed.
+  - Successful clean 1% pilot:
+    - log: `Results/render_logs/render_20260505_112929.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `639.10` seconds
+    - max resident set size from `/usr/bin/time -l`: `7,502,659,584` bytes
+    - clean bundle: `Results/exports/abg_vbg_clean_1pct_outputs_20260505_112929.zip`
+  - Successful 25% pilot:
+    - log: `Results/render_logs/render_20260505_114127.log`
+    - wrapper status: `0`
+    - elapsed time from `/usr/bin/time -l`: `2,123.42` seconds
+    - max resident set size from `/usr/bin/time -l`: `7,290,355,712` bytes
+    - clean bundle: `Results/exports/abg_vbg_clean_render_outputs_20260505_114127.zip`
+  - Successful full render:
+    - log: `Results/render_logs/render_20260505_121730.log`
+    - status JSON: `Results/mi_run_status_20260505_121730.json`
+    - wrapper status: `0`; postmortem status: `completed`; PDF exists.
+    - elapsed time from `/usr/bin/time -l`: `39,568.60` seconds.
+    - max resident set size from `/usr/bin/time -l`: `7,970,078,720` bytes.
+    - clean bundle: `Results/exports/abg_vbg_clean_render_outputs_20260505_121730.zip`; `unzip -tq` passed and denylist scan found no `table2a`, `table_summary_*`, `table1_combined_internal`, `.DS_Store`, `archive/`, or `mi_batch_checkpoints` entries.
+  - Full MICE completed all `80/80` imputations, `mi-single-pass` completed, and common-source marginal standardization completed with all 16 spline/categorical group/outcome combinations using `m_used = 80`, `m_total = 80`, `m_failed = 0`, and `passed_threshold = TRUE`.
+  - Full `discordance-diagnostics` completed the previously failing marginal-standardization path for all `80/80` imputations and wrote pooled discordance marginal curves plus validation artifacts.
+  - Full validation checks:
+    - `Results/table_visual_qc.csv`: `14` PASS, `0` FAIL.
+    - `Results/publication_quality_asset_audit.csv`: `17` Pass, `0` Fatal/Major.
+    - `Results/publication_quality_pdf_text_scan.csv`: `25` passed.
+    - `Results/pdf_asset_presence_scan.csv`: `38` passed.
+    - `Results/discordance_validation_status.csv`: `22` completed, `2` optional skipped because no feasible site identifier was found.
+    - `Results/validation_build_status.csv`: `6` PASS and `3` PASS_WITH_WARNINGS for manual visual review and one existing medium diagnostics warning.
+    - Table S1 labels `S1A.`, `S1B.`, and `S1C.` were found in the rendered PDF text.
+    - Poster PNG dimensions met final-size 300 dpi targets: Figure 1 `3609 x 3033`; Figure 2 `5745 x 3750`.
+    - `Results/poster_figure_export_status.csv` recorded 6 created poster outputs.
+    - `Results/figure2_probability_standardization_audit.md` and `Results/gbm_probability_standardization_audit.md` both passed objective method checks.
+  - Full render RSS trace peak for R was about `7.25 GiB`; disk ended at about `14 GiB` free after cleanup.
+  - During the full render, stale archived checkpoint directories were removed to protect disk headroom while preserving logs/status:
+    - `Results/archive/pre_run_20260503_155949/mi_batch_checkpoints`
+    - `Results/archive/pre_run_20260504_215816/mi_batch_checkpoints`
+- Next steps:
+  - Manual visual review remains required for final poster/table readability, but no automated Fatal/Major issue remains.
+  - Review the generated full clean bundle and manuscript PDF before circulation; no further render is currently running.
+
+## 2026-05-05 10:42 MDT
+- Task: Implement remaining 1% render ticket cleanup and verify with iterative 1% pilot.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `scripts/render_pdf.sh`
+  - `scripts/check_pdf_assets.R`
+  - `WORKLOG.md`
+- Implementation:
+  - Refactored poster Figure 1 into auditable layout data, moved the ambulatory-exclusion box out of the source-cohort collision zone, kept singular “Criteria for hypercapnia suspicion,” and added deterministic poster layout checks.
+  - Expanded poster Figure 2 OR-axis handling to allow `y_upper = 128` when central CIs require it and record remaining tail truncation as a warning, not a silent clip.
+  - Rendered Table S1 as page-separated S1A/S1B/S1C panels with explicit widths and no shrink-to-fit compression, preserving canonical Table S1 artifact names.
+  - Changed Figure S6 GBM balance display to a top-20-per-cohort readable plot while retaining the full `loveplot_ipw_gbm_data.csv` and adding `loveplot_ipw_gbm_display_data.csv`.
+  - Added `PASS`/`WARN`/`FAIL` semantics to `Results/poster_visual_qc.md`.
+  - Added `Results/README_CURRENT_RENDER.md`, `Results/CODE_SNAPSHOT.md`, and the active QMD source to the clean wrapper bundle.
+  - Strengthened PDF postflight checks for visible scientific code and hidden QA/QC headings; adjusted the code-visibility text match after `pdftotext` whitespace normalization produced `fit_spline_glm <-function` and `subset_data <-dplyr...`.
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla scripts/check_dependencies.R`
+  - `git diff --check -- scripts/render_pdf.sh scripts/check_pdf_assets.R "Code Drafts/ABG-VBG analysis 2026-4-21.qmd"`
+  - targeted source scans for fragile-path references, poster layout coordinates, Table S1 panel settings, and clean-bundle denylisted sidecars
+  - first 1% pilot: `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - retry 1% pilot after patching the over-strict PDF code-visibility check: same command
+  - post-render checks: wrapper status JSON, `sips` poster dimensions, `unzip -tq` clean bundle, bundle manifest denylist/required-file scan, Table S1 PDF text label scan, publication-quality/PDF scan status checks
+- Outcomes:
+  - Static checks passed; QMD purl/parse reported `parsed_expressions=2394`.
+  - First 1% pilot completed notebook/PDF generation but failed postflight only because the new exact-space code-visibility assertions missed `pdftotext` normalized code strings; failed PDF/TEX were archived under `Results/render_logs/output_backup_20260505_101923/` and prior outputs were restored by the wrapper.
+  - Retry 1% pilot succeeded:
+    - log: `Results/render_logs/render_20260505_103101.log`
+    - wrapper status: `0`
+    - status JSON: `Results/mi_run_status_20260505_103101.json`
+    - elapsed time from `/usr/bin/time -l`: `638.22` seconds
+    - max resident set size from `/usr/bin/time -l`: `5,286,739,968` bytes
+  - Postflight and `scripts/check_pdf_assets.R` passed with zero failed PDF asset checks.
+  - Poster Figure 1 PNG dimensions: `3609 x 3033`; Poster Figure 2 PNG dimensions: `5745 x 3750`.
+  - `Results/poster_visual_qc.md` had `0` failures and `2` warnings: Figure 2 tail CI truncation disclosed after raising y-axis to 128, and final manual visual review still required.
+  - Figure 2 axis audit: `y_upper = 128`, `central_ucl_max = 91.1261`, `central_ci_truncated = FALSE`, `any_ci_truncated = TRUE`.
+  - Table S1 standalone PDF text exposes `Panel A. S1A.`, `Panel B. S1B.`, and `Panel C. S1C.`.
+  - Publication-quality audit had `0` Fatal/Major issues; validation build status was `PASS_WITH_WARNINGS` due manual visual review and existing diagnostics warnings.
+  - Clean 1% bundle passed `unzip -tq`: `Results/exports/abg_vbg_clean_1pct_outputs_20260505_103101.zip`.
+  - Bundle manifest had `0` denylisted table sidecar hits and includes `Results/README_CURRENT_RENDER.md`, `Results/CODE_SNAPSHOT.md`, and `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`.
+- Next steps:
+  - Review the two retained poster QC warnings visually before circulation.
+  - No 25% or full render was started.
+
+## 2026-05-05 10:09 MDT
+- Task: Address stale Table S1 rendered artifacts and stale clean 1% bundle review findings without rerunning a render.
+- Files changed:
+  - `Code Drafts/ABG-VBG-analysis-2026-4-21.tex`
+  - `Code Drafts/ABG-VBG-analysis-2026-4-21.pdf`
+  - `Results/table_s1_inclusion_criteria.pdf`
+  - `Results/exports/abg_vbg_clean_1pct_outputs_20260505_093644.zip`
+  - `Results/exports/abg_vbg_clean_1pct_outputs_20260505_093644.zip.sha256`
+  - `Results/exports/abg_vbg_clean_1pct_outputs_20260505_093644_manifest.csv`
+  - `WORKLOG.md`
+- Commands run:
+  - `git restore -- "Code Drafts/ABG-VBG-analysis-2026-4-21.tex" "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf" Results/table_s1_inclusion_criteria.pdf`
+  - `rm -f Results/exports/abg_vbg_clean_1pct_outputs_20260505_093644.zip Results/exports/abg_vbg_clean_1pct_outputs_20260505_093644.zip.sha256 Results/exports/abg_vbg_clean_1pct_outputs_20260505_093644_manifest.csv`
+  - Targeted source/artifact checks for Table S1 panel labels, clean-bundle stale export removal, and `scripts/render_pdf.sh` table allowlist exclusions.
+  - `git diff --check -- "Code Drafts/ABG-VBG analysis 2026-4-21.qmd" scripts/render_pdf.sh WORKLOG.md`
+- Outcomes:
+  - Restored stale rendered manuscript PDF/TEX and Table S1 PDF artifacts out of the current diff because they were generated before the `S1A.`/`S1B.`/`S1C.` Table S1 source fix.
+  - Removed the stale clean 1% collaborator bundle artifacts from `Results/exports/` because the manifest and zip still contained noncanonical/internal table sidecars.
+  - Kept the QMD source fix for Table S1 panel labels and the `scripts/render_pdf.sh` clean-bundle allowlist intact for the next approved 1% render.
+  - No 1%, 25%, or full render was started.
+- Next steps:
+  - On the next approved 1% render, regenerate the manuscript PDF/TEX/Table S1 PDF and clean 1% bundle, then verify Table S1 exposes `S1A.`, `S1B.`, and `S1C.` and the new bundle excludes noncanonical/internal table sidecars.
+
+## 2026-05-05 09:58 MDT
+- Task: Fix three review findings without rerunning a render.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `scripts/render_pdf.sh`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `git diff --check -- scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-4-21.qmd" WORKLOG.md`
+  - Targeted source checks for GBM categorical probability captions, Table S1 panel labels, and clean-bundle table allowlist exclusions.
+- Outcomes:
+  - Updated GBM categorical figure and table-summary text so active GBM categorical probabilities are described as common-source marginal standardized, not conditional on `X_ref`.
+  - Preserved explicit conditional `X_ref` objects only as named debug/sensitivity objects.
+  - Preserved visible `S1A.`, `S1B.`, and `S1C.` prefixes in `table_s1_display_panels`.
+  - Replaced broad clean-bundle `Results/table*.csv` and `Results/table*.pdf` globs with an explicit manuscript/supplement table allowlist.
+  - Confirmed the wrapper allowlist does not include `table2a_crude_outcomes_by_co2_category`, `table_summary_`, or `table1_combined_internal`.
+  - Static checks passed; QMD purl/parse reported `parsed_expressions=2385`.
+  - No 1%, 25%, or full render was started.
+- Next steps:
+  - Integrate the next planned source-change batch, then rerun the agreed render validation sequence.
+
+## 2026-05-05 09:49 MDT
+- Task: Implement poster/notebook cleanup ticket and verify with a 1% pilot render.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `scripts/render_pdf.sh`
+  - `scripts/check_pdf_assets.R`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "parse('scripts/check_pdf_assets.R'); cat('check_pdf_assets_parse=ok\n')"`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla scripts/check_dependencies.R`
+  - `git diff --check -- scripts/render_pdf.sh scripts/check_pdf_assets.R "Code Drafts/ABG-VBG analysis 2026-4-21.qmd"`
+  - Targeted static scans for visible-source ASCII safety, no new render modes, no new MICE/discordance extraction references from the new poster/audit code, and poster/probability-audit object order.
+  - Iterative 1% render command as implementation issues were found and fixed: `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - Final successful 1% render: `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - `unzip -tq Results/exports/abg_vbg_clean_1pct_outputs_20260505_093644.zip`
+  - `sips -g pixelWidth -g pixelHeight Results/figs/cohort_flow_poster.png Results/figs/key-results-spline-main-mi-ipw-abg-vbg_poster.png`
+- Outcomes:
+  - Restored notebook-style PDF behavior by keeping scientific code visible and hiding QA/QC-only chunks from the manuscript PDF while preserving their side-effect artifacts.
+  - Removed the fragile global source-suppression path and kept the notebook self-contained; visible source/prose were converted to ASCII-safe text to avoid PDF replacement-character failures.
+  - Updated poster Figure 1 with the revised labels/layout, non-clipped ambulatory-exclusion text, day-of-admission blood-gas label, and no overlap annotation text.
+  - Updated poster Figure 2 to use the OR-only 2 x 2 layout with a large ABG/VBG legend, no direct line-end labels, and an explicit OR-axis truncation audit.
+  - Compact Table 2 display panels and S1A/S1B/S1C Table S1 panels now render without changing the canonical Table 2/Table S1 artifact identities.
+  - Added audit outputs:
+    - `Results/poster_visual_qc.md`
+    - `Results/figure2_probability_standardization_audit.md`
+    - `Results/gbm_probability_standardization_audit.md`
+  - Harmonized probability inventory/method labeling so primary Figure 2 and GBM probability outputs report common-source marginal standardization when the compact fitted objects are available.
+  - Added successful-render clean 1% export bundle creation in `scripts/render_pdf.sh`:
+    - `Results/exports/abg_vbg_clean_1pct_outputs_20260505_093644.zip`
+    - `Results/exports/abg_vbg_clean_1pct_outputs_20260505_093644_manifest.csv`
+    - SHA-256: `9ef6b64f1814d40cea2453d42476d421d696785c804ba4787c289e3072f05c85`
+  - Direct implementation/postflight bugs found during the 1% loop were fixed before the final run: GBM marginal probability column naming, compact GBM fitted-object retention after cleanup, missing LaTeX code-block package dependency, oversized visible internal source chunks, PDF replacement-character scan failures, and stale postflight text requirements.
+  - Final successful 1% evidence:
+    - log: `Results/render_logs/render_20260505_093644.log`
+    - status: `Results/mi_run_status_20260505_093644.json`
+    - wrapper status `0`, `status = completed`, `postflight_passed = true`, and PDF exists.
+    - `Results/publication_quality_asset_audit.csv` had zero Fatal/Major automated issues.
+    - `Results/publication_quality_pdf_text_scan.csv` had zero failed checks.
+    - `Results/pdf_asset_presence_scan.csv` had zero failed checks.
+    - `Results/figs/cohort_flow_poster.png` was `3609 x 3033`; `Results/figs/key-results-spline-main-mi-ipw-abg-vbg_poster.png` was `5745 x 3750`.
+    - Clean export zip passed `unzip -tq`.
+  - The final render completed through `discordance-diagnostics`; no 25% or full render was started.
+  - Disk free space was tight during the final run at about 8.7 GiB, but memory/disk pressure did not worsen across the successful run.
+- Next steps:
+  - Review the 1% output bundle and manuscript PDF visually.
+  - Commit source/worklog changes separately from broad generated pilot-output churn if desired.
+
+## 2026-05-05 07:51 MDT
+- Task: Fix publication-quality audit raw-field detection and case-insensitive PDF forbidden-text scanning, then verify with a 1% pilot.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `scripts/render_pdf.sh`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `git diff --check -- scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-4-21.qmd"`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla scripts/check_dependencies.R`
+  - Targeted R checks for raw-field header severity semantics and PDF forbidden-text capitalization variants.
+  - Failed first 1% rerun: `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - Successful second 1% rerun: `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - Post-render R checks for wrapper status, publication table headers, diagnostic run metadata, publication-quality audit severity, PDF text scan, and PDF asset presence scan.
+- Outcomes:
+  - Added a publication-table CSV cleaning path that suppresses `run_id`/`run_ts` and renames helper `panel` to `Table section` only for known manuscript/supplement publication table stubs.
+  - Kept diagnostic/provenance CSVs on the standard `write_csv_safely()` path with run metadata.
+  - Changed publication-quality audit `no_raw_fields` so detected internal/raw table headers produce `FALSE`, causing objective severity and issue-summary failures.
+  - Updated `scripts/render_pdf.sh` forbidden-text scan to handle capitalization variants by lowercasing fixed-string language checks before matching; glyph/mojibake checks remain exact or regex-specific.
+  - First 1% rerun failed after `discordance-diagnostics` at `diagnostics-completeness` because `runtime_summary.csv` no longer had `run_id`; the wrapper restored prior PDF/TEX and wrote `Results/render_logs/postmortem_20260505_072738.md` plus `Results/mi_run_status_20260505_072738.json`.
+  - Patched the CSV cleaning scope and reran 1%; successful log: `Results/render_logs/render_20260505_074004.log`.
+  - Successful 1% wrapper status: `0`; PDF output created and postflight path/PDF validation plus `pdf_asset_presence_scan.csv` passed.
+  - Post-render checks passed:
+    - Publication table CSVs had no `run_id`, `run_ts`, `panel`, `var_type`, `row_type`, `analysis_family`, or other forbidden internal headers.
+    - `Results/runtime_summary.csv` and `Results/diagnostics_summary.csv` retained `run_id`.
+    - `Results/publication_quality_asset_audit.csv` had zero Fatal/Major rows.
+    - `Results/publication_quality_asset_audit_summary.csv` retained `Manual Review = REVIEW_NEEDED`; all 17 rows remained unresolved for manual visual review (`resolved_true = 0`).
+    - `Results/publication_quality_pdf_text_scan.csv` had zero Fatal/Major failures.
+  - No 25% or full render was started for this fix.
+- Next steps:
+  - Review and commit the source/worklog changes separately from generated pilot-output churn if desired.
+
+## 2026-05-05 06:30 MDT
+- Task: Package the completed 25% pilot outputs into a shareable zip archive.
+- Files changed:
+  - `Results/exports/abg_vbg_25pct_outputs_20260504_225607.zip`
+  - `WORKLOG.md`
+- Commands run:
+  - Inspected output sizes with `du -sh Results Results/archive Results/mi_batch_checkpoints`.
+  - Staged a curated bundle under `/tmp/abg_vbg_25pct_outputs_20260504_225607`.
+  - Used `rsync` to copy current non-archive `Results/` outputs and copied the run-specific `render_20260504_225607.log`, `postmortem_20260504_225607.md`, and `rss_trace_20260504_225607.csv`.
+  - Created `Results/exports/abg_vbg_25pct_outputs_20260504_225607.zip`.
+  - Verified the archive with `unzip -tq Results/exports/abg_vbg_25pct_outputs_20260504_225607.zip`.
+  - Recorded SHA-256: `7b19f9d62e8a9b52cd766d52482fc1616fbd64f11789ada171ce0254ba0f3ea2`.
+- Outcomes:
+  - Zip archive created successfully: `Results/exports/abg_vbg_25pct_outputs_20260504_225607.zip`.
+  - Archive size: `79M`; uncompressed staging size: `112M`.
+  - The bundle includes the 25% rendered PDF/TEX, current non-archive result artifacts, poster/publication-quality outputs, and the 25% render log/status/postmortem/RSS evidence.
+  - The bundle excludes `Results/archive`, `Results/mi_batch_checkpoints`, `Results/preserved_full_run_20260421_182601`, non-`20260504_225607` render logs, and `Results/exports`.
+- Next steps:
+  - If a checkpoint-preserving bundle is needed, create a separate larger archive including `Results/mi_batch_checkpoints`.
+
+## 2026-05-04 23:35 MDT
+- Task: Fix failed-render PDF/TEX deletion, add publication-quality asset audit outputs, verify with iterative 1% pilot, then run one 25% pilot.
+- Files changed:
+  - `scripts/render_pdf.sh`
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `docs/abg_vbg_publication_quality_asset_audit_checklist.md`
+  - `Code Drafts/ABG-VBG-analysis-2026-4-21.pdf`
+  - `Code Drafts/ABG-VBG-analysis-2026-4-21.tex`
+  - `WORKLOG.md`
+- Commands run:
+  - Restored tracked render artifacts from `HEAD` before editing: `Code Drafts/ABG-VBG-analysis-2026-4-21.pdf` and `.tex`.
+  - `bash -n scripts/render_pdf.sh`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n')"` (`parsed_expressions=2339`)
+  - Extracted and parsed the `scripts/render_pdf.sh` postflight R here-doc (`postflight_parsed_expressions=38`).
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" Rscript --vanilla scripts/check_dependencies.R`
+  - Targeted source-order/safety scan confirming the new publication-quality audit section does not reference `subset_data`, `get_imp(`, `mice::`, `discordance_diagnostics`, or marginal-standardization internals.
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01` (`Results/render_logs/render_20260504_223737.log`, expected implementation failure in new audit)
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01` (`Results/render_logs/render_20260504_224507.log`, passed)
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.25` (`Results/render_logs/render_20260504_225607.log`, passed)
+  - Post-render verification with `sips`, `df -h`, RSS trace summaries, and CSV status scans for publication-quality, poster, validation, PDF, and discordance artifacts.
+- Outcomes:
+  - `scripts/render_pdf.sh` now backs up any pre-existing manuscript PDF/TEX before stale cleanup and restores them on nonzero wrapper exit if no valid replacement exists. The wrapper still records failed status/postmortem status when restore occurs.
+  - The first 1% rerun failed in the new publication-quality audit because generated table CSV provenance/header fields (`run_id`, `run_ts`, `panel`) were treated as visible manuscript table fields. The wrapper restore logic worked and restored the prior PDF/TEX after the failure.
+  - Patched the audit to use tri-state manual/automated fields: objective `FALSE` can fail, while `NA` means visual/PDF-text review is still required and is not falsely marked pass/fail.
+  - Added `docs/abg_vbg_publication_quality_asset_audit_checklist.md` as a durable checklist document.
+  - Added QMD-generated `Results/publication_quality_asset_audit.csv` and `Results/publication_quality_asset_audit_summary.csv` derived from compact manifest/audit objects only.
+  - Added wrapper postflight `Results/publication_quality_pdf_text_scan.csv` for required labels, forbidden placeholder/deprecated/global-SHAP/negative-control text, obvious glyph corruption, and active Figure 3 caption text.
+  - Added the publication-quality artifacts to validation/postflight required-artifact and required-column checks.
+  - Successful 1% pilot (`20260504_224507`): wrapper status `0`, postflight passed, publication audit `17/17 Pass`, PDF text fatal/major failures `0`, discordance reached `marginal_pooling_complete`, and poster output status recorded six created files.
+  - Successful 25% pilot (`20260504_225607`): wrapper status `0`, postflight passed, publication audit `17/17 Pass`, PDF text fatal/major failures `0`, `validation_build_status.csv` overall `PASS_WITH_WARNINGS` due one medium diagnostics issue, and discordance again reached `marginal_pooling_complete`.
+  - Poster PNG dimensions passed final-size checks after the 25% run: Figure 1 `3609 x 3033`; Figure 2 `5745 x 3750`. SVG/PDF poster outputs were present and nonzero.
+  - 25% RSS trace peak was approximately `7.29 GiB`; disk remained about `10 GiB` free at `96%` capacity throughout. Old archived MI checkpoints occupy most of `Results/archive` (~17 GiB) and remain a future disk-pressure risk.
+- Next steps:
+  - No full render was started.
+  - Consider pruning or externally archiving old `Results/archive/*/mi_batch_checkpoints` before the next full render to reduce disk-pressure risk.
+  - If committing, review generated `Results/` churn separately from source/docs/script changes.
+
+## 2026-05-04 22:25 MDT
+- Task: Implement poster-specific Figure 1/Figure 2 export helpers and run the requested single 1% verification render.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" /usr/local/bin/Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"` (`parsed_expressions=2323`)
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" /usr/local/bin/Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" /usr/local/bin/Rscript --vanilla scripts/check_dependencies.R`
+  - targeted source-order check confirming poster constants, export helpers, hidden poster chunks, and key-results data objects are defined before use
+  - targeted poster safety scan confirming the new poster chunks do not reference `subset_data`, MICE execution, imputation extraction, discordance outputs, or marginal-standardization internals
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - `rm -f Results/figs/cohort_flow_poster.png Results/figs/cohort_flow_poster.pdf Results/figs/cohort_flow_poster.svg Results/cohort_flow_poster.png Results/cohort_flow_poster.pdf Results/cohort_flow_poster.svg Results/figs/key-results-spline-main-mi-ipw-abg-vbg_poster.png Results/figs/key-results-spline-main-mi-ipw-abg-vbg_poster.pdf Results/figs/key-results-spline-main-mi-ipw-abg-vbg_poster.svg Results/poster_figure_export_status.csv`
+- Outcomes:
+  - Added poster export constants for 300 dpi final-size Figure 1 and Figure 2 outputs.
+  - Added self-contained poster export helpers for ggplot and grid/grob outputs. PNG uses `ragg`; PDF uses Cairo PDF when available; SVG uses an optional dynamic `svglite` lookup so SVG support is not treated as a new required package dependency.
+  - Added strict missing/zero-byte poster output validation and a lightweight `Results/poster_figure_export_status.csv` audit initialized during render.
+  - Added `build_cohort_flow_poster_plot()` and hidden chunk `cohort-flow-poster`, using existing `cohort_flow_counts` only and validating ABG-only, ABG+VBG, VBG-only, and neither-tested counts against the eligible ED/inpatient source cohort.
+  - Added `build_key_results_or_poster_figure()` and hidden chunk `key-results-spline-main-mi-ipw-abg-vbg-poster`, using existing `key_results_main_mi_ipw_or_df` only. The poster version is odds-ratio only, 2 x 2, poster-sized, directly labels ABG/VBG, and keeps manuscript Figure 2 outputs unchanged.
+  - The initial dependency audit failed when direct `svglite::` references made SVG support appear as an undeclared required dependency; this was fixed by the optional dynamic SVG device lookup, and the dependency audit then passed.
+  - The single approved 1% pilot render failed early in chunk `18/307 [cohort-flow-poster]`, before MICE or `discordance-diagnostics` executed. Log: `Results/render_logs/render_20260504_222312.log`; status JSON: `Results/mi_run_status_20260504_222312.json`; postmortem: `Results/render_logs/postmortem_20260504_222312.md`.
+  - Failure cause was a type mismatch in `record_poster_export_status()`: an initialized zero-row CSV was read back with logical columns, then `dplyr::bind_rows()` could not combine logical `run_id` with the new character `run_id`.
+  - Patched `record_poster_export_status()` after the failed pilot so empty status reads are retyped from `status_row[0, , drop = FALSE]`; post-patch purl/parse, dependency audit, source-order check, and poster safety scan all passed.
+  - Removed partial poster artifacts from the failed pilot so no unverified `_poster` outputs remain. The failed wrapper also cleaned the prior PDF before render, so `Code Drafts/ABG-VBG-analysis-2026-4-21.pdf` is currently absent until the next successful render.
+- Next steps:
+  - Stop here per instruction. No second 1% pilot, larger pilot, or full render was launched after the failed verification attempt.
+  - If authorized, run one fresh 1% pilot to verify the patched poster status helper and generate the poster PNG/PDF/SVG artifacts.
+
+## 2026-05-04 22:12 MDT
+- Task: Postmortem and memory-safety fix for the full-render failure inside `discordance-diagnostics`, followed by the requested 1% pilot render only.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `Results/render_logs/discordance_diagnostics_postmortem_20260503_182713.md`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" /usr/local/bin/Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"` (`parsed_expressions=2292`)
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" /usr/local/bin/Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" /usr/local/bin/Rscript --vanilla scripts/check_dependencies.R`
+  - targeted source-order check confirming `MARGINAL_PREDICTION_CHUNK_ROWS` is defined before `predict_marginal_prob_from_compact()`, and that both precede `discordance-diagnostics`
+  - `PATH="/usr/local/bin:/opt/homebrew/bin:$PATH" ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - post-render inspection of `Results/mi_run_status_20260504_215816.json`, `Results/discordance_diagnostics_progress.csv`, `Results/discordance_marginal_standardized_imp_curves.csv`, `Results/discordance_validation_status.csv`, `Results/validation_build_status.csv`, `Results/pdf_asset_presence_scan.csv`, and `Results/render_logs/rss_trace_20260504_215816.csv`
+- Outcomes:
+  - Wrote a focused postmortem for the failed full render at `Results/render_logs/discordance_diagnostics_postmortem_20260503_182713.md`.
+  - Added `MARGINAL_PREDICTION_CHUNK_ROWS = 2500L` and changed compact marginal predictions to process standardization rows in bounded row chunks when compact model terms are available; this reduces peak model-matrix allocation without lowering the standardization cap or changing the estimand.
+  - Refactored `discordance-diagnostics` marginal standardization to stream imputation-level predictions to `Results/discordance_marginal_standardized_imp_curves.csv` and reload that compact file only for pooling, rather than accumulating all rows in `marginal_rows`.
+  - Added `Results/discordance_diagnostics_progress.csv` breadcrumbs with section/stage, imputation, group, outcome, source/prediction sizes, GC vector-cell pressure, and RSS.
+  - The requested 1% pilot render succeeded: log `Results/render_logs/render_20260504_215816.log`, wrapper status `0`, postflight passed, PDF created, and `Results/mi_run_status_20260504_215816.json` reports `status = completed`.
+  - Pilot elapsed time from `/usr/bin/time -l` was `636.08` seconds; maximum resident set size was `7,534,510,080` bytes. RSS trace peak for the render R process was about `6.38 GiB`.
+  - `discordance-diagnostics` completed in the pilot. Progress log had 226 rows, streamed imputation-level curves had 16,080 rows across 20 pilot imputations, and the final marginal progress stage was `marginal_pooling_complete`.
+  - Fresh validation artifacts passed: `discordance_validation_status.csv` had 24 rows with zero required failures, `pdf_asset_presence_scan.csv` had 35 passed rows, and `validation_build_status.csv` had `PASS` or `PASS_WITH_WARNINGS` statuses only.
+  - The wrapper archived the prior failed-run MI/debug artifacts under `Results/archive/pre_run_20260504_215816/` before the pilot.
+- Next steps:
+  - Stop here per instruction. Do not start a larger pilot or full render until explicitly requested.
+  - If the next step is a full render, use the existing monitoring wrapper and watch `Results/discordance_diagnostics_progress.csv` for the full-mode standardization source size and RSS trend.
+
+## 2026-05-04 20:25 MDT
+- Task: Record terminal failure of the full-data render launched from `Results/render_logs/render_20260503_182713.log`.
+- Files changed:
+  - `WORKLOG.md`
+- Commands/artifacts reviewed:
+  - process table for wrapper, Quarto, and R render processes
+  - `df -h . Results`
+  - `Results/render_logs/render_20260503_182713.log`
+  - `Results/render_logs/rss_trace_20260503_182713.csv`
+  - `Results/render_logs/postmortem_20260503_182713.md`
+  - `Results/mi_run_status_20260503_182713.json`
+  - `Results/mice_batches_log.csv`
+  - `Results/mice_combine_log.csv`
+  - stale prior-pilot status files: `Results/pdf_asset_presence_scan.csv`, `Results/discordance_validation_status.csv`, `Results/validation_build_status.csv`
+- Outcomes:
+  - Full render failed with wrapper status `1`; no full PDF was produced.
+  - Failure occurred in chunk `280/303 [discordance-diagnostics]`, the same broad stage as the prior full-render crash.
+  - Terminal error was `Error: vector memory limit of 16.0 Gb reached, see mem.maxVSize()`.
+  - Quarto reported the failing source range as `ABG-VBG-analysis-2026-4-21.rmarkdown:17236-21052 [discordance-diagnostics]`.
+  - MICE completed successfully before the failure: 40/40 checkpoint batches, `m_done_after = 80`, final checkpoint saved at `2026-05-04 11:46:45 MDT`; `mice_combine_log.csv` shows all 80 combine rows and no combine errors.
+  - RSS trace recorded peak R RSS around `7.32 GiB`; `/usr/bin/time -l` reported maximum resident set size `8,146,911,232` bytes. The blocker is the R vector heap limit, not a process RSS peak or disk exhaustion.
+  - Disk had about `10 GiB` free after failure; disk pressure did not cause the failure.
+  - `Results/mi_run_status_20260503_182713.json` reports `status = failed_caught_error`, `pdf_exists = false`, `wrapper_status = 1`, `postflight_passed = false`, and `last_batch = 40`.
+  - `Results/pdf_asset_presence_scan.csv`, `Results/discordance_validation_status.csv`, and `Results/validation_build_status.csv` were still from the earlier 1% pilot run (`run_id = 20260503_160001`) and are not full-render validation outputs.
+- Next steps:
+  - Do not auto-retry another full render.
+  - Diagnose the `discordance-diagnostics` memory path directly, focusing on objects created between the start of that chunk and the first failure: remaining full-width data retention, repeated MI prediction/standardization objects, and any list/tibble expansion in the validation or sensitivity summaries.
+  - A likely next fix is to make `discordance-diagnostics` stream or narrow its intermediate objects before row-binding, and to explicitly drop large upstream MI/model objects before entering this chunk.
+
+## 2026-05-03 18:26 MDT
+- Task: Triage machine-restart interruption of the full-data render and prepare a clean full-render restart.
+- Files changed:
+  - `WORKLOG.md`
+- Commands/artifacts reviewed:
+  - process table for `render_pdf.sh`, Quarto, and R render processes
+  - `Results/render_logs/render_20260503_161857.log`
+  - `Results/render_logs/rss_trace_20260503_161857.csv`
+  - `Results/mice_batches_log.csv`
+  - `Results/mice_combine_log.csv`
+  - `Results/mi_batch_checkpoints/`
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd` MICE checkpoint/resume logic
+- Outcomes:
+  - The machine restart killed the active full render; no wrapper, Quarto, or render R process survived.
+  - The interrupted render had no `[render:end]`, no wrapper status, no postmortem, and no new `mi_run_status_*.json`, so it is not an accepted render attempt.
+  - Last durable MICE state was batch 2 completed (`m_done_after=4`) with `Results/mi_batch_checkpoints/imp_acc_after_batch_02.rds`; batch 3 had only entered `mice::mice()` and did not return or checkpoint.
+  - The render is not safely resumable as-is because the notebook executes top-to-bottom and `run_mice_batched()` clears `Results/mi_batch_checkpoints` at the start of a run; the in-memory `imp` accumulator was lost when the R process died.
+  - Disk recovered to about `17 GiB` free after the restart; the interrupted run's active checkpoint directory was about `123 MiB`.
+- Next steps:
+  - Restart the full render from scratch with `./scripts/render_pdf.sh -P run_mode:full`.
+  - Let the wrapper archive the interrupted run's active MICE logs/checkpoints under the new `Results/archive/pre_run_<run_id>/` folder.
+  - Update the `monitor-full-render` heartbeat to the new render log after the restart begins.
+
 ## 2026-05-03 16:10 MDT
 - Task: Fix the full-render memory failure in the discordance first-encounter sensitivity block and validate with a 1% pilot render only.
 - Files changed:
@@ -1671,6 +2083,51 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
   - Pilot-generated PDFs, logs, archives, and `Results/` churn were left unstaged by design.
 - Next steps:
   - If desired, commit only source/docs/worklog changes. Full-mode execution remains deferred until explicitly requested.
+
+## 2026-05-05 06:50 MDT
+- Task: Address review findings for failed-render artifact recovery and publication-quality audit resolution semantics, then validate with one 1% pilot render.
+- Files changed:
+  - `scripts/render_pdf.sh`
+  - `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
+  - `WORKLOG.md`
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-4-21.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - targeted audit-section safety scan confirming the publication-quality audit block does not reference `subset_data`, `get_imp(`, `mice::`, `discordance_diagnostics`, or `marginal_standardization`
+  - `git diff --check -- scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-4-21.qmd"`
+  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+- Outcomes:
+  - Updated failed-render recovery so a nonzero failed PDF/TEX is archived under `Results/render_logs/output_backup_<run_ts>/failed_<run_ts>_<name>` before any pre-render backup is restored to the canonical manuscript paths.
+  - The failed-output archive path preserves debugging artifacts without leaving failed replacements at tracked deliverable paths.
+  - Updated `publication_quality_asset_audit.csv` semantics so manual visual-review-only rows are not marked resolved. Automated severity can remain `Pass`, but `resolved` remains `FALSE` until manual review is complete.
+  - Added a `Manual Review` row to `publication_quality_asset_audit_summary.csv`; the 1% pilot reported `17` assets requiring manual review and an overall publication-quality status of `PASS_WITH_WARNINGS`.
+  - Static checks passed:
+    - shell syntax passed.
+    - purl/parse passed with `parsed_expressions=2340`.
+    - environment preflight passed.
+    - dependency audit passed for `45` declared direct packages.
+    - audit-section safety scan passed.
+    - `git diff --check` passed for the edited source files.
+  - Successful 1% pilot:
+    - log: `Results/render_logs/render_20260505_063807.log`
+    - postmortem: `Results/render_logs/postmortem_20260505_063807.md`
+    - status JSON: `Results/mi_run_status_20260505_063807.json`
+    - wrapper status: `0`
+    - postflight passed: `true`
+    - elapsed time from `/usr/bin/time -l`: `691.56` seconds
+    - max resident set size from `/usr/bin/time -l`: `5283266560` bytes
+    - PDF output exists: `Code Drafts/ABG-VBG-analysis-2026-4-21.pdf`
+  - Post-pilot validation:
+    - `Results/pdf_asset_presence_scan.csv` had zero failures.
+    - `Results/discordance_validation_status.csv` had zero failures.
+    - `Results/publication_quality_asset_audit.csv` had `17` rows, all with automated severity `Pass`, `0` objective Fatal/Major issues, and `17` rows with `resolved = FALSE` pending manual visual review.
+    - `Results/validation_build_status.csv` reported `overall_build = PASS_WITH_WARNINGS` due manual publication-quality review and diagnostics warnings, not objective artifact failures.
+    - `Results/render_logs/output_backup_20260505_063807/` contains the pre-render PDF/TEX backups; no `failed_*` artifacts were created because the pilot succeeded.
+- Next steps:
+  - No larger pilot or full render was started.
+  - If a future wrapper failure occurs after producing nonzero PDF/TEX outputs, inspect the archived `failed_*` files in that run's `output_backup_*` directory while the canonical manuscript paths should contain the restored pre-render backups.
 
 ## 2026-04-24 07:36 MDT
 - Task: Synchronize `renv.lock` with the validated local R library state.

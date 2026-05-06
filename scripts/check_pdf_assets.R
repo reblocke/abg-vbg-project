@@ -159,13 +159,7 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
     "Table S3. GBM IPSW-weighted associations",
     "Table S4. Missingness of baseline covariates",
     "Table S5. Multiple-imputation diagnostic summary",
-    "Analysis of the discordance between predicted probabilities and OR for NIV and IMV",
-    "Sentinel procedure capture/completeness",
-    "Summary of plausible explanations for NIV/IMV probability-OR discordance",
-    "Enhanced capture proxies, sentinel v2 specificity notes, IMV setting heterogeneity, timing field mapping, and metadata audits",
-    "The final remaining-issues summary separates resolved or strongly clarified findings from unresolved residual IMV",
-    "marginally standardized to the common eligible source-population covariate distribution",
-    "Current NIV/IMV OR and predicted-probability summaries"
+    "marginally standardized to the common eligible source-population covariate distribution"
   )
   found <- vapply(required_snippets, grepl, logical(1L), x = pdf_text, fixed = TRUE)
   for (idx in seq_along(required_snippets)) {
@@ -175,6 +169,42 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
       observed = if (found[[idx]]) "found" else "missing",
       scanner = "pdftotext",
       detail = required_snippets[[idx]]
+    )
+  }
+
+  required_code_checks <- list(
+    list(
+      check = "scientific_code_visible_data_subset",
+      snippets = c(
+        "subset_data <- dplyr::sample_frac",
+        "subset_data <-dplyr::sample_frac",
+        "subset_data <- subset_data %>%",
+        "subset_data <-subset_data %>%"
+      )
+    ),
+    list(
+      check = "scientific_code_visible_spline_model",
+      snippets = c(
+        "fit_spline_glm <- function",
+        "fit_spline_glm <-function",
+        "fit_imv <- fit_spline_glm",
+        "fit_imv <-fit_spline_glm"
+      )
+    ),
+    list(
+      check = "scientific_code_visible_ggplot",
+      snippets = c("ggplot(", "ggplot2::ggplot(")
+    )
+  )
+  for (item in required_code_checks) {
+    present <- vapply(item$snippets, grepl, logical(1L), x = pdf_text, fixed = TRUE)
+    ok <- any(present)
+    rows[[length(rows) + 1L]] <- scan_row(
+      item$check,
+      if (ok) "passed" else "failed",
+      observed = if (ok) item$snippets[[which(present)[[1L]]]] else "missing",
+      scanner = "pdftotext",
+      detail = paste(item$snippets, collapse = " OR ")
     )
   }
 
@@ -224,10 +254,41 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
       check = "no_noncanonical_table_2a",
       snippet = "Table 2a. Crude outcomes by CO2 category",
       detail = "Validation PDF should suppress exploratory crude CO2-category outcome tables."
+    ),
+    list(
+      check = "no_diagnostics_heading",
+      snippet = "Diagnostics and Exports",
+      detail = "QA/QC diagnostics headings should be hidden from the manuscript-facing PDF."
+    ),
+    list(
+      check = "no_validation_build_summary_heading",
+      snippet = "Validation build summary",
+      detail = "Validation build summary should be a side-effect artifact, not a manuscript-facing PDF heading."
+    ),
+    list(
+      check = "no_diagnostics_audit_summary_heading",
+      snippet = "Diagnostics audit summary",
+      detail = "Diagnostics audit summary should be hidden from the manuscript-facing PDF."
+    ),
+    list(
+      check = "no_artifact_provenance_summary_heading",
+      snippet = "Artifact provenance summary",
+      detail = "Artifact provenance summary should be hidden from the manuscript-facing PDF."
+    ),
+    list(
+      check = "no_publication_quality_asset_audit_heading",
+      snippet = "Publication-quality asset audit",
+      detail = "Publication-quality asset audit should be a CSV artifact, not a manuscript-facing PDF heading."
+    ),
+    list(
+      check = "no_discordance_diagnostics_heading",
+      snippet = "Analysis of the discordance between predicted probabilities and OR for NIV and IMV",
+      detail = "Discordance diagnostics should remain side-effect artifacts, not manuscript-facing PDF sections."
     )
   )
+  pdf_text_lower <- tolower(pdf_text)
   for (item in global_forbidden_checks) {
-    ok <- !grepl(item$snippet, pdf_text, fixed = TRUE)
+    ok <- !grepl(tolower(item$snippet), pdf_text_lower, fixed = TRUE)
     rows[[length(rows) + 1L]] <- scan_row(
       item$check,
       if (ok) "passed" else "failed",
