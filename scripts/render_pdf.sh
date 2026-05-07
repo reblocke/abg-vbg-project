@@ -6,7 +6,7 @@ set -euo pipefail
 # 2) render the main Quarto analysis PDF
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-QMD_DEFAULT="${ROOT_DIR}/Code Drafts/ABG-VBG analysis 2026-4-21.qmd"
+QMD_DEFAULT="${ROOT_DIR}/Code Drafts/ABG-VBG analysis 2026-5-6.qmd"
 if [[ $# -gt 0 && "${1}" != -* ]]; then
   QMD_PATH="$1"
   shift
@@ -215,6 +215,14 @@ restore_render_output_backups_on_failure() {
   fi
 }
 
+cleanup_render_output_backups_on_success() {
+  local wrapper_status="$1"
+  [[ "${wrapper_status}" -eq 0 && ${POSTFLIGHT_PASSED} -eq 1 ]] || return 0
+  [[ -n "${OUTPUT_BACKUP_DIR}" && -d "${OUTPUT_BACKUP_DIR}" ]] || return 0
+  rm -rf "${OUTPUT_BACKUP_DIR}"
+  echo "[render:backup] removed successful-render backup ${OUTPUT_BACKUP_DIR}"
+}
+
 start_rss_sampler() {
   local trace_path="$1"
   local wrapper_pid="$2"
@@ -337,6 +345,14 @@ create_clean_output_bundle() {
   local qmd_sha="unknown"
   local qmd_rel=""
   local args_display="(none)"
+  local run_scope_display="current render"
+  local overall_build_status="unknown"
+  local diagnostics_status="unknown"
+  local diagnostics_detail="unknown"
+  local extracted_n="unknown"
+  local analytic_n="unknown"
+  local abg_n="unknown"
+  local vbg_n="unknown"
 
   mkdir -p "${export_dir}"
   if [[ ${#QUARTO_ARGS[@]} -gt 0 ]]; then
@@ -345,6 +361,13 @@ create_clean_output_bundle() {
   fi
   if [[ "${args_joined}" == *"run_mode:pilot"* && "${args_joined}" == *"pilot_frac:0.01"* ]]; then
     bundle_scope="1pct"
+    run_scope_display="pilot render; 1% subset"
+  elif [[ "${args_joined}" == *"run_mode:pilot"* && "${args_joined}" == *"pilot_frac:0.25"* ]]; then
+    bundle_scope="25pct"
+    run_scope_display="pilot render; 25% subset"
+  elif [[ "${args_joined}" == *"run_mode:full"* ]]; then
+    bundle_scope="full"
+    run_scope_display="full render; 100% dataset"
   fi
 
   git_ref="$(git -C "${ROOT_DIR}" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
@@ -353,6 +376,24 @@ create_clean_output_bundle() {
     qmd_sha="$(sha256_file "${QMD_PATH}")"
   fi
   qmd_rel="$(rel_from_root "${QMD_PATH}")"
+  if [[ -f "${RESULTS_DIR}/validation_build_status.csv" ]]; then
+    overall_build_status="$(awk -F, 'NR > 1 {gsub(/^"|"$/, "", $1); gsub(/^"|"$/, "", $2); if ($1 == "overall_build") {print $2; exit}}' "${RESULTS_DIR}/validation_build_status.csv")"
+    diagnostics_status="$(awk -F, 'NR > 1 {gsub(/^"|"$/, "", $1); gsub(/^"|"$/, "", $2); if ($1 == "diagnostics_audit") {print $2; exit}}' "${RESULTS_DIR}/validation_build_status.csv")"
+    diagnostics_detail="$(awk -F, 'NR > 1 {gsub(/^"|"$/, "", $1); gsub(/^"|"$/, "", $3); if ($1 == "diagnostics_audit") {print $3; exit}}' "${RESULTS_DIR}/validation_build_status.csv")"
+  fi
+  if [[ -f "${RESULTS_DIR}/cohort_flow_summary.csv" ]]; then
+    extracted_n="$(awk -F, 'NR > 1 {gsub(/^"|"$/, "", $1); gsub(/^"|"$/, "", $2); if ($1 == "Extracted encounter cohort") {print $2; exit}}' "${RESULTS_DIR}/cohort_flow_summary.csv")"
+    analytic_n="$(awk -F, 'NR > 1 {gsub(/^"|"$/, "", $1); gsub(/^"|"$/, "", $2); if ($1 == "Analytic ED/inpatient cohort") {print $2; exit}}' "${RESULTS_DIR}/cohort_flow_summary.csv")"
+    abg_n="$(awk -F, 'NR > 1 {gsub(/^"|"$/, "", $1); gsub(/^"|"$/, "", $2); if ($1 == "ABG-tested encounters") {print $2; exit}}' "${RESULTS_DIR}/cohort_flow_summary.csv")"
+    vbg_n="$(awk -F, 'NR > 1 {gsub(/^"|"$/, "", $1); gsub(/^"|"$/, "", $2); if ($1 == "VBG-tested encounters") {print $2; exit}}' "${RESULTS_DIR}/cohort_flow_summary.csv")"
+  fi
+  overall_build_status="${overall_build_status:-unknown}"
+  diagnostics_status="${diagnostics_status:-unknown}"
+  diagnostics_detail="${diagnostics_detail:-unknown}"
+  extracted_n="${extracted_n:-unknown}"
+  analytic_n="${analytic_n:-unknown}"
+  abg_n="${abg_n:-unknown}"
+  vbg_n="${vbg_n:-unknown}"
 
   zip_path="${export_dir}/abg_vbg_clean_${bundle_scope}_outputs_${RUN_TS}.zip"
   manifest_path="${export_dir}/abg_vbg_clean_${bundle_scope}_outputs_${RUN_TS}_manifest.csv"
@@ -363,18 +404,34 @@ create_clean_output_bundle() {
     printf '# ABG/VBG Current Render Output Bundle\n\n'
     printf 'This bundle contains the current render PDF, manuscript-facing figures/tables, validation artifacts, and source traceability files from the successful wrapper postflight.\n\n'
     printf -- '- Render timestamp: `%s`\n' "${RUN_TS}"
-    printf -- '- Bundle scope: `%s`\n' "${bundle_scope}"
+    printf -- '- Bundle scope: `%s` (%s)\n' "${bundle_scope}" "${run_scope_display}"
     printf -- '- Quarto arguments: `%s`\n' "${args_display}"
     printf -- '- Render log: `%s`\n' "$(basename "${LOG_PATH}")"
+    printf -- '- Overall build status: `%s`\n' "${overall_build_status}"
+    printf -- '- Diagnostics status: `%s`\n' "${diagnostics_status}"
     printf -- '- Git commit: `%s`\n' "${git_ref}"
     printf -- '- Dirty worktree entries at bundle creation: `%s`\n\n' "${git_dirty_count}"
+    printf '## Cohort Counts\n\n'
+    printf -- '- Extracted encounter cohort: `%s`\n' "${extracted_n}"
+    printf -- '- Analytic ED/inpatient cohort: `%s`\n' "${analytic_n}"
+    printf -- '- ABG-tested encounters: `%s`\n' "${abg_n}"
+    printf -- '- VBG-tested encounters: `%s`\n\n' "${vbg_n}"
+    printf '## Warning Interpretation\n\n'
+    printf 'The expected successful full-run status can be `PASS_WITH_WARNINGS` when diagnostic warnings reflect sparse-tail or off-profile fitted-probability behavior. These warnings are not treated as nonconvergence or explicit separation warnings unless the diagnostics audit says so.\n\n'
+    printf -- '- Diagnostics detail: `%s`\n\n' "${diagnostics_detail}"
     printf '## Canonical Manuscript Outputs\n\n'
     printf -- '- `Code Drafts/%s`\n' "$(basename "${OUTPUT_PDF}")"
     printf -- '- `Code Drafts/%s`\n' "$(basename "${OUTPUT_TEX}")"
-    printf -- '- `Results/figs/figure_*.pdf`\n'
-    printf -- '- `Results/table_*.csv` and `Results/table_*.pdf` files explicitly allowlisted by the wrapper\n\n'
+    printf -- '- Main figures: Figure 1 and Figure 2 PNG/PDF canonical and alias outputs\n'
+    printf -- '- Main tables: Table 1 and Table 2 CSV/PDF outputs\n\n'
+    printf '## Canonical Supplement Outputs\n\n'
+    printf -- '- Supplement figures: Figure S1-S8 PNG/PDF canonical and alias outputs\n'
+    printf -- '- Supplement tables: Table S1-S5 CSV/PDF outputs\n\n'
+    printf '## Poster Outputs\n\n'
+    printf -- '- `Results/figs/cohort_flow_poster.{png,pdf,svg}` when available\n'
+    printf -- '- `Results/figs/key-results-spline-main-mi-ipw-abg-vbg_poster.{png,pdf,svg}` when available\n\n'
     printf '## Supporting Validation Outputs\n\n'
-    printf 'Poster QC, probability-standardization audits, publication-quality audits, artifact registries, and render logs are included to explain how the bundle was validated. Deprecated/debug table sidecars are intentionally excluded.\n\n'
+    printf 'Poster QC, probability-standardization audits, publication-quality audits, manuscript sync audits, artifact registries, MI run-status JSON, and render logs are included to explain how the bundle was validated. Deprecated/debug table sidecars and internal TODO notes are intentionally excluded.\n\n'
     printf '## Source Traceability\n\n'
     printf -- '- Active QMD source is included at `%s`.\n' "${qmd_rel}"
     printf -- '- A compact source snapshot is included at `Results/CODE_SNAPSHOT.md`.\n'
@@ -426,13 +483,52 @@ create_clean_output_bundle() {
   add_abs_path "${LOG_PATH}"
   add_abs_path "${RSS_TRACE_PATH}"
   add_abs_path "${LOG_DIR}/postmortem_${RUN_TS}.md"
-
-  add_glob "${RESULTS_DIR}/figs/figure_*.pdf"
-  add_glob "${RESULTS_DIR}/figs/key-results-*.pdf"
+  add_glob "${RESULTS_DIR}/mi_run_status_*.json"
   add_glob "${RESULTS_DIR}/figs/cohort_flow_poster.*"
+  add_glob "${RESULTS_DIR}/cohort_flow_poster.*"
   add_glob "${RESULTS_DIR}/figs/key-results-spline-main-mi-ipw-abg-vbg_poster.*"
 
   for rel_path in \
+    Results/cohort_flow.png \
+    Results/cohort_flow.pdf \
+    Results/figs/figure_1_cohort_assembly_target_population_ipsw.png \
+    Results/figs/figure_1_cohort_assembly_target_population_ipsw.pdf \
+    Results/figs/key-results-spline-main-mi-ipw-abg-vbg.png \
+    Results/figs/key-results-spline-main-mi-ipw-abg-vbg.pdf \
+    Results/figs/figure_2_primary_weighted_spline_associations_abg_vbg.png \
+    Results/figs/figure_2_primary_weighted_spline_associations_abg_vbg.pdf \
+    Results/figs/loveplot-mi-logistic-abg-vbg.png \
+    Results/figs/loveplot-mi-logistic-abg-vbg.pdf \
+    Results/figs/figure_s1_covariate_balance_mi_logistic_ipsw.png \
+    Results/figs/figure_s1_covariate_balance_mi_logistic_ipsw.pdf \
+    Results/figs/propensity-histograms-mi-logistic.png \
+    Results/figs/propensity-histograms-mi-logistic.pdf \
+    Results/figs/figure_s2_propensity_score_overlap_mi_logistic.png \
+    Results/figs/figure_s2_propensity_score_overlap_mi_logistic.pdf \
+    Results/figs/shap-top10-mi-logistic-abg-vbg.png \
+    Results/figs/shap-top10-mi-logistic-abg-vbg.pdf \
+    Results/figs/figure_s3_shap_style_contributions_mi_logistic.png \
+    Results/figs/figure_s3_shap_style_contributions_mi_logistic.pdf \
+    Results/figs/key-results-cat3-main-mi-ipw-abg-vbg.png \
+    Results/figs/key-results-cat3-main-mi-ipw-abg-vbg.pdf \
+    Results/figs/figure_s4_weighted_categorical_associations_abg_vbg.png \
+    Results/figs/figure_s4_weighted_categorical_associations_abg_vbg.pdf \
+    Results/figs/key-results-spline-adjusted-abg-vbg.png \
+    Results/figs/key-results-spline-adjusted-abg-vbg.pdf \
+    Results/figs/figure_s5_unweighted_adjusted_spline_abg_vbg.png \
+    Results/figs/figure_s5_unweighted_adjusted_spline_abg_vbg.pdf \
+    Results/figs/loveplot-ipw-gbm-abg-vbg.png \
+    Results/figs/loveplot-ipw-gbm-abg-vbg.pdf \
+    Results/figs/figure_s6_covariate_balance_gbm_weighting.png \
+    Results/figs/figure_s6_covariate_balance_gbm_weighting.pdf \
+    Results/figs/propensity-histograms-conditional.png \
+    Results/figs/propensity-histograms-conditional.pdf \
+    Results/figs/figure_s7_propensity_score_overlap_gbm.png \
+    Results/figs/figure_s7_propensity_score_overlap_gbm.pdf \
+    Results/figs/shap-top10-ipw-gbm-abg-vbg.png \
+    Results/figs/shap-top10-ipw-gbm-abg-vbg.pdf \
+    Results/figs/figure_s8_shap_style_contributions_gbm.png \
+    Results/figs/figure_s8_shap_style_contributions_gbm.pdf \
     Results/table1_combined.csv \
     Results/table1_combined.pdf \
     Results/table_1_baseline_characteristics_analytic_cohort.csv \
@@ -468,6 +564,8 @@ create_clean_output_bundle() {
     Results/canonical_asset_registry.csv \
     Results/manuscript_asset_manifest.csv \
     Results/manuscript_sync_report.md \
+    Results/manuscript_asset_sync_audit.csv \
+    Results/manuscript_asset_sync_audit.md \
     Results/glyph_audit.csv \
     Results/duplicate_asset_audit.csv \
     Results/diagnostics_audit.md \
@@ -528,6 +626,7 @@ on_exit() {
     postflight_flag="TRUE"
   fi
   restore_render_output_backups_on_failure "${status}"
+  cleanup_render_output_backups_on_success "${status}"
   run_collector "${status}" "${postflight_flag}"
   if [[ "${status}" -eq 0 && ${POSTFLIGHT_PASSED} -eq 1 ]]; then
     create_clean_output_bundle
@@ -676,6 +775,9 @@ write_publication_quality_pdf_scan <- function(txt, scanner, path) {
     list(check = "no_things_like_text", pattern = "Things like", severity = "Major", fixed = TRUE, ignore_case = TRUE),
     list(check = "no_global_shap_language", pattern = "global SHAP", severity = "Major", fixed = TRUE, ignore_case = TRUE),
     list(check = "no_negative_control_language", pattern = "negative control outcome", severity = "Major", fixed = TRUE, ignore_case = TRUE),
+    list(check = "no_internal_abg_residual_note", pattern = "ABG residual imbalance", severity = "Major", fixed = TRUE, ignore_case = TRUE),
+    list(check = "no_internal_separation_todo_note", pattern = "separation/nonconvergence", severity = "Major", fixed = TRUE, ignore_case = TRUE),
+    list(check = "no_internal_discontinuity_todo_note", pattern = "possible discontinuity", severity = "Major", fixed = TRUE, ignore_case = TRUE),
     list(check = "no_active_figure_3_caption", pattern = "Figure 3. ", severity = "Fatal", fixed = TRUE, ignore_case = TRUE),
     list(check = "no_replacement_character", pattern = "\uFFFD", severity = "Major", fixed = TRUE, ignore_case = FALSE),
     list(check = "no_utf8_mojibake", pattern = mojibake_pattern, severity = "Major", fixed = FALSE, ignore_case = FALSE)
@@ -834,6 +936,8 @@ required_validation_artifacts <- c(
   "artifact_check_missing.csv",
   "canonical_asset_registry.csv",
   "manuscript_sync_report.md",
+  "manuscript_asset_sync_audit.csv",
+  "manuscript_asset_sync_audit.md",
   "glyph_audit.csv",
   "duplicate_asset_audit.csv",
   "diagnostics_audit_summary.csv",
@@ -865,6 +969,7 @@ required_validation_cols <- list(
   artifact_check_status.csv = c("manuscript_label", "artifact_role", "check_status", "severity"),
   artifact_check_missing.csv = c("manuscript_label", "artifact_role", "check_status", "severity"),
   canonical_asset_registry.csv = c("numbering_slot", "manuscript_label", "status", "source_type"),
+  manuscript_asset_sync_audit.csv = c("check", "status", "severity", "detail", "run_id", "run_ts"),
   glyph_audit.csv = c("manuscript_label", "field_name", "glyph_status", "severity"),
   duplicate_asset_audit.csv = c("audit_scope", "audit_key", "status", "severity"),
   diagnostics_audit_summary.csv = c("component", "metric", "value", "status", "severity"),
@@ -880,7 +985,7 @@ required_validation_cols <- list(
   publication_quality_asset_audit_summary.csv = c("severity", "n_assets", "status", "run_id", "run_ts"),
   publication_quality_pdf_text_scan.csv = c("check", "status", "severity", "observed", "scanner", "detail"),
   table_visual_qc.csv = c(
-    "asset_label", "artifact_path", "page", "status", "severity",
+    "asset_label", "artifact_path", "check_type", "page", "status", "severity",
     "min_margin_px", "left_margin_px", "right_margin_px",
     "top_margin_px", "bottom_margin_px", "detail"
   )

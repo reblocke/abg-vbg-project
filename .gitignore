@@ -8,6 +8,8 @@ data/full_db.dta
 .DS_Store
 /Code Drafts/figs
 /Code Drafts/output
+Results/render_logs/output_backup_*/
+/Results/archive/pre_run_*/
 *.RData
 *.rdx
 *.rdb

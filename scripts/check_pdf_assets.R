@@ -192,6 +192,15 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
       )
     ),
     list(
+      check = "scientific_code_visible_mi_single_pass",
+      snippets = c(
+        "This single-pass loop computes MI weights",
+        "prepare_mi_ps_frame <- function",
+        "extract_imputation <- function",
+        "mitools::MIcombine"
+      )
+    ),
+    list(
       check = "scientific_code_visible_ggplot",
       snippets = c("ggplot(", "ggplot2::ggplot(")
     )
@@ -279,6 +288,21 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
       check = "no_publication_quality_asset_audit_heading",
       snippet = "Publication-quality asset audit",
       detail = "Publication-quality asset audit should be a CSV artifact, not a manuscript-facing PDF heading."
+    ),
+    list(
+      check = "no_internal_abg_residual_note",
+      snippet = "ABG residual imbalance",
+      detail = "Internal future-work notes should be side-effect artifacts, not manuscript-facing PDF text."
+    ),
+    list(
+      check = "no_internal_separation_todo_note",
+      snippet = "separation/nonconvergence",
+      detail = "Internal future-work notes should be side-effect artifacts, not manuscript-facing PDF text."
+    ),
+    list(
+      check = "no_internal_discontinuity_todo_note",
+      snippet = "possible discontinuity",
+      detail = "Internal future-work notes should be side-effect artifacts, not manuscript-facing PDF text."
     ),
     list(
       check = "no_discordance_diagnostics_heading",
