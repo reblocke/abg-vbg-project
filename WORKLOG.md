@@ -10,6 +10,74 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Outcomes:
 - Next steps:
 
+## 2026-05-26 15:46 MDT
+- Task: Implement final manuscript comment cleanup in the dated rough draft.
+- Files changed:
+  - `Drafts/2026-5-26 ABG_VBG_RoughDraft.docx`
+  - `WORKLOG.md`
+- Commands run:
+  - Created backup copy at `/tmp/2026-5-26_ABG_VBG_RoughDraft_before_final_comment_cleanup_20260526_1542.docx`
+  - Verified final balance diagnostics directly from `Results/loveplot_mi_logistic_data.csv`, `Results/balance_target_imp_summary.csv`, and `Results/balance_max_smd_by_imp.csv`
+  - OOXML edits to normalize `Supplementary Table 1` capitalization, remove a redundant duplicate Table S1 definitions sentence, and replace the unsupported balance-diagnostics text
+  - `resolve_docx_comments.py "Drafts/2026-5-26 ABG_VBG_RoughDraft.docx" --all`
+  - Removed stale comment-package relationship residue and stale `CommentReference` run styles left after comment deletion
+  - `audit_docx_package.py "Drafts/2026-5-26 ABG_VBG_RoughDraft.docx"`
+  - `unzip -t "Drafts/2026-5-26 ABG_VBG_RoughDraft.docx"`
+  - DOCX text assertions confirming no comments, no comment parts, no stale comment-reference styles, no old `worst 0.103` language, corrected balance values, no `e-Appendix 4`, and preserved S1A/S1B/S1C panels
+  - `render_docx_pages.py "Drafts/2026-5-26 ABG_VBG_RoughDraft.docx" --needle "0.090 for ABG and 0.041 for VBG" --adjacent 1 --outdir "/tmp/abgvbg_final_comment_cleanup_balance2_20260526_1555"`
+  - `render_docx_pages.py "Drafts/2026-5-26 ABG_VBG_RoughDraft.docx" --needle "S1B. Hypercapnia-suspicion phenotype enrichment criteria" --adjacent 2 --outdir "/tmp/abgvbg_final_comment_cleanup_table_s1_20260526_1555"`
+- Outcomes:
+  - All 42 remaining Word comments were removed after resolving or incorporating their substance.
+  - The Methods section now consistently refers to `Supplementary Table 1`, and the redundant final sentence "Complete definitions are provided in Supplementary table 1" was removed.
+  - The primary weighted analyses balance paragraph now reports the verified post-weighting values: largest displayed median-across-imputation absolute SMDs of `0.090` for ABG and `0.041` for VBG, and across-imputation maxima of `0.091` for ABG and `0.042` for VBG. The unsupported `worst 0.103` post-weighting claim was removed.
+  - DOCX package audit, ZIP integrity, text checks, and rendered-page visual checks passed. Visual inspection covered the Methods page, the corrected Results balance paragraph, and Table S1 panels.
+- Next steps:
+  - If Microsoft Word itself reports a repair warning, run a Word-side open check on a temporary copy; current validation used OOXML audit, ZIP integrity, text extraction, and LibreOffice/PDF rendering.
+
+## 2026-05-26 15:37 MDT
+- Task: Resolve the Supplementary Table 1 inclusion-criteria manuscript comment in the dated rough draft.
+- Files changed:
+  - `Drafts/2026-5-26 ABG_VBG_RoughDraft.docx`
+  - `WORKLOG.md`
+- Commands run:
+  - Created backup copy at `/tmp/2026-5-26_ABG_VBG_RoughDraft_before_table_s1_20260526_152528.docx`
+  - DOCX OOXML structure/comment/table audit of `Drafts/2026-5-26 ABG_VBG_RoughDraft.docx`
+  - OOXML edits to replace the Methods `e-Appendix 4` code-list claim, remove the duplicate manual exact-code Table S1 block, and rebuild Table S1 as S1A/S1B/S1C panel tables
+  - `resolve_docx_comments.py "Drafts/2026-5-26 ABG_VBG_RoughDraft.docx" --id 42`
+  - `audit_docx_package.py "Drafts/2026-5-26 ABG_VBG_RoughDraft.docx"`
+  - `unzip -t "Drafts/2026-5-26 ABG_VBG_RoughDraft.docx"`
+  - DOCX text assertions for the Table S1 title, S1A/S1B/S1C panels, required phenotype/procedure entries, absence of the `e-Appendix 4` claim, and removal of the table-selection comment
+  - `render_docx_pages.py "Drafts/2026-5-26 ABG_VBG_RoughDraft.docx" --needle "S1B. Hypercapnia-suspicion phenotype enrichment criteria" --adjacent 2 --outdir "/tmp/abgvbg_table_s1_render_final3_20260526_1545"`
+- Outcomes:
+  - The final Table S1 is now the phenotype/code-definition table rather than a cohort restriction table.
+  - The duplicate manual exact-code table block before the generated Table S1 was removed.
+  - Table S1 is split into readable panels: S1A blood gas measurement/exposure inputs, S1B hypercapnia-suspicion phenotype enrichment criteria, and S1C outcome/procedure definitions.
+  - The Methods sentence now points to Supplementary Table 1 for extract fields/code-system families covering blood gas testing, respiratory failure diagnoses, hypercapnia-associated conditions, severe obesity/OHS/BMI-related criteria, and ventilatory support procedures.
+  - Active comment 42, "Which supplementary table 1 is better for inclusion criteria?", was removed; older citation/reminder comments were retained.
+  - Package audit, ZIP integrity check, text assertions, and rendered-page visual inspection passed. The final rendered PDF for inspection is `/tmp/abgvbg_table_s1_render_final3_20260526_1545/2026-5-26 ABG_VBG_RoughDraft.pdf`.
+- Next steps:
+  - Remaining older citation/reminder and structural comments in the draft still need separate manuscript cleanup before submission.
+
+## 2026-05-26 15:18 MDT
+- Task: Fetch latest GitHub state and audit final manuscript balance-diagnostic SMD numbers.
+- Files changed:
+  - `WORKLOG.md`
+- Commands run:
+  - `git fetch --prune origin`
+  - `git rev-list --left-right --count HEAD...origin/main`
+  - `Rscript --vanilla` checks of `Results/loveplot_mi_logistic_data.csv`, `Results/balance_target_imp_summary.csv`, `Results/balance_max_smd_by_imp.csv`, and `Results/balance_target_by_imp.csv`
+  - `pdftotext "Code Drafts/ABG-VBG-analysis-2026-5-6.pdf" -` balance-number text search
+  - DOCX OOXML text/comment extraction from `Drafts/2026-5-26 ABG_VBG_RoughDraft.docx`
+- Outcomes:
+  - Local `main` was already current with `origin/main` at `edf6530`; no fast-forward merge was needed.
+  - The local draft `Drafts/2026-5-26 ABG_VBG_RoughDraft.docx` remained untracked and was inspected read-only.
+  - Final full-run balance artifacts use run id `20260506_131602`.
+  - Median-across-imputation love-plot maximum post-weighting |SMD| values were `0.089803` for ABG and `0.040712` for VBG.
+  - Across individual imputations, maximum post-weighting |SMD| values were `0.090926` for ABG and `0.042319` for VBG; no post-weighting maximum exceeded 0.1.
+  - The draft body sentence reporting ABG worst `0.103` was not supported by the current post-weighting SMD artifacts; `0.103`-range hits in current balance CSVs were raw/pre-weighting SMDs, not post-weighting maxima.
+- Next steps:
+  - Revise the Results sentence to avoid the unsupported `worst 0.103` claim or replace it with the current across-imputation maxima.
+
 ## 2026-05-07 08:29 MDT
 - Task: Address source-only review findings for Table S1 standalone layout and pre-run archive hygiene.
 - Files changed:
