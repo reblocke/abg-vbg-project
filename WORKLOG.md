@@ -10,6 +10,30 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Outcomes:
 - Next steps:
 
+## 2026-06-23 00:15 MDT
+- Task: Commit approved cleanup after pulling `origin/main`.
+- Files changed:
+  - Removed remaining tracked generated artifacts under `Results/`.
+  - Added `Drafts/06-15-26 ABG_VBG_RoughDraft.docx`.
+  - Added `Drafts/06-22-26 ABG_VBG_RoughDraft_BL.docx`.
+  - Updated `WORKLOG.md`.
+- Commands run:
+  - `git status --short --branch`
+  - `git add -u -- Results`
+  - `git add -- "Drafts/06-15-26 ABG_VBG_RoughDraft.docx" "Drafts/06-22-26 ABG_VBG_RoughDraft_BL.docx" WORKLOG.md`
+  - `git diff --cached --stat`
+  - `git diff --cached --name-status`
+  - `git commit -m "Remove generated Results artifacts and add June drafts"`
+  - `git push origin main`
+  - `git status --short --branch`
+  - `git rev-list --left-right --count HEAD...origin/main`
+- Outcomes:
+  - Scope is limited to the approved `Results/` cleanup, two June draft DOCX files, and this handoff entry.
+  - `.DS_Store` is intentionally excluded from the commit.
+  - No R or Quarto render was run because this is artifact cleanup and draft-document addition, not analysis-code or report-generation logic.
+- Next steps:
+  - Treat `Results/` artifacts as regenerated outputs unless a future task explicitly restores specific tracked deliverables.
+
 ## 2026-05-26 15:46 MDT
 - Task: Implement final manuscript comment cleanup in the dated rough draft.
 - Files changed:
