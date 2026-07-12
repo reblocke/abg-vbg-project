@@ -1,22 +1,47 @@
-.Rproj.user
+# R and IDE state
+.Rproj.user/
 .Rhistory
+.Rapp.history
 .RData
-.Ruserdata
-full_trinetx.rdata
-data/full_db.dta
 .RDataTmp
-.DS_Store
-/Code Drafts/figs
-/Code Drafts/output
-Results/render_logs/output_backup_*/
-/Results/archive/pre_run_*/
+.Ruserdata
+.Rlib/
+renv/library/
+renv/staging/
+*.rds
+*.RDS
+*.rdata
 *.RData
 *.rdx
 *.rdb
-*.rds
-Drafts/~$-08-25 ABG_VBG_Rough Draft BL.docx
-Drafts/~$2026-05-03 ABG vs VBG Poster.pptx
-Drafts/2026-4-17 AM ATS ABG vs VBG Poster \[Autosaved\].pptx
-Drafts/~$2026-05-04 BL ABG vs VBG Poster.pptx
-Results/archive_2026-05-29.zip
-Drafts/abg_vbg_manuscript_update_package_20260707.zip
+
+# Restricted local inputs
+/data/
+
+# Generated analysis and audit outputs
+/Results/
+/tmp/
+/Code Drafts/Results/
+/Code Drafts/figs/
+/Code Drafts/output/
+/Code Drafts/Prior versions/
+/Code Drafts/logistic/
+/Code Drafts/.quarto/
+/Code Drafts/*.quarto_ipynb
+/Code Drafts/*.pdf
+/Code Drafts/*.tex
+/Code Drafts/*.zip
+/Code Drafts/*.zip.sha256
+
+# Superseded working notebooks retained locally only
+/Code Drafts/20*.qmd
+/Code Drafts/ABG-VBG analysis *.qmd
+
+# Manuscript, cover-letter, abstract, and poster working files
+/Drafts/
+~$*
+
+# Machine-local and accidental paths
+/http:/
+.DS_Store
+**/.DS_Store
