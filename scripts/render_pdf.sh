@@ -6,7 +6,7 @@ set -euo pipefail
 # 2) render the main Quarto analysis PDF
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-QMD_DEFAULT="${ROOT_DIR}/Code Drafts/ABG-VBG analysis 2026-5-6.qmd"
+QMD_DEFAULT="${ROOT_DIR}/Code Drafts/ABG-VBG-analysis.qmd"
 if [[ $# -gt 0 && "${1}" != -* ]]; then
   QMD_PATH="$1"
   shift
@@ -425,8 +425,14 @@ create_clean_output_bundle() {
     printf -- '- Main figures: Figure 1 and Figure 2 PNG/PDF canonical and alias outputs\n'
     printf -- '- Main tables: Table 1 and Table 2 CSV/PDF outputs\n\n'
     printf '## Canonical Supplement Outputs\n\n'
-    printf -- '- Supplement figures: Figure S1-S8 PNG/PDF canonical and alias outputs\n'
-    printf -- '- Supplement tables: Table S1-S5 CSV/PDF outputs\n\n'
+    printf -- '- Supplement figures: Figure S1-S14 PNG/PDF canonical and alias outputs\n'
+    printf -- '- Supplement tables: Table S1-S15 CSV/PDF outputs\n'
+    printf -- '- ROR outputs: Table S6-S8 and Figure S9-S10\n'
+    printf -- '- Standardized risk-difference outputs: Table S9-S11 and Figure S11-S12\n'
+    printf -- '- Likelihood-ratio outputs: Table S12-S15 and Figure S13-S14\n\n'
+    printf '## Reverse-Timing / Severity Sensitivity Outputs\n\n'
+    printf -- '- Integrated sensitivity summaries and validation status files are included.\n'
+    printf -- '- Ticket-specific outputs under `Results/sensitivity_reverse_timing/`, `Results/sensitivity_timing_stratified_rates/`, `Results/sensitivity_no_lactate/`, `Results/sensitivity_pregas_covariates/`, and `Results/sensitivity_acute_workflow/` are included.\n\n'
     printf '## Poster Outputs\n\n'
     printf -- '- `Results/figs/cohort_flow_poster.{png,pdf,svg}` when available\n'
     printf -- '- `Results/figs/key-results-spline-main-mi-ipw-abg-vbg_poster.{png,pdf,svg}` when available\n\n'
@@ -435,6 +441,7 @@ create_clean_output_bundle() {
     printf '## Source Traceability\n\n'
     printf -- '- Active QMD source is included at `%s`.\n' "${qmd_rel}"
     printf -- '- A compact source snapshot is included at `Results/CODE_SNAPSHOT.md`.\n'
+    printf -- '- Repo-local reverse-timing/severity ticket snapshots are included under `Code Drafts/ticket_snapshots/reverse_timing_severity/`.\n'
   } > "${readme_path}"
 
   {
@@ -453,7 +460,7 @@ create_clean_output_bundle() {
     [[ -f "${one_abs}" ]] || return 0
     rel_path="$(rel_from_root "${one_abs}")"
     case "${rel_path}" in
-      Results/archive/*|Results/mi_batch_checkpoints/*|Results/population_standardization_run_*|*.DS_Store)
+      Results/archive/*|Results/exports/*|Results/mi_batch_checkpoints/*|Results/mi_fit_cache/*|Results/population_standardization_run_*|Results/codebookr.docx|*.rds|*.RDS|*.RData|*.rdata|*.RDataTmp|*.rdatatmp|*.DS_Store)
         return 0
         ;;
     esac
@@ -477,6 +484,14 @@ create_clean_output_bundle() {
     return 0
   }
 
+  add_dir_tree() {
+    local dir="$1"
+    [[ -d "${dir}" ]] || return 0
+    while IFS= read -r -d '' abs_path; do
+      add_abs_path "${abs_path}"
+    done < <(find "${dir}" -type f -print0)
+  }
+
   add_rel_path "Code Drafts/$(basename "${OUTPUT_PDF}")"
   add_rel_path "Code Drafts/$(basename "${OUTPUT_TEX}")"
   add_abs_path "${QMD_PATH}"
@@ -487,6 +502,12 @@ create_clean_output_bundle() {
   add_glob "${RESULTS_DIR}/figs/cohort_flow_poster.*"
   add_glob "${RESULTS_DIR}/cohort_flow_poster.*"
   add_glob "${RESULTS_DIR}/figs/key-results-spline-main-mi-ipw-abg-vbg_poster.*"
+  add_dir_tree "${RESULTS_DIR}/sensitivity_reverse_timing"
+  add_dir_tree "${RESULTS_DIR}/sensitivity_timing_stratified_rates"
+  add_dir_tree "${RESULTS_DIR}/sensitivity_no_lactate"
+  add_dir_tree "${RESULTS_DIR}/sensitivity_pregas_covariates"
+  add_dir_tree "${RESULTS_DIR}/sensitivity_acute_workflow"
+  add_dir_tree "${ROOT_DIR}/Code Drafts/ticket_snapshots/reverse_timing_severity"
 
   for rel_path in \
     Results/cohort_flow.png \
@@ -529,6 +550,18 @@ create_clean_output_bundle() {
     Results/figs/shap-top10-ipw-gbm-abg-vbg.pdf \
     Results/figs/figure_s8_shap_style_contributions_gbm.png \
     Results/figs/figure_s8_shap_style_contributions_gbm.pdf \
+    Results/figs/figure_s9_spline_ror_dual_axis.png \
+    Results/figs/figure_s9_spline_ror_dual_axis.pdf \
+    Results/figs/figure_s10_offset_scan_ror_trend.png \
+    Results/figs/figure_s10_offset_scan_ror_trend.pdf \
+    Results/figs/figure_s11_spline_risk_difference_dual_axis.png \
+    Results/figs/figure_s11_spline_risk_difference_dual_axis.pdf \
+    Results/figs/figure_s12_offset_scan_risk_difference_trend.png \
+    Results/figs/figure_s12_offset_scan_risk_difference_trend.pdf \
+    Results/figs/figure_s13_spline_likelihood_ratios.png \
+    Results/figs/figure_s13_spline_likelihood_ratios.pdf \
+    Results/figs/figure_s14_offset_scan_likelihood_ratio.png \
+    Results/figs/figure_s14_offset_scan_likelihood_ratio.pdf \
     Results/table1_combined.csv \
     Results/table1_combined.pdf \
     Results/table_1_baseline_characteristics_analytic_cohort.csv \
@@ -545,6 +578,26 @@ create_clean_output_bundle() {
     Results/table_s4_missingness_primary_analysis.pdf \
     Results/table_s5_mi_diagnostic_summary.csv \
     Results/table_s5_mi_diagnostic_summary.pdf \
+    Results/table_s6_stacked_ror_cat3.csv \
+    Results/table_s6_stacked_ror_cat3.pdf \
+    Results/table_s7_stacked_ror_spline_readouts_5mm.csv \
+    Results/table_s7_stacked_ror_spline_readouts_5mm.pdf \
+    Results/table_s8_offset_scan_summary.csv \
+    Results/table_s8_offset_scan_summary.pdf \
+    Results/table_s9_category_risk_differences.csv \
+    Results/table_s9_category_risk_differences.pdf \
+    Results/table_s10_spline_risk_difference_readouts_5mm.csv \
+    Results/table_s10_spline_risk_difference_readouts_5mm.pdf \
+    Results/table_s11_offset_scan_risk_difference.csv \
+    Results/table_s11_offset_scan_risk_difference.pdf \
+    Results/table_s12_baseline_outcome_rates_and_odds.csv \
+    Results/table_s12_baseline_outcome_rates_and_odds.pdf \
+    Results/table_s13_categorical_likelihood_ratios.csv \
+    Results/table_s13_categorical_likelihood_ratios.pdf \
+    Results/table_s14_spline_likelihood_ratios_5mm.csv \
+    Results/table_s14_spline_likelihood_ratios_5mm.pdf \
+    Results/table_s15_offset_scan_likelihood_ratio.csv \
+    Results/table_s15_offset_scan_likelihood_ratio.pdf \
     Results/poster_visual_qc.md \
     Results/poster_caption_text.md \
     Results/figure2_probability_standardization_audit.md \
@@ -552,6 +605,30 @@ create_clean_output_bundle() {
     Results/poster_figure_export_status.csv \
     Results/table_visual_qc.csv \
     Results/table_visual_qc.md \
+    Results/stacked_ror_validation_status.csv \
+    Results/stacked_ror_fit_diagnostics.csv \
+    Results/stacked_ror_vs_table2_validation.csv \
+    Results/risk_difference_validation_status.csv \
+    Results/baseline_relative_predicted_odds_validation_status.csv \
+    Results/risk_difference_standardization_audit.csv \
+    Results/baseline_relative_predicted_odds_audit.csv \
+    Results/baseline_relative_predicted_odds_audit.md \
+    Results/outcome_rate_reference_risk_diagnostic_inventory.md \
+    Results/weighted_outcome_rate_diagnostic.csv \
+    Results/weighted_outcome_rate_diagnostic.md \
+    Results/model_implied_reference_risk_diagnostic.csv \
+    Results/model_implied_reference_risk_diagnostic.md \
+    Results/weighted_rates_vs_reference_risks_interpretation.md \
+    Results/outcome_rate_reference_risk_audit.csv \
+    Results/reverse_timing_severity_ticket_references.md \
+    Results/reverse_timing_severity_sensitivity_summary.csv \
+    Results/reverse_timing_severity_sensitivity_summary.md \
+    Results/reverse_timing_severity_sensitivity_validation_status.csv \
+    Results/figs/weighted_outcome_rate_diagnostic.png \
+    Results/figs/weighted_outcome_rate_diagnostic.pdf \
+    Results/figs/model_implied_reference_risk_diagnostic.png \
+    Results/figs/model_implied_reference_risk_diagnostic.pdf \
+    Results/pdf_parse_table_figure_check.csv \
     Results/publication_quality_asset_audit.csv \
     Results/publication_quality_asset_audit_summary.csv \
     Results/publication_quality_pdf_text_scan.csv \
@@ -697,6 +774,13 @@ if [[ ${RENDER_STATUS} -ne 0 ]]; then
   exit "${RENDER_STATUS}"
 fi
 
+echo "[render:postflight] check_pdf_assets"
+Rscript --vanilla "${ROOT_DIR}/scripts/check_pdf_assets.R" \
+  --pdf-path "${OUTPUT_PDF}" \
+  --results-dir "${RESULTS_DIR}" \
+  --min-pages 40 \
+  --min-images 0
+
 echo "[render:postflight] validate_outputs"
 POSTFLIGHT_STATUS=0
 set +e
@@ -732,39 +816,88 @@ write_publication_quality_pdf_scan <- function(txt, scanner, path) {
     )
   }
 
-  required_labels <- c(
-    "Figure 1. Cohort assembly",
-    "Figure 2. Primary MI-logistic IPSW-weighted spline associations",
-    "Table 1. Baseline characteristics",
-    "Table 2. MI-pooled, MI-logistic IPSW-weighted 3-level categorical results",
-    "Table S1. Inclusion criteria",
-    "Figure S1. Covariate balance after MI logistic inverse-probability weighting",
-    "Figure S2. Propensity-score overlap for MI logistic",
-    "Figure S3. SHAP-style contribution summaries for MI logistic",
-    "Figure S4. MI-logistic IPSW-weighted categorical associations",
-    "Figure S5. Unweighted covariate-adjusted spline associations",
-    "Table S2. Crude associations",
-    "Table S3. GBM IPSW-weighted associations",
-    "Figure S6. Covariate balance after gradient-boosted propensity weighting",
-    "Figure S7. Propensity-score overlap for gradient-boosted",
-    "Figure S8. SHAP-style contribution summaries for gradient-boosted",
-    "Table S4. Missingness of baseline covariates",
-    "Table S5. Multiple-imputation diagnostic summary"
-  )
+  read_active_manifest_labels <- function() {
+    manifest_path <- file.path(results_dir, "manuscript_asset_manifest.csv")
+    if (!file.exists(manifest_path)) return(character())
+    manifest <- tryCatch(
+      utils::read.csv(manifest_path, stringsAsFactors = FALSE, na.strings = character()),
+      error = function(e) data.frame()
+    )
+    required_cols <- c("manuscript_label", "title", "status", "pdf_display")
+    if (!all(required_cols %in% names(manifest))) return(character())
+    pdf_display <- tolower(as.character(manifest$pdf_display)) %in% c("true", "1", "yes")
+    active <- manifest[pdf_display & manifest$status != "draft_only", , drop = FALSE]
+    if (!nrow(active)) return(character())
+    paste0(active$manuscript_label, ". ", active$title)
+  }
 
-  rows <- lapply(required_labels, function(label) {
-    found <- grepl(label, normalized_text, fixed = TRUE)
-    scan_row(
-      paste0("required_label_", gsub("[^A-Za-z0-9]+", "_", tolower(label))),
+  required_labels <- read_active_manifest_labels()
+  if (!length(required_labels)) {
+    required_labels <- c(
+      "Figure 1. Cohort assembly",
+      "Figure 2. Primary MI-logistic IPSW-weighted spline associations",
+      "Table 1. Baseline characteristics",
+      "Table 2. MI-pooled, MI-logistic IPSW-weighted 3-level categorical results",
+      "Table S1. Inclusion criteria",
+      "Figure S1. Covariate balance after MI logistic inverse-probability weighting",
+      "Figure S2. Propensity-score overlap for MI logistic",
+      "Figure S3. SHAP-style contribution summaries for MI logistic",
+      "Figure S4. MI-logistic IPSW-weighted categorical associations",
+      "Figure S5. Unweighted covariate-adjusted spline associations",
+      "Table S2. Crude associations",
+      "Table S3. GBM IPSW-weighted associations",
+      "Figure S6. Covariate balance after gradient-boosted propensity weighting",
+      "Figure S7. Propensity-score overlap for gradient-boosted",
+      "Figure S8. SHAP-style contribution summaries for gradient-boosted",
+      "Table S4. Missingness of baseline covariates",
+      "Table S5. Multiple-imputation diagnostic summary"
+    )
+  }
+
+	  rows <- lapply(required_labels, function(label) {
+	    found <- grepl(label, normalized_text, fixed = TRUE)
+	    scan_row(
+	      paste0("required_label_", gsub("[^A-Za-z0-9]+", "_", tolower(label))),
       if (found) "passed" else "failed",
       "Fatal",
       observed = if (found) "found" else "missing",
-      detail = label
-    )
-  })
+	      detail = label
+	    )
+	  })
 
-  mojibake_pattern <- paste0(
-    "(",
+	  lr_labels_active <- any(grepl("^(Table S1[2-5]|Figure S1[3-4])\\.", required_labels))
+	  if (lr_labels_active) {
+	    lr_required_checks <- list(
+	      list(
+	        check = "likelihood_ratio_definition_present",
+	        pattern = "Likelihood ratios are defined as pCO2-conditioned predicted outcome odds divided by the common weighted target-population baseline odds",
+	        severity = "Fatal"
+	      ),
+	      list(
+	        check = "likelihood_ratio_formula_present",
+	        pattern = "LR =",
+	        severity = "Major"
+	      ),
+	      list(
+	        check = "vbg_abg_lr_ratio_present",
+	        pattern = "VBG/ABG LR ratio",
+	        severity = "Major"
+	      )
+	    )
+	    for (item in lr_required_checks) {
+	      found <- grepl(item$pattern, normalized_text, fixed = TRUE)
+	      rows[[length(rows) + 1L]] <- scan_row(
+	        item$check,
+	        if (found) "passed" else "failed",
+	        item$severity,
+	        observed = if (found) "found" else "missing",
+	        detail = item$pattern
+	      )
+	    }
+	  }
+
+	  mojibake_pattern <- paste0(
+	    "(",
     paste(vapply(c(0x00e2, 0x00c3, 0x00c2), intToUtf8, character(1L)), collapse = "|"),
     ")"
   )
@@ -776,10 +909,14 @@ write_publication_quality_pdf_scan <- function(txt, scanner, path) {
     list(check = "no_global_shap_language", pattern = "global SHAP", severity = "Major", fixed = TRUE, ignore_case = TRUE),
     list(check = "no_negative_control_language", pattern = "negative control outcome", severity = "Major", fixed = TRUE, ignore_case = TRUE),
     list(check = "no_internal_abg_residual_note", pattern = "ABG residual imbalance", severity = "Major", fixed = TRUE, ignore_case = TRUE),
-    list(check = "no_internal_separation_todo_note", pattern = "separation/nonconvergence", severity = "Major", fixed = TRUE, ignore_case = TRUE),
-    list(check = "no_internal_discontinuity_todo_note", pattern = "possible discontinuity", severity = "Major", fixed = TRUE, ignore_case = TRUE),
-    list(check = "no_active_figure_3_caption", pattern = "Figure 3. ", severity = "Fatal", fixed = TRUE, ignore_case = TRUE),
-    list(check = "no_replacement_character", pattern = "\uFFFD", severity = "Major", fixed = TRUE, ignore_case = FALSE),
+	    list(check = "no_internal_separation_todo_note", pattern = "separation/nonconvergence", severity = "Major", fixed = TRUE, ignore_case = TRUE),
+	    list(check = "no_internal_discontinuity_todo_note", pattern = "possible discontinuity", severity = "Major", fixed = TRUE, ignore_case = TRUE),
+	    list(check = "no_active_figure_3_caption", pattern = "Figure 3. ", severity = "Fatal", fixed = TRUE, ignore_case = TRUE),
+	    list(check = "no_prognostic_likelihood_ratio_wording", pattern = "prognostic likelihood ratio", severity = "Major", fixed = TRUE, ignore_case = TRUE),
+	    list(check = "no_prognostic_lr_wording", pattern = "prognostic lr", severity = "Major", fixed = TRUE, ignore_case = TRUE),
+	    list(check = "no_model_based_likelihood_ratio_wording", pattern = "model-based likelihood ratio", severity = "Major", fixed = TRUE, ignore_case = TRUE),
+	    list(check = "no_not_diagnostic_likelihood_ratio_wording", pattern = "not diagnostic likelihood ratio", severity = "Major", fixed = TRUE, ignore_case = TRUE),
+	    list(check = "no_replacement_character", pattern = "\uFFFD", severity = "Major", fixed = TRUE, ignore_case = FALSE),
     list(check = "no_utf8_mojibake", pattern = mojibake_pattern, severity = "Major", fixed = FALSE, ignore_case = FALSE)
   )
 
@@ -935,6 +1072,7 @@ required_validation_artifacts <- c(
   "artifact_check_status.csv",
   "artifact_check_missing.csv",
   "canonical_asset_registry.csv",
+  "internal_debug_asset_registry.csv",
   "manuscript_sync_report.md",
   "manuscript_asset_sync_audit.csv",
   "manuscript_asset_sync_audit.md",
@@ -945,10 +1083,19 @@ required_validation_artifacts <- c(
   "publication_quality_asset_audit.csv",
   "publication_quality_asset_audit_summary.csv",
   "publication_quality_pdf_text_scan.csv",
+  "pdf_parse_table_figure_check.csv",
   "poster_visual_qc.md",
   "poster_caption_text.md",
   "figure2_probability_standardization_audit.md",
   "gbm_probability_standardization_audit.md",
+  "outcome_rate_reference_risk_diagnostic_inventory.md",
+  "weighted_outcome_rate_diagnostic.csv",
+  "weighted_outcome_rate_diagnostic.md",
+  "model_implied_reference_risk_diagnostic.csv",
+  "model_implied_reference_risk_diagnostic.md",
+  "weighted_rates_vs_reference_risks_interpretation.md",
+  "outcome_rate_reference_risk_audit.csv",
+  "README_CURRENT_RENDER.md",
   "table_visual_qc.csv",
   "table_visual_qc.md"
 )
@@ -969,11 +1116,15 @@ required_validation_cols <- list(
   artifact_check_status.csv = c("manuscript_label", "artifact_role", "check_status", "severity"),
   artifact_check_missing.csv = c("manuscript_label", "artifact_role", "check_status", "severity"),
   canonical_asset_registry.csv = c("numbering_slot", "manuscript_label", "status", "source_type"),
+  internal_debug_asset_registry.csv = c("numbering_slot", "artifact_label", "status", "source_type", "pdf_display"),
   manuscript_asset_sync_audit.csv = c("check", "status", "severity", "detail", "run_id", "run_ts"),
   glyph_audit.csv = c("manuscript_label", "field_name", "glyph_status", "severity"),
   duplicate_asset_audit.csv = c("audit_scope", "audit_key", "status", "severity"),
   diagnostics_audit_summary.csv = c("component", "metric", "value", "status", "severity"),
   diagnostics_audit_issues.csv = c("severity", "component", "evidence_file", "evidence_snippet"),
+  weighted_outcome_rate_diagnostic.csv = c("outcome", "modality", "weighted_rate_pct", "weighted_rate_difference_vbg_minus_abg_pct", "diagnostic_status"),
+  model_implied_reference_risk_diagnostic.csv = c("outcome", "abg_ref_pco2", "vbg_ref_pco2", "risk_difference_vbg_minus_abg_pct", "diagnostic_status"),
+  outcome_rate_reference_risk_audit.csv = c("component", "status", "severity", "detail", "run_id", "run_ts"),
   publication_quality_asset_audit.csv = c(
     "asset_label", "asset_title", "asset_type", "expected_location",
     "artifact_path", "present", "label_correct", "purpose_correct",
@@ -984,6 +1135,7 @@ required_validation_cols <- list(
   ),
   publication_quality_asset_audit_summary.csv = c("severity", "n_assets", "status", "run_id", "run_ts"),
   publication_quality_pdf_text_scan.csv = c("check", "status", "severity", "observed", "scanner", "detail"),
+  pdf_parse_table_figure_check.csv = c("label", "expected", "detected", "status", "detail", "run_id", "run_ts"),
   table_visual_qc.csv = c(
     "asset_label", "artifact_path", "check_type", "page", "status", "severity",
     "min_margin_px", "left_margin_px", "right_margin_px",
@@ -1015,11 +1167,5 @@ set -e
 if [[ ${POSTFLIGHT_STATUS} -ne 0 ]]; then
   exit "${POSTFLIGHT_STATUS}"
 fi
-echo "[render:postflight] check_pdf_assets"
-Rscript --vanilla "${ROOT_DIR}/scripts/check_pdf_assets.R" \
-  --pdf-path "${OUTPUT_PDF}" \
-  --results-dir "${RESULTS_DIR}" \
-  --min-pages 40 \
-  --min-images 0
 POSTFLIGHT_PASSED=1
 echo "[render:quarto] complete"

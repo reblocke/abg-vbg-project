@@ -1,33 +1,29 @@
-# Data Access & Provenance
+# Data access and provenance
 
-This repository expects restricted local patient-level inputs in `data/`. The current notebooks are built around a direct local file layout rather than a public sample-data workflow.
+This project analyzes restricted TriNetX-derived patient-level data under applicable data-use and institutional controls. Patient-level inputs and the local codebook are not public repository artifacts.
 
-## Current local inputs
+## Local inputs
 
-- `data/full_db.dta`: the primary Stata-format input expected by the maintained analysis notebooks
-- `data/full_trinetx.rdata`: a local legacy RData snapshot retained for older workflows and comparison
-- `data/codebookr.docx`: local codebook / data dictionary artifact
+The canonical notebook `Code Drafts/ABG-VBG-analysis.qmd` expects:
 
-## Current notebook expectations
+- `data/full_db.dta`: primary Stata-format analysis input;
+- `data/full_trinetx.rdata`: legacy local comparison snapshot, when needed; and
+- `data/codebookr.docx`: governed local data dictionary/codebook.
 
-- The maintained Quarto notebooks read directly from `data/`, not from `data/raw/` and `data/processed/`.
-- The primary notebook is `Code Drafts/ABG-VBG analysis 2026-2-28.qmd`.
-- If the local data layout changes, update `README.md`, this file, and any render helpers in the same change.
+The entire `data/` directory is ignored by Git. Do not commit raw extracts, row-level derivatives, codebooks, credentials, or PHI/PII.
 
-## Restrictions / sensitive data
+## Required private provenance
 
-- These files are restricted and should be treated as governed patient-level data.
-- Do **not** commit raw patient-level extracts, PHI/PII, credentials, or derivative files that would expose restricted data.
-- Access should remain consistent with the governing TriNetX / local institutional data-use and review constraints.
+The data custodian or analyst should retain, in approved private storage:
 
-## Provenance notes to capture outside the repo when needed
+- extract or refresh date;
+- TriNetX query/cohort-definition source;
+- inclusion and exclusion criteria;
+- any preprocessing performed before the canonical notebook begins; and
+- the applicable data-use, disclosure, and small-cell rules.
 
-- extract date or refresh date
-- query or cohort definition source
-- inclusion / exclusion criteria
-- any preprocessing performed before the notebook begins
+## Public reproducibility boundary
 
-## Public reproducibility note
+The public repository provides the complete statistical implementation, locked R environment, and selected aggregate review outputs. It does not provide a synthetic dataset and cannot reproduce the full analysis without separately authorized access to the restricted inputs.
 
-- This repository does not currently include a synthetic or de-identified example dataset.
-- External reviewers can inspect code, manuscript drafts, and derived non-patient-level outputs in `Results/`, but they cannot reproduce the full pipeline without approved local access to the restricted input files.
+Release artifacts must pass direct-identifier, row-level-data, absolute-path, and disclosure review before publication. Screening flags are review prompts and do not replace institutional or data-use requirements.

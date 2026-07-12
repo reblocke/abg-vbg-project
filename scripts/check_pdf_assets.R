@@ -61,6 +61,61 @@ scan_row <- function(check, status, observed = "", threshold = "", scanner = "",
   )
 }
 
+read_active_manifest <- function(results_dir) {
+  manifest_path <- file.path(results_dir, "manuscript_asset_manifest.csv")
+  if (!file.exists(manifest_path)) return(data.frame())
+  manifest <- tryCatch(
+    utils::read.csv(manifest_path, stringsAsFactors = FALSE, na.strings = character()),
+    error = function(e) data.frame()
+  )
+  required_cols <- c("manuscript_label", "title", "status", "pdf_display")
+  if (!all(required_cols %in% names(manifest))) return(data.frame())
+  pdf_display <- tolower(as.character(manifest$pdf_display)) %in% c("true", "1", "yes")
+  active <- manifest[pdf_display & manifest$status != "draft_only", , drop = FALSE]
+  active[order(seq_len(nrow(active))), , drop = FALSE]
+}
+
+write_pdf_label_scan <- function(active_manifest, pdf_text, results_dir) {
+  if (!nrow(active_manifest)) return(invisible(NULL))
+  run_id <- if ("run_id" %in% names(active_manifest)) {
+    unique(active_manifest$run_id[nzchar(active_manifest$run_id)])[1]
+  } else {
+    NA_character_
+  }
+  run_ts <- if ("run_ts" %in% names(active_manifest)) {
+    unique(active_manifest$run_ts[nzchar(active_manifest$run_ts)])[1]
+  } else {
+    NA_character_
+  }
+  if (is.na(run_id) || !nzchar(run_id)) run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
+  if (is.na(run_ts) || !nzchar(run_ts)) run_ts <- as.character(Sys.time())
+  labels <- active_manifest$manuscript_label
+  detected <- vapply(
+    paste0(labels, "."),
+    grepl,
+    logical(1L),
+    x = pdf_text,
+    fixed = TRUE
+  )
+  label_scan <- data.frame(
+    label = labels,
+    expected = TRUE,
+    detected = detected,
+    status = ifelse(detected, "PASS", "FAIL"),
+    detail = ifelse(detected, "Active label detected in final PDF text.", "Active label missing from final PDF text."),
+    run_id = run_id,
+    run_ts = run_ts,
+    stringsAsFactors = FALSE
+  )
+  utils::write.csv(
+    label_scan,
+    file.path(results_dir, "pdf_parse_table_figure_check.csv"),
+    row.names = FALSE,
+    na = ""
+  )
+  invisible(label_scan)
+}
+
 args <- parse_args(commandArgs(trailingOnly = TRUE))
 if (!nzchar(args$pdf_path)) {
   stop("--pdf-path is required.", call. = FALSE)
@@ -141,27 +196,51 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
   pdf_text <- gsub("-\\s+", "-", pdf_text, perl = TRUE)
   pdf_text <- gsub("\\s+", " ", pdf_text, perl = TRUE)
 
-  required_snippets <- c(
-    "Figure 1. Cohort assembly",
-    "Figure 2. Primary MI-logistic IPSW-weighted spline associations",
-    "Figure S1. Covariate balance after MI logistic inverse-probability weighting",
-    "Figure S2. Propensity-score overlap for MI logistic",
-    "Figure S3. SHAP-style contribution summaries for MI logistic",
-    "Figure S4. MI-logistic IPSW-weighted categorical associations",
-    "Figure S5. Unweighted covariate-adjusted spline associations",
-    "Figure S6. Covariate balance after gradient-boosted propensity weighting",
-    "Figure S7. Propensity-score overlap for gradient-boosted",
-    "Figure S8. SHAP-style contribution summaries for gradient-boosted",
-    "Table 1. Baseline characteristics",
-    "Table 2. MI-pooled, MI-logistic IPSW-weighted 3-level categorical results",
-    "Table S1. Inclusion criteria",
-    "Table S2. Crude associations",
-    "Table S3. GBM IPSW-weighted associations",
-    "Table S4. Missingness of baseline covariates",
-    "Table S5. Multiple-imputation diagnostic summary",
-    "marginally standardized to the common eligible source-population covariate distribution"
-  )
-  found <- vapply(required_snippets, grepl, logical(1L), x = pdf_text, fixed = TRUE)
+  active_manifest <- read_active_manifest(results_dir)
+  write_pdf_label_scan(active_manifest, pdf_text, results_dir)
+  required_snippets <- if (nrow(active_manifest)) {
+    paste0(active_manifest$manuscript_label, ". ", active_manifest$title)
+  } else {
+    character()
+  }
+  if (!length(required_snippets)) {
+    required_snippets <- c(
+      "Figure 1. Cohort assembly",
+      "Figure 2. Primary MI-logistic IPSW-weighted spline associations",
+      "Figure S1. Covariate balance after MI logistic inverse-probability weighting",
+      "Figure S2. Propensity-score overlap for MI logistic",
+      "Figure S3. SHAP-style contribution summaries for MI logistic",
+      "Figure S4. MI-logistic IPSW-weighted categorical associations",
+      "Figure S5. Unweighted covariate-adjusted spline associations",
+      "Figure S6. Covariate balance after gradient-boosted propensity weighting",
+      "Figure S7. Propensity-score overlap for gradient-boosted",
+      "Figure S8. SHAP-style contribution summaries for gradient-boosted",
+      "Table 1. Baseline characteristics",
+      "Table 2. MI-pooled, MI-logistic IPSW-weighted 3-level categorical results",
+      "Table S1. Inclusion criteria",
+      "Table S2. Crude associations",
+      "Table S3. GBM IPSW-weighted associations",
+      "Table S4. Missingness of baseline covariates",
+      "Table S5. Multiple-imputation diagnostic summary"
+    )
+  }
+	  required_snippets <- c(
+	    required_snippets,
+	    "marginally standardized to the common eligible source-population covariate distribution",
+	    "relative association strength",
+	    "standardized risk differences"
+	  )
+	  lr_labels_active <- nrow(active_manifest) &&
+	    any(active_manifest$manuscript_label %in% c("Table S12", "Table S13", "Table S14", "Table S15", "Figure S13", "Figure S14"))
+	  if (isTRUE(lr_labels_active)) {
+	    required_snippets <- c(
+	      required_snippets,
+	      "Likelihood ratios are defined as pCO2-conditioned predicted outcome odds divided by the common weighted target-population baseline odds",
+	      "LR =",
+	      "VBG/ABG LR ratio"
+	    )
+	  }
+	  found <- vapply(required_snippets, grepl, logical(1L), x = pdf_text, fixed = TRUE)
   for (idx in seq_along(required_snippets)) {
     rows[[length(rows) + 1L]] <- scan_row(
       paste0("required_text_", idx),
@@ -299,11 +378,31 @@ if (!is.null(status_code) && !identical(status_code, 0L)) {
       snippet = "separation/nonconvergence",
       detail = "Internal future-work notes should be side-effect artifacts, not manuscript-facing PDF text."
     ),
-    list(
-      check = "no_internal_discontinuity_todo_note",
-      snippet = "possible discontinuity",
-      detail = "Internal future-work notes should be side-effect artifacts, not manuscript-facing PDF text."
-    ),
+	    list(
+	      check = "no_internal_discontinuity_todo_note",
+	      snippet = "possible discontinuity",
+	      detail = "Internal future-work notes should be side-effect artifacts, not manuscript-facing PDF text."
+	    ),
+	    list(
+	      check = "no_prognostic_likelihood_ratio_wording",
+	      snippet = "prognostic likelihood ratio",
+	      detail = "Manuscript-facing PDF should use plain likelihood-ratio wording."
+	    ),
+	    list(
+	      check = "no_prognostic_lr_wording",
+	      snippet = "prognostic lr",
+	      detail = "Manuscript-facing PDF should use plain LR wording."
+	    ),
+	    list(
+	      check = "no_model_based_likelihood_ratio_wording",
+	      snippet = "model-based likelihood ratio",
+	      detail = "Manuscript-facing PDF should use plain likelihood-ratio wording."
+	    ),
+	    list(
+	      check = "no_not_diagnostic_likelihood_ratio_wording",
+	      snippet = "not diagnostic likelihood ratio",
+	      detail = "Manuscript-facing PDF should use plain likelihood-ratio wording."
+	    ),
     list(
       check = "no_discordance_diagnostics_heading",
       snippet = "Analysis of the discordance between predicted probabilities and OR for NIV and IMV",

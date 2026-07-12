@@ -1,8 +1,12 @@
 Package: abgvbgproject
 Type: Project
 Title: ABG Versus VBG Analysis Project
-Version: 0.0.0.9000
-Authors@R: person("Brian", "Locke", role = c("aut", "cre"))
+Version: 0.1.0
+Date: 2026-07-12
+Authors@R: c(
+    person("Brian", "Locke", role = c("aut", "cre")),
+    person("Anila", "Mehta", role = "aut")
+  )
 Description: Reproducible R and Quarto analysis project for the ABG versus
     VBG clinical study.
 License: MIT + file LICENSE
@@ -45,6 +49,7 @@ Imports:
     progressr,
     purrr,
     ragg,
+    readr,
     renv,
     rlang,
     rms,

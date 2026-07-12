@@ -1,198 +1,91 @@
-# ABG vs VBG Project
+# ABG versus VBG analysis
 
-Retrospective clinical analysis comparing prognostic associations of hypercapnia measured by arterial blood gas (ABG) and venous blood gas (VBG), implemented in R + Quarto.
+R and Quarto code for the retrospective multicenter study, “Propensity-weighted prognostic associations of hypercapnia by arterial and venous blood gas.” The analysis compares associations between arterial or venous pCO2 and hypercapnic respiratory failure, ventilatory support, and 60-day mortality while accounting for differential test ordering.
 
 Repository: <https://github.com/reblocke/abg-vbg-project>
 
-## Current state (as of April 21, 2026)
+## Current source
 
-- Primary analysis notebook: `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`
-- Last completed no-code full-render notebook snapshot: `Code Drafts/ABG-VBG analysis 2026-2-28.qmd`
-- Secondary maintained notebook: `Code Drafts/ABG-VBG analysis 2025-12-11.qmd`
-- Reproducible render wrapper: `scripts/render_pdf.sh` (now defaults to the 2026-4-21 notebook)
-- Latest rendered analysis PDF: `Code Drafts/ABG-VBG-analysis-2026-4-21.pdf`
-- Latest `Results/` snapshot: pilot run `run_id = 20260421_090421`; see `Results/run_metadata.csv`
-- Run settings snapshot for that output set: `Results/run_config.json` (includes machine-specific absolute paths from the render environment)
-- Most recently modified manuscript draft: `Drafts/04-08-25 ABG_VBG_Rough Draft BL.docx` (mtime 2026-04-08)
+- Canonical self-contained notebook: `Code Drafts/ABG-VBG-analysis.qmd`
+- Canonical render wrapper: `scripts/render_pdf.sh`
+- Dependency declaration: `DESCRIPTION`
+- Reproducible environment: `renv.lock`
+- Data-governance statement: `DATA_ACCESS.md`
+- Full-run and release lineage: `PROVENANCE.md`
 
-## Start here for review
-
-- Code: start with `Code Drafts/ABG-VBG analysis 2026-4-21.qmd`, then compare against `Code Drafts/ABG-VBG analysis 2026-2-28.qmd` for the last completed no-code full render or `Code Drafts/ABG-VBG analysis 2025-12-11.qmd` for the older December workflow.
-- Outputs: use `Results/run_metadata.csv`, `Results/diagnostics_audit.md`, `Results/plot_registry.csv`, `Results/table_summary_adjusted_threelevel.csv`, `Results/discordance_interpretation_summary.csv`, `Results/Table1.docx`, `Results/Table2.docx`, and `Results/figs/` as the main review surfaces.
-- Validation build outputs: `Results/artifact_provenance_manifest.csv`, `Results/artifact_check_status.csv`, `Results/canonical_asset_registry.csv`, `Results/glyph_audit.csv`, `Results/duplicate_asset_audit.csv`, `Results/diagnostics_audit_summary.csv`, and `Results/diagnostics_audit_issues.csv`.
-- Manuscript: use `Drafts/04-08-25 ABG_VBG_Rough Draft BL.docx` first, then older draft files in `Drafts/` only for revision history.
+The repository does not track patient-level data, the local codebook, manuscript drafts, generated `Results/`, rendered PDFs/TEX, or exploratory notebook history. The tagged release contains the compact review artifacts associated with the initial-submission snapshot.
 
 ## Quick start
 
-1. Open `abg-vbg-project.Rproj` in RStudio, or run commands from the repo root.
-2. Restore the R environment:
+Run all commands from the repository root with R 4.3 or newer.
+
+1. Restore the locked environment:
 
 ```r
 renv::restore()
 ```
 
-3. Run the environment preflight:
+2. Validate the environment and declared dependencies:
 
 ```bash
 Rscript --vanilla -e "source('scripts/check_env.R')"
-```
-
-4. Run the direct-dependency audit:
-
-```bash
 Rscript --vanilla scripts/check_dependencies.R
 ```
 
-5. Render the current primary notebook from the repo root via the canonical wrapper:
-
-```bash
-./scripts/render_pdf.sh
-```
-
-The wrapper is the only sanctioned validation entrypoint. It writes a timestamped combined stdout/stderr log to `Results/render_logs/` and records timing output from the best available host tool for the render.
-The canonical PDF keeps all executed R source visible in shaded code blocks. Rendered output is reserved for manuscript-facing displays, compact required status/provenance summaries, and essential validation tables; long QA/debug displays are suppressed while their CSV/PDF/PNG artifacts continue to write under `Results/`. There is no separate debug render mode.
-Before each wrapper run, existing MI/debug artifacts are archived under `Results/archive/pre_run_<render_ts>/` so abrupt-stop evidence is preserved without moving the rest of `Results/`.
-
-Machine-local MI resource overrides are available when needed for operational troubleshooting:
-
-```bash
-ABGVBG_MI_RAM_GB=8 ABGVBG_MI_BATCH_START=1 ./scripts/render_pdf.sh
-```
-
-Pilot render example matching the current `Results/` snapshot:
+3. Run the canonical 1% pilot:
 
 ```bash
 ./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01
 ```
 
-Manual postmortem recovery for an abrupt render stop:
+4. Run the full analysis only when a new full-data result is required:
 
 ```bash
-Rscript --vanilla scripts/collect_render_postmortem.R \
-  --render-ts 20260416_112907 \
-  --results-dir Results \
-  --log-path Results/render_logs/render_20260416_112907.log \
-  --pdf-path "Code Drafts/ABG-VBG-analysis-2026-4-21.pdf"
+./scripts/render_pdf.sh -P run_mode:full -P pilot_frac:1
 ```
 
-Standalone batch-40 `mice()` reproduction from the archived batch-39 boundary:
+The wrapper writes generated artifacts under ignored `Results/` and performs environment, output, PDF, and publication-quality postflight checks. Dataset scope (`run_mode` and `pilot_frac`) and machine-local resource controls are the only supported execution variations.
 
-```bash
-Rscript --vanilla scripts/debug_batch40_mice.R \
-  --context Results/archive/pre_run_20260416_211642/mi_batch_context.rds \
-  --checkpoint Results/archive/pre_run_20260416_211642/mi_batch_checkpoints/imp_acc_after_batch_39.rds \
-  --batch 40 \
-  --seed 24251206 \
-  --outdir Results/mi_batch_debug/20260416_112923
-```
+## Data access
 
-If you need to reproduce the older December notebook for comparison:
+The notebook expects restricted TriNetX-derived inputs under local `data/`. These inputs cannot be distributed with the repository. External users can inspect the complete analysis implementation and the aggregate release artifacts but cannot rerun the full pipeline without separately authorized data access. See `DATA_ACCESS.md`.
 
-```bash
-./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2025-12-11.qmd"
-```
+## Public artifact policy
+
+The Git repository contains durable source, environment, documentation, and provenance only. Generated outputs are distributed, when appropriate, as curated release assets rather than ordinary Git blobs.
+
+Public release assets are limited to:
+
+- the final analysis PDF;
+- manuscript-facing figures and tables selected from the artifact manifest;
+- compact validation and provenance summaries;
+- sanitized run metadata, file manifests, and SHA-256 checksums; and
+- the exact QMD snapshot used for the successful full render.
+
+Private material includes raw data, the codebook, manuscript and cover-letter drafts, full `Results/`, per-imputation grids, model state, render logs, checkpoints, TEX, and broad reviewer packages.
 
 ## Repository map
 
-- `Code Drafts/`: the maintained Quarto analysis notebooks and rendered notebook PDFs
-- `Code Drafts/Prior versions/`: archived notebook history; use only for provenance or older branching logic
-- `Drafts/`: manuscript and abstract drafts
-- `Results/`: generated review artifacts, including tables, figures, diagnostics, runtime logs, and output crosswalks
-- `data/`: restricted local input files and local codebook artifacts
-- `scripts/`: reproducibility helpers (`check_env.R`, `render_pdf.sh`)
-- `R/`: standalone helper code (`R/diagnostics_audit.R`)
+- `Code Drafts/ABG-VBG-analysis.qmd`: canonical top-to-bottom analysis
+- `Code Drafts/ticket_snapshots/`: post-hoc implementation and traceability records, not preregistration
+- `scripts/`: render, dependency, environment, and postflight checks
+- `docs/`: publication-quality review guidance
+- `PROVENANCE.md`: executed-source, output, and release hash crosswalk
+- `WORKLOG.md`: persistent implementation and validation handoff log
 
-## Analysis coverage
+## Reproducibility contract
 
-The primary notebook `Code Drafts/ABG-VBG analysis 2026-4-21.qmd` covers:
+- The canonical QMD contains all essential analysis and manuscript-facing artifact logic.
+- `DESCRIPTION` lists direct R dependencies; `renv.lock` resolves their versions.
+- Do not add `install.packages()` to committed code.
+- After an intentional dependency change, validate the pilot and then run `renv::snapshot()`; do not snapshot merely to silence unreviewed drift.
+- Generated outputs must be recreated through `scripts/render_pdf.sh`, not by editing result files directly.
+- Random operations use explicit seeds recorded in the notebook and release provenance.
 
-- Cohort setup and schema/type normalization from TriNetX-derived extracts in `data/`
-- Unweighted ABG/VBG outcome analyses
-- Non-MI IPSW using GBM propensity models
-- MI + IPSW analyses with pooled estimates
-- Restricted cubic spline outcome modeling
-- End-of-notebook NIV/IMV diagnostics for probability-versus-OR discordance, including common-reference, marginal-standardization, scale, enhanced missingness/capture, sentinel-procedure v2 specificity, IMV setting/site heterogeneity, support, subgroup, timing, metadata, and resolved-vs-unresolved checks under `Results/discordance_*`
-- Diagnostics export and audit outputs to `Results/`
-- Manuscript-oriented tables and figure registries for review
+## Citation and licensing
 
-The December notebook remains useful as a stable comparison point, but it is no longer the primary entrypoint.
-
-## Results-to-manuscript mapping
-
-Use these as the main crosswalk from analysis outputs into the manuscript:
-
-- Main display tables: `Results/table1_combined.csv`, `Results/table_2_weighted_categorical_outcomes.csv`, `Results/table_s1_inclusion_criteria.csv`, `Results/table_s2_crude_threelevel.csv`, `Results/table_s3_gbm_threelevel.csv`, `Results/table_s4_missingness_primary_analysis.csv`, and `Results/table_s5_mi_diagnostic_summary.csv`
-- Legacy DOCX baseline tables: `Results/Table1.docx`, `Results/Table2.docx`, `Results/Table1_ABG_VBG.docx`
-- Core adjusted 3-level OR summary sidecars: `Results/table_summary_adjusted_threelevel.csv` and the cohort-specific split CSVs
-- Primary manuscript probability outputs: Figure 2, Table 2, and Figure S4 use common-source marginal standardized predicted probabilities; the older modality-specific conditional-reference outputs remain available as `Results/prob_curve_conditional_xref_abg.csv`, `Results/prob_curve_conditional_xref_vbg.csv`, `Results/prob_cat3_conditional_xref_abg.csv`, and `Results/prob_cat3_conditional_xref_vbg.csv`
-- Probability standardization audit outputs: `Results/probability_generation_inventory.csv`, `Results/prob_curve_marginal_standardized_abg.csv`, `Results/prob_curve_marginal_standardized_vbg.csv`, `Results/prob_cat3_marginal_standardized_abg.csv`, `Results/prob_cat3_marginal_standardized_vbg.csv`, `Results/manuscript_probability_output_map.csv`, `Results/probability_method_comparison_summary.csv`, `Results/figs/probability_method_comparison.png`, and `Results/standardization_validation_status.csv`
-- Plot lookup and figure registry: `Results/plot_registry.csv`
-- Diagnostics summary: `Results/diagnostics_summary.csv`, `Results/diagnostics_audit.md`, `Results/runtime_summary.csv`
-- NIV/IMV probability-OR discordance diagnostics: `Results/discordance_current_summary.csv`, `Results/discordance_gap_metrics.csv`, `Results/discordance_standardization_summary.csv`, `Results/discordance_marginal_standardization_status.csv`, `Results/discordance_scale_summary.csv`, `Results/discordance_capture_summary_enhanced.csv`, `Results/discordance_sentinel_procedure_selection_v2.csv`, `Results/discordance_sentinel_procedure_summary_v2.csv`, `Results/discordance_imv_heterogeneity_summary.csv`, `Results/discordance_timing_field_map.csv`, `Results/discordance_metadata_audit.csv`, `Results/discordance_remaining_issues_summary.csv`, `Results/discordance_interpretation_rules.md`, `Results/discordance_interpretation_summary.csv`, and `Results/discordance_validation_status.csv`
-- Validation-only audit surfaces: `Results/artifact_provenance_manifest.csv`, `Results/artifact_check_status.csv`, `Results/artifact_check_missing.csv`, `Results/canonical_asset_registry.csv`, `Results/manuscript_sync_report.md`, `Results/glyph_audit.csv`, `Results/duplicate_asset_audit.csv`, `Results/diagnostics_audit_summary.csv`, `Results/diagnostics_audit_issues.csv`
-- MI/debug postmortem surfaces: `Results/render_logs/rss_trace_<render_ts>.csv`, `Results/render_logs/postmortem_<render_ts>.md`, `Results/mi_run_status_<render_ts>.json`, `Results/mice_batches_log.csv`, `Results/mice_combine_log.csv`, `Results/mi_batch_context.rds`, `Results/mi_batch_checkpoints/`
-- Figure files: `Results/figs/`
-
-Canonical manuscript display set: Figure 1, Figure 2, Table 1, Table 2, Figure S1-S8, and Table S1-S5. Main Figure 3 remains deprecated; the categorical visual companion to Table 2 is Figure S4.
-
-Note: figure filenames in `Results/figs/` can include chunk index suffixes; use `Results/plot_registry.csv` as the canonical crosswalk.
-
-## Stable outputs vs transient scratch files
-
-- Treat the CSV, DOCX, PNG, PDF, JSON, and Markdown files in `Results/` as the stable review artifacts.
-- MI scratch files such as `Results/mi_abg_vbg_mids.rds`, `Results/subset_data_pre_mi.rds`, `Results/mi_logistic_ps_*.rds`, and `Results/mi_weights/` are transient by design and are auto-cleaned during renders.
-
-## Data access and governance
-
-- Data source context: TriNetX-derived patient data under local access restrictions / data use controls
-- Individual-level patient data are restricted and not shareable in this repository
-- Keep PHI/PII out of version control
-- See `DATA_ACCESS.md` for the current local file expectations and provenance notes
-
-## Reproducibility and checks
-
-- Direct dependency manifest: `DESCRIPTION`
-- Dependency lockfile: `renv.lock`
-- Canonical render root: the repo root only. Do not validate renders from `Code Drafts/` or any other subdirectory.
-- Preflight check before long renders: `Rscript --vanilla -e "source('scripts/check_env.R')"`
-- Direct dependency audit before long renders: `Rscript --vanilla scripts/check_dependencies.R`
-- Canonical render command: `./scripts/render_pdf.sh` from the repo root
-- Render contract: one canonical report path only. Do not add alternate render modes that change figure embedding, table inclusion, scratch retention, or other report content/presentation.
-- Wrapper postflight now requires the validation artifact set named above, the NIV/IMV discordance section, and PDF asset-presence checks; a render is not considered valid if artifacts are missing/malformed, if the rendered PDF is missing the expected figure/table/source-code display content, or if known table-layout failure text appears near the manuscript tables.
-- The only sanctioned execution variation is dataset scope (`run_mode` with `pilot_frac`) plus machine-local path/resource controls that do not change analytical outputs.
-- The checked-in `Results/` snapshot reflects a pilot run; rerender the primary notebook for a fresh production run
-- No `testthat` suite is currently present in this repository
-
-## Dependency workflow
-
-- `DESCRIPTION` is the canonical list of direct R dependencies used by the notebook and reproducibility scripts.
-- `renv.lock` is the canonical fully resolved environment that collaborators restore onto a machine.
-- Lockfile-first recovery workflow on a new or drifted machine:
-  - `Rscript --vanilla -e "source('renv/activate.R'); renv::restore(clean = TRUE, prompt = FALSE)"`
-  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
-  - `Rscript --vanilla scripts/check_dependencies.R`
-  - `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
-  - only after a validated render, `Rscript --vanilla -e "source('renv/activate.R'); renv::snapshot(prompt = FALSE)"` if dependencies intentionally changed
-- Approved workflow for any dependency change:
-  - update code,
-  - add or remove the direct dependency in `DESCRIPTION`,
-  - install only the intended package change with `renv::install(...)`,
-  - run `Rscript --vanilla scripts/check_dependencies.R`,
-  - run a 1% pilot render through `./scripts/render_pdf.sh`,
-  - run `Rscript --vanilla -e "source('renv/activate.R'); renv::snapshot(prompt = FALSE)"`,
-  - commit code, `DESCRIPTION`, and `renv.lock` together.
-- If `renv::status()` shows version drift but the dependency audit passes and declared packages are installed, validate with a wrapper pilot render and only then snapshot the intentional working state.
-
-## Citation, license, and support
-
-- Citation metadata: `CITATION.cff`
+- Software citation metadata: `CITATION.cff`
 - Code license: MIT (`LICENSE`)
-- Contributing guide: `CONTRIBUTING.md`
+- Data and generated-output boundaries: `OUTPUT_LICENSE.md`
+- Contribution guidance: `CONTRIBUTING.md`
 - Support: `SUPPORT.md`
-- Code of conduct: `CODE_OF_CONDUCT.md`
-- Acknowledgements: `ACKNOWLEDGEMENTS.md`
-
-## Maintainers
-
-- Brian Locke (`reblocke`)
-- Anila Mehta / collaborators listed in manuscript drafts

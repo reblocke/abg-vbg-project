@@ -1,28 +1,21 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it using the metadata in this file (and cite the associated manuscript when available)."
-title: "ABG vs VBG Project"
+message: "If you use this software, please cite this release and the associated manuscript when available."
+title: "ABG versus VBG analysis code"
 type: software
 authors:
   - family-names: "Locke"
     given-names: "Brian"
-  - family-names: "Khan"
+  - family-names: "Mehta"
     given-names: "Anila"
 repository-code: "https://github.com/reblocke/abg-vbg-project"
+url: "https://github.com/reblocke/abg-vbg-project/releases/tag/v0.1.0"
 license: "MIT"
+version: "0.1.0"
+date-released: 2026-07-12
 keywords:
   - "arterial blood gas"
   - "venous blood gas"
-  - "ABG"
-  - "VBG"
+  - "hypercapnia"
+  - "inverse propensity weighting"
+  - "multiple imputation"
   - "reproducible research"
-version: "0.1.0"
-# preferred-citation:
-#   type: article
-#   title: "TODO: paper title"
-#   authors:
-#     - family-names: "Locke"
-#       given-names: "Brian"
-#     - family-names: "Khan"
-#       given-names: "Anila"
-#   doi: "TODO"
-#   year: 2025

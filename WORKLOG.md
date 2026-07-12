@@ -10,6 +10,1021 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Outcomes:
 - Next steps:
 
+## 2026-07-12 14:12 MDT
+- Task: Sanitize the public repository boundary, establish one canonical self-contained analysis, validate the initial-submission snapshot, and prepare the lean `v0.1.0` release.
+- Files changed:
+  - Promoted `Code Drafts/ABG-VBG-analysis.qmd` as the canonical source.
+  - Updated render, staged-render, escalation, dependency, and PDF postflight scripts to use the canonical path.
+  - Inlined the diagnostics audit into the canonical QMD and removed the external `R/diagnostics_audit.R` execution dependency.
+  - Updated `.gitignore`, `.renvignore`, `README.md`, `DATA_ACCESS.md`, `CONTRIBUTING.md`, `DESCRIPTION`, `CITATION.cff`, `ACKNOWLEDGEMENTS.md`, and `OUTPUT_LICENSE.md` for the public/private boundary and version `0.1.0`.
+  - Added `PROVENANCE.md` and labeled the ticket snapshots as post-hoc implementation records.
+  - Removed restricted, private, generated, and superseded artifacts from the tracked public tip while retaining the local files under ignore rules.
+- Private preservation and release preparation:
+  - Created and verified the all-ref backup bundle, ref inventory, artifact manifest, historical-release backup, and archive checksums under the private `abg-vbg-private-archive/2026-07-12` directory.
+  - Preserved the pre-cleanup `main`, stale snapshot branch, historical tag, stash, remote-tracking ref, and Codex capture refs in the verified bundle.
+  - Prepared `abg-vbg-v0.1.0-review-bundle.zip` from the successful full-run outputs without rerunning the full analysis.
+  - Lean bundle: `6,883,222` bytes, 106 files, SHA-256 `688ed46dbeebb5789a95619abc84671f0f4d79d6f51384441a8b43ec21fb5bd8`.
+  - Bundle validation: `unzip -t` passed; 105/105 payload checksums passed; no missing, extra, or forbidden paths were found.
+  - Disclosure review: no absolute paths, direct-identifier columns, row-level exports, likely patient-count cells from 1-10, or release-blocking findings. Offset values from 1-10 in Tables S8, S11, and S15 were confirmed to be parameters rather than patient counts.
+- Commands and validation run:
+  - `git diff --check`
+  - shell syntax checks for all committed shell scripts
+  - R parsing for all committed R scripts and `DESCRIPTION` DCF validation
+  - QMD purl/parse check: 3,093 parsed expressions
+  - dependency audit: 46 declared direct packages
+  - environment preflight
+  - `renv::status()`: no issues found; no lockfile snapshot required
+  - CFF 1.2 schema validation with `cffconvert`
+  - canonical 1% pilot: `./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`
+  - pilot wrapper run `20260712_134745`; notebook run `20260712_134802`; wrapper status `0`; PDF and render-path postflight passed.
+  - pilot elapsed time `1074.93` seconds; maximum resident set size `4,465,508,352` bytes; generated PDF `425` pages.
+  - blocking-status audit across primary ROR, risk-difference, likelihood-ratio, manuscript asset, table/figure, diagnostics, discordance, and all five sensitivity modules: zero `FAIL`, `ERROR`, or fatal rows. Remaining `WARN`/`REVIEW` rows are documented pilot balance, tail-fit, and interpretation prompts.
+- Provenance outcomes:
+  - Successful full-run wrapper/notebook IDs remain `20260629_074952` / `20260629_075007`.
+  - Exact executed QMD SHA-256: `f77d21aab5e28c34c4e9e19640758237269154d54831cc2de761c07a58170daf`.
+  - Post-review dated QMD SHA-256: `2d8d93be8e93072dfa17d8a6d70cb7e54aa8a2d40b461c71f5bc68b163be2a0b`.
+  - Canonical release QMD SHA-256: `e26ed760228e37480e91a4c02a36faef768302a06d6731007f18999129ee619c`.
+  - Retained full-run PDF SHA-256: `bc23e1569c4abf5b4989d65d7ffb9868330bc24cfac4fec7ce58c9fbe9e60420`.
+  - The approximately 21-hour full render was not repeated. The release preserves the exact executed source and does not claim the retained PDF was rendered from the later portability-patched canonical QMD.
+- Repository publication status:
+  - Rewrote the public history in an isolated fresh clone with `git-filter-repo --sensitive-data-removal`; 92 of 93 commits changed and the first affected commit was `36f27d5a7eef02efe7795103f649f9fc4fcf3089`.
+  - Public-boundary commit map: pre-rewrite `cf5ce21a13f0e904440bb464a3ba4063ecf366db` -> rewritten `65de07b4bc92cd035a914e000191af03e6384006`.
+  - The pre-rewrite release commit `a62d3e996dcac6bb7aee470bdbc1d9899bb57ac4` mapped to `d7ed342ba8ab044788b0b5a0174125b27141bfc9` before this Worklog-only final amend.
+  - The prior public `main` tip `33c48f6ef30e34a677cd0dbc5a131db40bd7933c` became empty after draft removal. The historical release tag's prior target `edf65304dec487c7e6bb626f8031ee3da2243a8f` also became empty and the tag was retained on rewritten surviving commit `f18089f` (`Finalize publication cleanup outputs`).
+  - Rewritten-history audit: zero forbidden paths, zero blobs over 10 MiB, one current QMD, zero credential-pattern matches, and zero machine-root path leaks. The remaining `/Users/` matches are the intentional absolute-path detector regex in `scripts/render_pdf.sh`.
+  - Final working branch: `main`. Final release commit: `Prepare v0.1.0 initial submission snapshot` (this commit). Release pointer: annotated unsigned tag `v0.1.0`.
+  - The existing historical release metadata/assets were backed up before its tag was force-updated. The new release publishes the final full-run PDF, lean review bundle, manifest, and checksums.
+  - Branch/tag rules prohibit deletion and non-fast-forward updates for `main` and `v*` tags while allowing direct fast-forward pushes to `main`.
+  - Three merged PR refs (`refs/pull/1/head`, `refs/pull/2/head`, and `refs/pull/3/head`) can remain server-accessible after the force-push. The repository has no forks. A private GitHub Support handoff records those refs, the first changed commit, rewrite map, and requested cached-object/PR-ref purge.
+- Next steps:
+  - Submit the prepared GitHub Support sensitive-data-removal request so cached views, orphaned objects, and the three historical PR refs can be purged server-side. Existing collaborators should discard old clones and reclone the rewritten repository.
+
+## 2026-06-30 06:22 MDT
+- Task: Fix reviewer findings for reverse-timing / severity package portability and rebuild the external-review bundle from existing full-run outputs without rerunning analysis.
+- Files changed:
+  - `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+  - `Code Drafts/ticket_snapshots/reverse_timing_severity/*.md`
+  - `scripts/render_pdf.sh`
+  - `scripts/run_staged_render.sh`
+  - `WORKLOG.md`
+  - Rebuilt reviewer package:
+    - `Code Drafts/abg_vbg_reverse_timing_severity_full_outputs_20260629_074952.zip`
+    - `Code Drafts/abg_vbg_reverse_timing_severity_full_outputs_20260629_074952.zip.sha256`
+- Commands run:
+  - Copied the six reverse-timing / severity implementation tickets into `Code Drafts/ticket_snapshots/reverse_timing_severity/`.
+  - `bash -n scripts/render_pdf.sh`
+  - `bash -n scripts/run_staged_render.sh`
+  - `Rscript --vanilla -e "parse('scripts/check_pdf_assets.R'); parse('scripts/render_escalation_check.R'); cat('R parse OK\n')"`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext='.R'); knitr::purl('Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd', output = tmp, quiet = TRUE); parse(tmp); cat('QMD purl/parse OK\n')"`
+  - `git diff --check -- "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" WORKLOG.md scripts/render_pdf.sh scripts/run_staged_render.sh scripts/check_pdf_assets.R scripts/render_escalation_check.R`
+  - `unzip -t "Code Drafts/abg_vbg_reverse_timing_severity_full_outputs_20260629_074952.zip"`
+  - Python zip-content validation confirming required sensitivity files/directories are present and excluded scratch/model-state patterns are absent.
+- Outcomes:
+  - The QMD now prefers repo-local ticket snapshots, keeps `~/Downloads` as a developer fallback, and records missing/fallback ticket markdown as `WARN`/`REVIEW` traceability status rather than an analytical `FAIL`.
+  - `scripts/render_pdf.sh` now includes the integrated reverse-timing / severity summary files, all five `Results/sensitivity_*` directories, and the repo-local ticket snapshots in future clean full-output bundles while continuing to exclude archives, exports, checkpoints, model state, and `.DS_Store`.
+  - `scripts/run_staged_render.sh` now uses the requested QMD basename for duplicate-render detection and a QMD-specific lock under `Results/render_logs/`, instead of hard-coding the June 23 stacked-ROR notebook.
+  - Static checks passed; no Quarto render or analysis chunks were run.
+  - Rebuilt reviewer zip contains `1,328` entries including package metadata.
+  - Zip size: `108,603,048` bytes (`104M` as reported by `ls -lh`).
+  - SHA-256: `073b2217d131fc961bd681a7e3a42c1507fadb9d5ae3422940c9c868f3993294`.
+  - `unzip -t` reported no compressed-data errors.
+  - Package validation found all required files/prefixes present and `0` forbidden scratch/model-state entries.
+- Next steps:
+  - Share the rebuilt zip and `.sha256` sidecar with the external reviewer.
+
+## 2026-06-30 06:00 MDT
+- Task: Create an external-review output package for the successful full reverse-timing / severity render.
+- Files changed:
+  - `WORKLOG.md`
+  - Generated reviewer package:
+    - `Code Drafts/abg_vbg_reverse_timing_severity_full_outputs_20260629_074952.zip`
+    - `Code Drafts/abg_vbg_reverse_timing_severity_full_outputs_20260629_074952.zip.sha256`
+- Commands run:
+  - Inspected `Results/exports/abg_vbg_clean_full_outputs_20260629_074952_manifest.csv` and found the clean render bundle did not include the new sensitivity subdirectories.
+  - Built a comprehensive reviewer archive from the final QMD/PDF/TEX, `WORKLOG.md`, and all non-scratch `Results/` outputs.
+  - Excluded `Results/archive/**`, `Results/exports/**`, MI checkpoints/cache, `.rds`/`.RData` state, `.DS_Store`, and `Results/codebookr.docx`.
+  - `unzip -t "Code Drafts/abg_vbg_reverse_timing_severity_full_outputs_20260629_074952.zip"`
+  - Spot-checked package contents for the final PDF/QMD, render log, postmortem, integrated sensitivity summary, and all five sensitivity validation files.
+- Outcomes:
+  - Reviewer zip contains `1,319` source/output files plus package README, manifest, and summary.
+  - Uncompressed package payload is `352,651,939` bytes; zip size is about `103M`.
+  - SHA-256: `5796e747a6d1fb6c6dc7ed298d2ba86732c119374d0d5da14f0b383fb2e41946`.
+  - `unzip -t` reported no compressed-data errors.
+- Next steps:
+  - Share the zip and `.sha256` sidecar with the reviewer. If upload limits are tighter than 103M, build a lean PDF/table/figure/QC-only package.
+
+## 2026-06-30 05:19 MDT
+- Task: Complete the staged reverse-timing / severity sensitivity implementation with the final full-dataset render after clean 1% gates.
+- Files changed:
+  - `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+  - `WORKLOG.md`
+  - Generated full-run outputs under `Results/`, `Results/render_logs/`, and `Results/exports/`
+  - Generated final PDF/TEX:
+    - `Code Drafts/2026-06-26-ABG-VBG-reverse-timing-severity-sensitivities.pdf`
+    - `Code Drafts/2026-06-26-ABG-VBG-reverse-timing-severity-sensitivities.tex`
+- Commands run:
+  - Static checks before the final successful 1% rerun/full retry:
+    - `bash -n scripts/render_pdf.sh`
+    - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+    - `Rscript --vanilla scripts/check_dependencies.R`
+    - `Rscript --vanilla -e "tmp <- tempfile(fileext='.R'); knitr::purl('Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd', output = tmp, quiet = TRUE); parse(tmp); cat('QMD purl/parse OK\n')"`
+    - `git diff --check -- "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" WORKLOG.md scripts/render_pdf.sh scripts/check_pdf_assets.R`
+  - Final clean 1% confirmation after stale no-lactate cleanup fix:
+    - `./scripts/render_pdf.sh "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" -P run_mode:pilot -P pilot_frac:0.01`
+    - Run `20260629_073100`; wrapper status `0`; no-lactate component count exactly `100` files with max imputation `020`; primary and sensitivity status checks had no `FAIL`/`ERROR`.
+  - Full render:
+    - `./scripts/render_pdf.sh "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" -P run_mode:full -P pilot_frac:1`
+    - Run `20260629_074952`; notebook run id `20260629_075007`; wrapper status `0`; elapsed `77322.07` seconds; maximum resident set size `7359741952` bytes; PDF postflight and render path validation passed.
+  - Post-full targeted checks:
+    - Confirmed all five sensitivity validation/status files exist and have no `FAIL`/`ERROR`.
+    - Confirmed primary stacked-ROR, standardized risk-difference, likelihood-ratio, weighted-rate/reference-risk, and discordance status files have no blocking failures.
+    - Confirmed `pdf_parse_table_figure_check.csv`, `stacked_ror_pdf_parse_check.csv`, `table_visual_qc.csv`, `publication_quality_asset_audit.csv`, `pdf_asset_presence_scan.csv`, and `stacked_ror_vs_table2_validation.csv` have zero blocking rows.
+    - Confirmed full no-lactate components: `400` files in `Results/sensitivity_no_lactate/components/`, max imputation `080`.
+- Outcomes:
+  - The dated notebook copy rendered end-to-end on the full dataset after staged 1% verification.
+  - Tickets 1-5 are implemented in the dated QMD with outputs under:
+    - `Results/sensitivity_reverse_timing/`
+    - `Results/sensitivity_timing_stratified_rates/`
+    - `Results/sensitivity_no_lactate/`
+    - `Results/sensitivity_pregas_covariates/`
+    - `Results/sensitivity_acute_workflow/`
+  - Integrated summary outputs were regenerated:
+    - `Results/reverse_timing_severity_sensitivity_summary.csv`
+    - `Results/reverse_timing_severity_sensitivity_summary.md`
+    - `Results/reverse_timing_severity_sensitivity_validation_status.csv`
+  - Final render artifacts:
+    - PDF: `Code Drafts/2026-06-26-ABG-VBG-reverse-timing-severity-sensitivities.pdf`
+    - Log: `Results/render_logs/render_20260629_074952.log`
+    - Postmortem: `Results/render_logs/postmortem_20260629_074952.md`
+    - Clean full bundle: `Results/exports/abg_vbg_clean_full_outputs_20260629_074952.zip`
+  - Full-mode R vector heap was raised to `32000` MB for this render, avoiding the earlier 16 GB vector-heap failure.
+  - During the long render, generated scratch/checkpoint artifacts were pruned for disk headroom after they were no longer needed by downstream chunks; the successful render ended with about `18Gi` free on `<local-data-volume>`.
+  - Nonfatal `REVIEW`/`WARN` rows remain as interpretation diagnostics, not implementation failures.
+- Next steps:
+  - Use the full-run summary CSV/MD and sensitivity module outputs for substantive interpretation.
+  - If preparing a reviewer handoff, build a fresh lean package from run `20260629_074952` rather than using older pilot packages.
+
+## 2026-06-28 17:18 MDT
+- Task: Patch no-lactate Ticket 3 full-mode memory pressure and confirm the reverse-timing / severity notebook with a fresh integrated 1% pilot before rerunning full mode.
+- Files changed:
+  - `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+  - `WORKLOG.md`
+  - Generated render logs/postmortems under `Results/render_logs/`
+- Commands run:
+  - Failed full render reviewed:
+    - `./scripts/render_pdf.sh "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" -P run_mode:full -P pilot_frac:1`
+    - Run `20260628_031401`; wrapper status `1`; MICE completed 80/80, primary MI/ROR/RD/LR sections completed, Tickets 1-2 completed, then `sensitivity-ticket-3-no-lactate-propensity` failed with `vector memory limit of 16.0 Gb reached`.
+  - Static checks after patch:
+    - `bash -n scripts/render_pdf.sh`
+    - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+    - `Rscript --vanilla scripts/check_dependencies.R`
+    - `Rscript --vanilla -e "tmp <- tempfile(fileext='.R'); knitr::purl('Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd', output = tmp, quiet = TRUE); parse(tmp); cat('QMD purl/parse OK\n')"`
+    - `git diff --check -- "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" WORKLOG.md`
+  - Patched integrated 1% pilot:
+    - `./scripts/render_pdf.sh "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" -P run_mode:pilot -P pilot_frac:0.01`
+    - Run `20260628_165402`; wrapper status `0`; elapsed `1058.11` seconds; maximum resident set size `4203216896` bytes; PDF postflight and render path validation passed.
+  - Post-pilot status check:
+    - Confirmed all five sensitivity status files and primary ROR/RD/LR/weighted-rate/reference-risk validation files exist.
+    - Confirmed zero `FAIL` or `ERROR` rows; remaining `REVIEW`/`WARN` rows are diagnostic interpretation statuses.
+    - Confirmed `Results/sensitivity_no_lactate/components/` held 100 component files for the 1% pilot, matching 20 imputations times 5 streamed component types.
+- Outcomes:
+  - Ticket 3 now stores categorical sensitivity fits as compact coefficient/vcov pairs for `pool_terms()`.
+  - Ticket 3 now writes per-imputation no-lactate weight, balance, weighted-rate, reference-risk, and fit-diagnostic component CSVs, then recombines those components for canonical outputs.
+  - Ticket 3 transient per-imputation row lists are removed before advancing to the next imputation, reducing full-mode heap pressure while preserving the estimands and output filenames.
+  - Disk check before the next full run showed about `22Gi` available on `<local-data-volume>`; `Results/` was about `1.6G`, with `Results/archive/` about `1.3G`.
+- Next steps:
+  - Rerun full mode with the patched notebook.
+  - If full succeeds, summarize final full-run statuses and interpretation implications; if it fails, inspect the new postmortem and patch only the failing gate.
+
+## 2026-06-28 03:16 MDT
+- Task: Patch reverse-timing / severity full-render failures after the integrated 1% gate and confirm with a fresh 1% pilot.
+- Files changed:
+  - `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+  - `WORKLOG.md`
+  - Generated render logs/postmortems under `Results/render_logs/`
+- Commands run:
+  - Failed full render:
+    - `./scripts/render_pdf.sh "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" -P run_mode:full -P pilot_frac:1`
+    - Run `20260627_120113`; wrapper status `1`; failed in `sensitivity-ticket-4-pregas-covariates` with `vector memory limit of 16.0 Gb reached` after passing primary ROR, RD, LR, weighted-rate/reference-risk diagnostics, and Tickets 1-3.
+  - Static checks after patches:
+    - `bash -n scripts/render_pdf.sh`
+    - QMD purl/parse check for `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+    - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+    - `Rscript --vanilla scripts/check_dependencies.R`
+    - `git diff --check -- "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" WORKLOG.md scripts/render_pdf.sh scripts/check_pdf_assets.R`
+  - Patched 1% pilots:
+    - Run `20260628_024255`; wrapper status `1`; failed in `risk-difference-standardized-execution` while writing a CSV with `Error writing to connection: Input/output error`.
+    - Run `20260628_025520`; wrapper status `0`; elapsed `1053.49` seconds; max resident set size `3.42` GB; PDF postflight passed.
+  - Post-pilot status check confirmed all five sensitivity status files and primary ROR/RD/LR/weighted-rate/reference-risk validation files exist, with zero `FAIL` or `ERROR` rows.
+- Outcomes:
+  - Added stronger post-Ticket-3 cleanup so no-lactate intermediate data frames and plots are removed before Ticket 4.
+  - Slimmed Ticket 4 categorical fit retention to coefficient/vcov pairs only for pooling.
+  - Hardened `write_csv_safely()` to write to a same-directory temporary file and atomically rename into place, avoiding partial CSV artifacts and improving large-debug-CSV reliability.
+  - Patched 1% pilot `20260628_025520` passed end to end, including Tickets 3-5 and final PDF/asset postflight.
+- Next steps:
+  - Rerun the full dataset with the patched notebook.
+  - If full succeeds, summarize final statuses and interpretation implications; if it fails again, inspect `Results/render_logs/postmortem_<run>.md` and patch only the failing gate.
+
+## 2026-06-27 11:41 MDT
+- Task: Diagnose failed full render of reverse-timing / severity sensitivity notebook and patch full-mode memory pressure in Ticket 4.
+- Files changed:
+  - `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+  - `WORKLOG.md`
+  - Generated failure logs/postmortems in `Results/render_logs/`
+- Commands run:
+  - Full render attempts:
+    - `20260626_120918`: wrapper status `1`; MICE completed 80/80 imputations but render failed in `mi-single-pass-loop` with `No space left on device`.
+    - `20260626_201133`: wrapper status `1`; checkpoint-reuse patch failed early because `RUN_ID` was not in scope inside `mi-exec`.
+    - `20260626_204930`: wrapper status `1`; storage patch avoided the prior disk-full failure and the render advanced to Ticket 4, but failed in `sensitivity-ticket-4-pregas-covariates` with `vector memory limit of 16.0 Gb reached`.
+  - Cleanup after `20260626_120918`:
+    - removed stale `Results/archive/pre_run_20260626_072418`, `Results/mi_batch_checkpoints`, `Results/mi_weights`, `Results/mi_fit_cache`, and transient MI single-pass CSVs.
+  - Static checks after Ticket 4 memory patch:
+    - `bash -n scripts/render_pdf.sh`
+    - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+    - `Rscript --vanilla scripts/check_dependencies.R`
+    - QMD purl/parse check for `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+    - `git diff --check -- "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" WORKLOG.md`
+- Outcomes:
+  - Added MI checkpoint pruning inside `run_mice_batched()` so only the latest batch checkpoint pair is retained. On `20260626_204930`, final `Results/mi_batch_checkpoints/` stayed around `350M` instead of accumulating obsolete checkpoints.
+  - Added a harmless MICE checkpoint reuse audit path, but the current render wrapper cleanup removes `Results/mi_abg_vbg_mids.rds` before `mi-exec`, so the reuse path did not activate for `20260626_204930`.
+  - Full render `20260626_204930` passed the previous disk failure point, completed the long stacked-ROR execution chunk, completed standardized risk-difference and likelihood-ratio sections, and failed only after reaching Ticket 4.
+  - Patched Ticket 4 to run each pre-gas propensity variant sequentially, write per-variant component CSVs, remove the variant result from memory, and then recombine those CSVs for the final Ticket 4 summaries. This preserves the same estimands and outputs while avoiding retention of multiple full variant result bundles.
+  - Post-patch static checks passed.
+- Next steps:
+  - Run a fresh 1% pilot of the patched dated notebook.
+  - If the 1% pilot is clean, rerun the full dataset and re-check all primary and sensitivity validation statuses.
+
+## 2026-06-26 12:08 MDT
+- Task: Add combined reverse-timing / severity sensitivity summary and complete integrated 1% gate.
+- Files changed:
+  - `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+  - `WORKLOG.md`
+  - Generated integrated summary artifacts in `Results/`
+- Commands run:
+  - Static checks:
+    - `bash -n scripts/render_pdf.sh`
+    - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+    - `Rscript --vanilla scripts/check_dependencies.R`
+    - QMD purl/parse check for `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+    - `git diff --check -- "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" WORKLOG.md`
+  - Integrated 1% attempts:
+    - `20260626_113836`: wrapper status `1`; failed in `reverse-timing-severity-combined-summary` because the combined summary referenced nonexistent `timing_pair_specs`.
+    - `20260626_115132`: wrapper status `0`, elapsed `987.70` seconds, max resident set size `5.53` GB.
+  - Targeted post-render check:
+    - confirmed `Results/reverse_timing_severity_sensitivity_summary.csv`;
+    - confirmed `Results/reverse_timing_severity_sensitivity_summary.md`;
+    - confirmed `Results/reverse_timing_severity_sensitivity_validation_status.csv`;
+    - confirmed all five ticket validation/status outputs exist and have no `FAIL`;
+    - confirmed primary stacked-ROR, standardized risk-difference, likelihood-ratio, and weighted-rate/reference-risk diagnostics have no `FAIL`.
+- Outcomes:
+  - Added integrated summary outputs:
+    - `Results/reverse_timing_severity_sensitivity_summary.csv`
+    - `Results/reverse_timing_severity_sensitivity_summary.md`
+    - `Results/reverse_timing_severity_sensitivity_validation_status.csv`
+  - Integrated 1% status was structurally acceptable:
+    - Ticket 1 reverse timing: `PASS`.
+    - Ticket 2 timing-stratified weighted rates: `PASS`.
+    - Ticket 3 no-lactate: nonfatal `REVIEW`.
+    - Ticket 4 pre-gas covariates: nonfatal `REVIEW`.
+    - Ticket 5 acute workflow proxies: nonfatal `REVIEW`.
+    - Primary weighted-rate/reference-risk diagnostics retained nonfatal `REVIEW/WARN` rows as expected diagnostic prompts.
+  - The combined markdown explicitly states that pilot results are structural QA only and that full-run values are required for manuscript interpretation.
+- Next steps:
+  - Run the full render of `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd` with `-P run_mode:full -P pilot_frac:1`, then summarize final diagnostics and update this worklog.
+
+## 2026-06-26 11:36 MDT
+- Task: Implement and verify Ticket 5 acute severity / workflow proxy sensitivity.
+- Files changed:
+  - `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+  - `WORKLOG.md`
+  - Generated diagnostic artifacts under `Results/sensitivity_acute_workflow/`
+- Commands run:
+  - Static checks:
+    - `bash -n scripts/render_pdf.sh`
+    - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+    - `Rscript --vanilla scripts/check_dependencies.R`
+    - QMD purl/parse check for `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+    - `git diff --check -- "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" WORKLOG.md`
+  - Ticket 5 pilot attempts:
+    - `20260626_110551`: wrapper status `1`; failed in `sensitivity-ticket-5-acute-workflow` because `ticket5_date_field_for()` called `sensitivity_first_existing_col()` without the required `data_names` argument.
+    - `20260626_111737`: wrapper status `0`, elapsed `1070.26` seconds, max resident set size `6.95` GB.
+  - Targeted structural check after `20260626_111737`:
+    - confirmed no `FAIL` in `sensitivity_acute_workflow_validation_status.csv`;
+    - confirmed no `FAIL`, missing `primary_value`, or missing `delta` in `acute_proxy_vs_primary_comparison.csv`;
+    - confirmed expected weighted-rate, categorical OR, and ABG 40/VBG 45 reference-risk rows;
+    - confirmed compact balance and attenuation figures exist.
+- Outcomes:
+  - Implemented acute/workflow proxy inventory:
+    - `Results/sensitivity_acute_workflow/acute_proxy_inventory.csv/.md`
+    - `Results/sensitivity_acute_workflow/acute_proxy_model_definitions.csv`
+  - The 1% pilot selected six row-aligned binary proxy variables for the enhanced model:
+    - `cc_time_0`
+    - `blood_cx_proc_0`
+    - `ip_abx_0`
+    - `sepsis_dx`
+    - `po_steroid_0`
+    - `ctccon_0`
+  - Implemented enhanced proxy outputs:
+    - `Results/sensitivity_acute_workflow/acute_proxy_weighting_diagnostics.csv`
+    - `Results/sensitivity_acute_workflow/acute_proxy_balance_summary.csv`
+    - `Results/sensitivity_acute_workflow/acute_proxy_weighted_outcome_rates.csv`
+    - `Results/sensitivity_acute_workflow/acute_proxy_primary_categorical_results.csv`
+    - `Results/sensitivity_acute_workflow/acute_proxy_reference_risks_by_imputation.csv`
+    - `Results/sensitivity_acute_workflow/acute_proxy_reference_risks.csv`
+    - `Results/sensitivity_acute_workflow/acute_proxy_fit_diagnostics.csv`
+    - `Results/sensitivity_acute_workflow/acute_proxy_vs_primary_comparison.csv`
+    - `Results/sensitivity_acute_workflow/acute_proxy_interpretation_summary.md`
+    - `Results/figs/acute_proxy_balance_plot.png/.pdf`
+    - `Results/figs/acute_proxy_weighted_outcome_rate_attenuation.png/.pdf`
+  - Ticket 5 validation status was `PASS` for required generation components, with nonfatal `REVIEW` for balance summary.
+  - Pilot comparison deltas versus primary had no hard failures; 1% numerical values remain structural QA only.
+- Next steps:
+  - Add the combined reverse-timing / severity sensitivity summary outputs and run the integrated 1% gate before considering full mode.
+
+## 2026-06-26 10:57 MDT
+- Task: Implement and verify Ticket 4 pre-gas / temporally conservative propensity sensitivity.
+- Files changed:
+  - `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+  - `WORKLOG.md`
+  - Generated diagnostic artifacts under `Results/sensitivity_pregas_covariates/`
+- Commands run:
+  - Static checks:
+    - `bash -n scripts/render_pdf.sh`
+    - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+    - `Rscript --vanilla scripts/check_dependencies.R`
+    - QMD purl/parse check for `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+    - `git diff --check -- "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" WORKLOG.md`
+  - Ticket 4 1% pilot:
+    - `./scripts/render_pdf.sh "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" -P run_mode:pilot -P pilot_frac:0.01`
+    - run `20260626_104041`, wrapper status `0`, elapsed `989.22` seconds, max resident set size `6.20` GB.
+  - Targeted structural check:
+    - confirmed `pregas_core` and `pregas_core_plus_vitals` covariate sets were generated;
+    - confirmed no `FAIL` in `sensitivity_pregas_covariates_validation_status.csv`;
+    - confirmed no `FAIL`, missing primary value, or missing delta in `pregas_vs_primary_comparison.csv`;
+    - confirmed expected weighted-rate, categorical OR, and ABG 40/VBG 45 reference-risk rows for both pre-gas variants.
+- Outcomes:
+  - Implemented conservative covariate timing inventory:
+    - `Results/sensitivity_pregas_covariates/covariate_timing_inventory.csv/.md`
+    - `Results/sensitivity_pregas_covariates/pregas_covariate_sets.csv`
+  - The 1% pilot fit two variants:
+    - `pregas_core`: 14 covariates (`age_at_encounter`, `sex`, `race_ethnicity`, `location`, `encounter_type`, `curr_bmi`, `copd`, `asthma`, `osa`, `chf`, `acute_nmd`, `phtn`, `ckd`, `dm`).
+    - `pregas_core_plus_vitals`: the same core plus `temp_new`, `sbp`, `dbp`, and `hr`.
+  - Implemented pre-gas comparisons:
+    - `Results/sensitivity_pregas_covariates/pregas_weighting_diagnostics.csv`
+    - `Results/sensitivity_pregas_covariates/pregas_balance_summary.csv`
+    - `Results/sensitivity_pregas_covariates/pregas_weighted_outcome_rates.csv`
+    - `Results/sensitivity_pregas_covariates/pregas_primary_categorical_results.csv`
+    - `Results/sensitivity_pregas_covariates/pregas_reference_risk_by_imputation.csv`
+    - `Results/sensitivity_pregas_covariates/pregas_reference_risk_diagnostic.csv`
+    - `Results/sensitivity_pregas_covariates/pregas_vs_primary_comparison.csv`
+    - `Results/sensitivity_pregas_covariates/pregas_fit_diagnostics.csv`
+    - `Results/sensitivity_pregas_covariates/pregas_interpretation_summary.md`
+    - `Results/figs/pregas_balance_plot.png/.pdf`
+    - `Results/figs/pregas_weighted_outcome_rate_comparison.png/.pdf`
+  - Ticket 4 validation status was `PASS` for required generation components, with nonfatal `REVIEW` for balance summary.
+  - Pilot comparison deltas versus primary were all nonfatal `PASS`; 1% numerical values remain structural QA only.
+- Next steps:
+  - Implement Ticket 5 acute severity/workflow proxy sensitivity, then run the next 1% pilot gate.
+
+## 2026-06-26 10:37 MDT
+- Task: Implement and verify Ticket 3 no-lactate propensity-weighting sensitivity.
+- Files changed:
+  - `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+  - `WORKLOG.md`
+  - Generated diagnostic artifacts under `Results/sensitivity_no_lactate/`
+- Commands run:
+  - Static checks:
+    - `bash -n scripts/render_pdf.sh`
+    - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+    - `Rscript --vanilla scripts/check_dependencies.R`
+    - QMD purl/parse check for `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+    - `git diff --check -- "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" WORKLOG.md`
+  - Ticket 3 pilot iterations:
+    - `20260626_094234`: wrapper status `0`; exposed that large diagnostic comparison deltas were being labeled `FAIL` instead of nonfatal `WARN`.
+    - `20260626_095946`: wrapper status `0`; exposed a comparison join bug where primary outcome labels (`IMV`, `NIV`, etc.) did not map to no-lactate source outcome variables (`imv_proc`, `niv_proc`, etc.).
+    - `20260626_101705`: final Ticket 3 1% pilot, wrapper status `0`, elapsed `958.64` seconds, max resident set size `5.87` GB.
+  - Targeted structural check after `20260626_101705`:
+    - confirmed no `FAIL` in `sensitivity_no_lactate_validation_status.csv`;
+    - confirmed no `FAIL`, missing `primary_value`, or missing `delta` in `no_lactate_vs_primary_comparison.csv`;
+    - confirmed 8 weighted-rate rows, 16 categorical OR rows, and 4 ABG 40/VBG 45 reference-risk rows.
+- Outcomes:
+  - Implemented lactate inventory and no-lactate MI logistic PS refit:
+    - `Results/sensitivity_no_lactate/lactate_variable_inventory.csv/.md`
+    - `Results/sensitivity_no_lactate/no_lactate_weighting_diagnostics.csv`
+    - `Results/sensitivity_no_lactate/no_lactate_fit_diagnostics.csv`
+  - The primary PS lactate variable removed in the pilot was `serum_lac`; lactate remained available to the imputation/completed-data objects when already present.
+  - Implemented no-lactate comparisons:
+    - `Results/sensitivity_no_lactate/no_lactate_balance_summary.csv`
+    - `Results/sensitivity_no_lactate/no_lactate_weighted_outcome_rates.csv`
+    - `Results/sensitivity_no_lactate/no_lactate_primary_categorical_results.csv`
+    - `Results/sensitivity_no_lactate/no_lactate_reference_risk_by_imputation.csv`
+    - `Results/sensitivity_no_lactate/no_lactate_reference_risk_diagnostic.csv`
+    - `Results/sensitivity_no_lactate/no_lactate_vs_primary_comparison.csv`
+    - `Results/sensitivity_no_lactate/no_lactate_interpretation_summary.md`
+    - `Results/figs/no_lactate_balance_plot.png/.pdf`
+    - `Results/figs/no_lactate_weighted_outcome_rate_comparison.png/.pdf`
+  - Ticket 3 validation status was `PASS` for all required generation components, with nonfatal `REVIEW` for balance summary.
+  - Pilot no-lactate deltas versus primary were all `PASS` in the comparison file after outcome-key repair; 1% numerical values remain structural QA only.
+- Next steps:
+  - Implement Ticket 4 pre-gas covariate propensity sensitivity, then run the next 1% pilot gate.
+
+## 2026-06-26 09:36 MDT
+- Task: Implement and verify Ticket 2 timing-stratified weighted-rate diagnostics in the reverse-timing / severity sensitivity notebook.
+- Files changed:
+  - `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+  - `WORKLOG.md`
+  - Generated diagnostic artifacts under `Results/sensitivity_timing_stratified_rates/`
+- Commands run:
+  - Static checks:
+    - `bash -n scripts/render_pdf.sh`
+    - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+    - `Rscript --vanilla scripts/check_dependencies.R`
+    - QMD purl/parse check for `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+    - `git diff --check -- "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" WORKLOG.md`
+  - Ticket 2 failed/interrupted attempts:
+    - `20260626_083357`: failed in `sensitivity-ticket-2-timing-stratified-rates` because the chunk referenced `weighted_mean_safe()` before that helper is defined later in the notebook.
+    - `20260626_084501`: failed because the chunk referenced `weighted_ess()` before that helper is defined later in the notebook.
+    - `20260626_085620`: interrupted/stopped before postflight without a logged R error; no validation credit taken.
+    - `20260626_090407`: failed at the existing stacked-ROR code-visibility audit because `resolve_current_qmd()` could resolve a transient `.rmarkdown`/older source before the dated `.qmd` copy.
+  - Successful Ticket 2 1% render:
+    - `./scripts/render_pdf.sh "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" -P run_mode:pilot -P pilot_frac:0.01`
+    - run `20260626_091507`, wrapper status `0`, elapsed `1063.46` seconds, max resident set size `4.94` GB.
+  - Targeted structural check:
+    - confirmed timing-class distribution contains ABG/VBG x IMV/NIV coverage;
+    - confirmed post-gas definitions include strict post-gas and same-day-or-after IMV/NIV rates for both modalities;
+    - confirmed broader rates excluding pre/same-day IMV context cover all four outcomes and both modalities;
+    - confirmed Ticket 2 validation status has no `FAIL`.
+- Outcomes:
+  - Added reusable local sensitivity helper functions for weighted means/effective sample size so sensitivity chunks do not depend on later notebook helper definitions.
+  - Patched `resolve_current_qmd()` to prefer `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd` and map transient `.rmarkdown` render inputs back to the source `.qmd`; this restored the pre-existing stacked-ROR code-visibility gate without changing the stacked-ROR estimands.
+  - Implemented Ticket 2 outputs:
+    - `Results/sensitivity_timing_stratified_rates/weighted_timing_class_distribution.csv`
+    - `Results/sensitivity_timing_stratified_rates/weighted_post_gas_outcome_rates.csv`
+    - `Results/sensitivity_timing_stratified_rates/weighted_rates_excluding_presame_imv.csv`
+    - `Results/sensitivity_timing_stratified_rates/timing_stratified_rates_summary.md`
+    - `Results/sensitivity_timing_stratified_rates/sensitivity_timing_stratified_rates_validation_status.csv`
+    - `Results/figs/weighted_timing_class_distribution.png/.pdf`
+    - `Results/figs/post_gas_outcome_rate_comparison.png/.pdf`
+  - Ticket 2 validation status is all `PASS`; same-day ventilatory support remains explicitly classified as temporally ambiguous.
+- Next steps:
+  - Implement Ticket 3 no-lactate propensity sensitivity, then run the next 1% pilot gate.
+
+## 2026-06-26 08:31 MDT
+- Task: Start the staged reverse-timing / severity sensitivity program, create the dated notebook copy, baseline-render it, then implement and verify Ticket 1 timing classification.
+- Files changed:
+  - `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+  - `WORKLOG.md`
+  - Generated diagnostic artifacts under `Results/sensitivity_reverse_timing/`
+- Commands run:
+  - Baseline static checks for the copied notebook:
+    - `bash -n scripts/render_pdf.sh`
+    - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+    - `Rscript --vanilla scripts/check_dependencies.R`
+    - QMD purl/parse check for `Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd`
+    - `git diff --check -- "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" WORKLOG.md`
+  - Baseline 1% render:
+    - `./scripts/render_pdf.sh "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" -P run_mode:pilot -P pilot_frac:0.01`
+  - Ticket 1 static checks after implementation.
+  - Ticket 1 failed pilot attempts:
+    - `20260626_074535`: failed in `sensitivity-ticket-1-reverse-timing` due a dplyr scalar/vector `if_else()` recycling bug.
+    - `20260626_075750`: new chunk completed, but wrapper failed PDF hygiene because visible code contained literal absolute `<absolute-ticket-path>` ticket paths.
+  - Successful Ticket 1 1% render:
+    - `./scripts/render_pdf.sh "Code Drafts/2026-06-26 ABG-VBG reverse-timing severity sensitivities.qmd" -P run_mode:pilot -P pilot_frac:0.01`
+    - run `20260626_081444`, wrapper status `0`.
+  - Targeted structural check:
+    - confirmed `timing_classification_counts.csv` contains both ABG/VBG, both IMV/NIV, and all six requested timing classes per modality/outcome.
+- Outcomes:
+  - Created the dated working notebook copy from `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd`.
+  - Baseline 1% render of the copy succeeded: run `20260626_072418`, wrapper status `0`.
+  - Added `Results/reverse_timing_severity_ticket_references.md` so the six markdown implementation tickets remain explicit specification references.
+  - Implemented Ticket 1 canonical timing classification outputs:
+    - `Results/sensitivity_reverse_timing/timing_field_inventory.csv`
+    - `Results/sensitivity_reverse_timing/timing_classification_counts.csv/.md`
+    - `Results/sensitivity_reverse_timing/timing_classification_by_modality_outcome.csv`
+    - `Results/sensitivity_reverse_timing/timing_classification_method_note.md`
+    - `Results/sensitivity_reverse_timing/sensitivity_reverse_timing_validation_status.csv`
+    - `Results/figs/timing_classification_by_modality_outcome.png/.pdf`
+  - Ticket 1 field mapping selected `paco2_date` for ABG, `vbg_co2_date` for VBG, and `imv_proc_first_date`/`niv_proc_first_date` for outcome timing.
+  - Ticket 1 validation status was all `PASS`; same-day is explicitly labeled temporally ambiguous.
+- Next steps:
+  - Implement Ticket 2 timing-stratified weighted outcome-rate diagnostics using the Ticket 1 timing classes, then run another 1% pilot.
+
+## 2026-06-26 00:21 MDT
+- Task: Add weighted outcome-rate and ABG 40/VBG 45 reference-risk diagnostics, integrate them into QA/build outputs, run a 1% pilot gate, then complete a full-data rerender.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd`
+  - `scripts/render_pdf.sh`
+  - `scripts/render_escalation_check.R`
+  - `WORKLOG.md`
+  - Generated diagnostic artifacts under `Results/`, including:
+    - `Results/outcome_rate_reference_risk_diagnostic_inventory.md`
+    - `Results/weighted_outcome_rate_diagnostic.csv/.md`
+    - `Results/model_implied_reference_risk_diagnostic.csv/.md`
+    - `Results/weighted_rates_vs_reference_risks_interpretation.md`
+    - `Results/outcome_rate_reference_risk_audit.csv`
+    - `Results/figs/weighted_outcome_rate_diagnostic.png/.pdf`
+    - `Results/figs/model_implied_reference_risk_diagnostic.png/.pdf`
+- Commands run:
+  - Static checks:
+    - `bash -n scripts/render_pdf.sh`
+    - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+    - `Rscript --vanilla scripts/check_dependencies.R`
+    - `Rscript --vanilla -e "tmp <- tempfile(fileext='.R'); knitr::purl('Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd', output = tmp, quiet = TRUE); parse(tmp); cat('QMD purl/parse OK\n')"`
+    - `git diff --check -- "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" WORKLOG.md scripts/render_pdf.sh scripts/check_pdf_assets.R scripts/render_escalation_check.R`
+  - 1% pilot:
+    - `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" -P run_mode:pilot -P pilot_frac:0.01`
+    - `Rscript --vanilla scripts/render_escalation_check.R --results-dir Results --render-ts 20260625_101638`
+    - Targeted R structural checks for `weighted_outcome_rate_diagnostic.csv`, `model_implied_reference_risk_diagnostic.csv`, and `outcome_rate_reference_risk_audit.csv`.
+  - Full render:
+    - `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" -P run_mode:full -P pilot_frac:1`
+    - `Rscript --vanilla scripts/render_escalation_check.R --results-dir Results --render-ts 20260625_103344`
+    - Targeted full-run structural checks for new diagnostics and existing ROR/RD/LR/PDF/table/publication gates.
+    - `unzip -t Results/exports/abg_vbg_clean_full_outputs_20260625_103344.zip`
+- Outcomes:
+  - Added an inventory note confirming existing partial diagnostics and canonical sources:
+    - LR baseline pooled/by-imputation objects are the source for overall weighted outcome rates.
+    - `risk_difference_spline_readouts_5mm.csv` is the source for ABG 40/VBG 45 model-implied reference risks, using the same common-source marginal standardization workflow as Figure 2/RD outputs.
+  - Added overall weighted outcome-rate diagnostics for all four outcomes and both modalities with raw rates, weighted rates, effective sample size, VBG-minus-ABG rate difference, VBG/ABG weighted-rate ratio, and nonfatal `PASS`/`REVIEW`/`WARN` flags.
+  - Added model-implied reference-risk diagnostics for all four outcomes at ABG pCO2 40 and VBG pCO2 45 with standardized risks, VBG-minus-ABG risk differences, risk ratios, uncertainty metadata, and nonfatal diagnostic flags.
+  - Integrated `outcome_rate_reference_risk_audit.csv` into `diagnostics_audit_summary.csv`/`diagnostics_audit_issues.csv`, `diagnostics-completeness`, `scripts/render_pdf.sh` bundle/schema validation, and `scripts/render_escalation_check.R`.
+  - Fixed the manuscript display boundary for likelihood-ratio supplement pages so Table S12-S15/Figure S13-S14 render only when `RENDER_LIKELIHOOD_RATIO_SUPPLEMENT` is active; current default remains active.
+  - 1% pilot run `20260625_101638` succeeded:
+    - Wrapper status `0`, escalation `blocking_failures=0`.
+    - Elapsed `15.96` minutes; peak RSS `3.063 GiB`; clean 1% bundle SHA-256 `47b6503307a8beadab3b04366a23518e3fdb7cc6444b89f8df35ea86750f2cf7`.
+  - Full run `20260625_103344` succeeded:
+    - Wrapper status `0`, escalation `blocking_failures=0`.
+    - Elapsed `827.04` minutes; peak RSS `7.374 GiB`; disk free after render `18.36 GiB`.
+    - Full clean bundle: `Results/exports/abg_vbg_clean_full_outputs_20260625_103344.zip`, size about `10M`, SHA-256 `79b0a728579b13566df55261f40bb65f1aae0fb491a267a3e14b3b2adf0f585e`; `unzip -t` reported no errors.
+  - Final full-run diagnostic values:
+    - Weighted outcome rates, VBG minus ABG:
+      - IMV: `-7.50` percentage points, VBG/ABG rate ratio `0.65`, `WARN`.
+      - NIV: `-0.86` percentage points, ratio `0.91`, `PASS`.
+      - Death (60d): `-3.25` percentage points, ratio `0.78`, `REVIEW`.
+      - Hypercapnic RF: `-1.13` percentage points, ratio `0.88`, `PASS`.
+    - ABG 40/VBG 45 reference risks, VBG minus ABG:
+      - IMV: `-6.24` percentage points, risk ratio `0.66`, `WARN`.
+      - NIV: `-0.63` percentage points, ratio `0.90`, `PASS`.
+      - Death (60d): `-2.40` percentage points, ratio `0.78`, `PASS`.
+      - Hypercapnic RF: `-0.75` percentage points, ratio `0.83`, `PASS`.
+  - Existing gates remain clean:
+    - `Results/render_escalation_validation_checks.csv`: no blocking failures.
+    - New diagnostics structural checks: no `FAIL`.
+    - ROR, RD, LR validation status files: no `FAIL`/`WARN`.
+    - PDF label parse, table visual QC, publication-quality audit, and Table 2 validation gates passed.
+    - Final build status remains `PASS_WITH_WARNINGS` because diagnostic warning/review signals are intentionally interpretive rather than hard failures.
+- Next steps:
+  - Use `Results/weighted_rates_vs_reference_risks_interpretation.md` to refine manuscript/supplement interpretation around IMV and Death absolute-risk differences.
+  - If sharing outputs externally, use the clean full bundle above or build a lean reviewer package from run `20260625_103344`.
+
+## 2026-06-24 18:35 MDT
+- Task: Complete staged escalation through a successful full render after restoring manuscript-facing likelihood-ratio supplement outputs, then build a corrected lean full-run reviewer package.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd`
+  - `scripts/render_pdf.sh`
+  - `scripts/check_pdf_assets.R`
+  - `scripts/run_staged_render.sh`
+  - `scripts/render_escalation_check.R`
+  - `WORKLOG.md`
+  - Created `Code Drafts/abg_vbg_stacked_ror_full_reviewer_outputs_lean_20260624_015631.zip`
+  - Created `Code Drafts/abg_vbg_stacked_ror_full_reviewer_outputs_lean_20260624_015631.zip.sha256`
+- Commands run:
+  - Staged successful renders:
+    - `bash scripts/run_staged_render.sh --target 0.05 --min-disk-gb 24 --max-peak-rss-gb 12`
+    - `bash scripts/run_staged_render.sh --target 0.25 --min-disk-gb 24 --max-peak-rss-gb 12`
+    - `bash scripts/run_staged_render.sh --target 0.50 --min-disk-gb 24 --max-peak-rss-gb 12`
+    - `bash scripts/run_staged_render.sh --target full --min-disk-gb 24 --max-peak-rss-gb 12`
+  - Full-render wrapper static checks included:
+    - `bash -n scripts/render_pdf.sh`
+    - QMD purl/parse check
+    - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+    - `Rscript --vanilla scripts/check_dependencies.R`
+    - `git diff --check -- "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" WORKLOG.md scripts/render_pdf.sh scripts/check_pdf_assets.R`
+  - During the full render, after `Results/mi_abg_vbg_mids.rds` existed and the QMD had advanced beyond MI batch combination, deleted completed generated checkpoint RDS files under `Results/mi_batch_checkpoints/` to prevent disk exhaustion.
+  - Post-full validation and package checks:
+    - `cat Results/render_escalation_status.csv`
+    - `cat Results/render_escalation_validation_checks.csv`
+    - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-06-23-stacked-ror.pdf"`
+    - validation/status inspections for stacked ROR, risk differences, likelihood ratios, PDF labels, table visual QC, publication-quality audit, and Table 2 validation
+    - `unzip -t Results/exports/abg_vbg_clean_full_outputs_20260624_015631.zip`
+    - `unzip -t "Code Drafts/abg_vbg_stacked_ror_full_reviewer_outputs_lean_20260624_015631.zip"`
+    - `git diff --check -- "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" WORKLOG.md scripts/render_pdf.sh scripts/check_pdf_assets.R scripts/run_staged_render.sh scripts/render_escalation_check.R`
+- Outcomes:
+  - Staged escalation passed:
+    - 5% run `20260623_225652`: wrapper status `0`, elapsed `22.9` minutes, peak RSS about `4.106 GiB`, validation clean.
+    - 25% run `20260623_232059`: wrapper status `0`, elapsed `52.75` minutes, peak RSS about `4.503 GiB`, validation clean.
+    - 50% run `20260624_001423`: wrapper status `0`, elapsed `99.3` minutes, peak RSS `6.456 GiB` from `/usr/bin/time -l`, validation clean.
+    - Full run `20260624_015631`: wrapper status `0`, elapsed `984.94` minutes, peak RSS `7.959 GiB` from `/usr/bin/time -l`, disk free after render `24.73 GiB`.
+  - Full PDF created successfully:
+    - `Code Drafts/ABG-VBG-analysis-2026-06-23-stacked-ror.pdf`
+    - 332 pages, created `2026-06-24 18:21 MDT`.
+  - Full wrapper postflight passed:
+    - `Results/render_escalation_validation_checks.csv`: `PASS` for `pdf_labels`, `stacked_ror`, `risk_difference`, `likelihood_ratio`, `table_visual`, `publication_quality`, and `table2_validation`.
+    - `Results/pdf_parse_table_figure_check.csv`: 33/33 active labels detected, including Table S12-S15 and Figure S13-S14.
+    - `Results/publication_quality_pdf_text_scan.csv`: likelihood-ratio definition and `LR =` formula detected; forbidden prognostic/model-based/not-diagnostic likelihood-ratio wording absent.
+    - `Results/stacked_ror_validation_status.csv`: 12/12 `PASS`; patient ID candidate `patient_id` carried and used for clustering; all stacked fits converged with `warning_n == 0`.
+    - `Results/risk_difference_validation_status.csv`: 7/7 `PASS`.
+    - `Results/baseline_relative_predicted_odds_validation_status.csv`: 8/8 `PASS`.
+    - `Results/table_visual_qc.csv`: no `FAIL` or `WARN`.
+    - `Results/publication_quality_asset_audit.csv`: no `Major`, `Fatal`, or `FAIL` rows.
+    - `Results/stacked_ror_vs_table2_validation.csv`: no `FAIL` or `WARN`.
+  - The automatic full clean bundle was valid:
+    - `Results/exports/abg_vbg_clean_full_outputs_20260624_015631.zip`
+    - SHA-256: `0b1451a61659e1fd51ef1235d1fe5c6e584bf0764e10605fec07fb78a1b474e5`.
+  - Found and fixed a bundle-scope bug in `scripts/render_pdf.sh`: the README advertised supplement outputs through Table S15 and Figure S14, but the file list omitted S6-S15 and S9-S14. Added these ROR, risk-difference, and likelihood-ratio tables/figures plus key validation CSVs to future clean bundles.
+  - Built a corrected current lean full-run reviewer package:
+    - `Code Drafts/abg_vbg_stacked_ror_full_reviewer_outputs_lean_20260624_015631.zip`
+    - Size about `7.6M`.
+    - SHA-256: `1c8ea5440bffcaf5c214b72dc1a19c3af3d16de96ceb260c27d640f51e9a5c0a`.
+    - `unzip -t` reported no errors.
+    - Internal `PACKAGE_VALIDATION.csv` has all `PASS`, including presence of final PDF/QMD, Table S15 PDF, Figure S14 PDF, PDF parse checks, publication-quality PDF scan, render escalation validation, and absence of `.rds`, checkpoint, archive, export-bundle, or backup members.
+- Next steps:
+  - The full render is structurally clean and ready for external review using the lean full-run reviewer package.
+  - Before another full run, consider adding progress logging and performance optimization to the longest full-data chunks: stacked-ROR execution and discordance diagnostics.
+
+## 2026-06-23 22:48 MDT
+- Task: Restore likelihood-ratio supplemental outputs to the manuscript-facing PDF with plain likelihood-ratio wording.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd`
+  - `scripts/render_pdf.sh`
+  - `scripts/check_pdf_assets.R`
+  - `Results/README_CURRENT_RENDER.md` sidecar text for the successful run
+  - `WORKLOG.md`
+- Source changes:
+  - Added `RENDER_LIKELIHOOD_RATIO_SUPPLEMENT <- TRUE` as a dedicated display flag separate from the broader exploratory supplement flag.
+  - Re-registered likelihood-ratio outputs as active manuscript assets:
+    - Table S12: baseline outcome rates and common baseline odds.
+    - Table S13: categorical likelihood ratios.
+    - Table S14: paired 5-mmHg spline likelihood-ratio readouts.
+    - Figure S13: spline likelihood-ratio curves.
+    - Table S15: exploratory offset scan for VBG/ABG likelihood-ratio parity.
+    - Figure S14: exploratory offset scan for VBG/ABG likelihood-ratio parity.
+  - Kept the existing LR estimands and validated baseline construction unchanged; manuscript-facing labels and notes use plain likelihood-ratio terminology.
+  - Added S12-S15 to the publication-facing CSV writer so public table CSVs omit `run_id`/`run_ts`.
+  - Wrote clean S12-S15 table exports and S13/S14 figure aliases before manifest construction, then made the active registry point to those public stubs rather than internal diagnostic stubs.
+  - Updated PDF asset checks to require S12-S15/Figure S13-S14 and the LR definition/formula while forbidding `prognostic likelihood ratio`, `prognostic LR`, `model-based likelihood ratio`, and `not diagnostic likelihood ratio`.
+  - Reordered `scripts/render_pdf.sh` postflight so `scripts/check_pdf_assets.R` writes `pdf_parse_table_figure_check.csv` before the wrapper validates required artifacts.
+  - Updated render-package README generation to state active supplement ranges as Figure S1-S14 and Table S1-S15 and to list ROR, standardized risk-difference, and likelihood-ratio output groups.
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `git diff --check -- "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" WORKLOG.md scripts/render_pdf.sh scripts/check_pdf_assets.R`
+  - Failed diagnostic render: `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" -P run_mode:pilot -P pilot_frac:0.01` for run `20260623_215332`.
+  - Failed postflight render: same command for run `20260623_221103`.
+  - Successful confirmation render: same command for run `20260623_222930`.
+  - Post-render R/PDF checks of active labels, LR definition/formula text, forbidden wording, LR validation, table visual QC, publication-quality audit, ROR/RD status, fit diagnostics, Table 2 validation, and S13/S14 image outputs.
+  - Final wrapper syntax and diff-whitespace checks after README generator text updates.
+- Outcomes:
+  - Static checks passed; final purl/parse produced `parsed_expressions=2771`.
+  - First failed render `20260623_215332` reached LR exports but failed `supplement-artifact-manifest` because active S12-S15 rows still audited internal CSV stubs containing `run_id`/`run_ts`.
+  - Second failed render `20260623_221103` created the PDF but failed wrapper postflight because `pdf_parse_table_figure_check.csv` was required before `scripts/check_pdf_assets.R` had run.
+  - Final pilot render `20260623_222930` completed with wrapper status `0`.
+  - Final PDF: `Code Drafts/ABG-VBG-analysis-2026-06-23-stacked-ror.pdf`, 332 pages, created `2026-06-23 22:46 MDT`.
+  - Render log: `Results/render_logs/render_20260623_222930.log`.
+  - Wrapper clean bundle: `Results/exports/abg_vbg_clean_1pct_outputs_20260623_222930.zip`.
+  - `Results/pdf_parse_table_figure_check.csv`: 33/33 `PASS`, including Table S12-S15 and Figure S13-S14.
+  - PDF text contains the LR definition and `LR =` formula and does not contain the forbidden model-based/not-diagnostic/prognostic LR phrases.
+  - `Results/baseline_relative_predicted_odds_validation_status.csv`: 8/8 `PASS`.
+  - `Results/table_visual_qc.csv`: 71/71 `PASS`; S12-S15 had no clipping, text extraction, or detached-column failures.
+  - `Results/publication_quality_asset_audit.csv`: 33/33 `Pass`; S12-S15 have `no_raw_fields == TRUE`.
+  - Existing ROR/RD gates remained clean:
+    - `Results/stacked_ror_validation_status.csv`: 12/12 `PASS`.
+    - `Results/risk_difference_validation_status.csv`: 7/7 `PASS`.
+    - `Results/stacked_ror_fit_diagnostics.csv`: all converged with `warning_n == 0`.
+    - `Results/stacked_ror_vs_table2_validation.csv`: no `FAIL`/`WARN`.
+  - Visual spot check showed Figure S13 and Figure S14 PNGs were nonblank, readable, and not obviously clipped.
+- Next steps:
+  - Review the restored LR supplement pages in the 1% PDF before any larger render.
+  - If a reviewer package is needed, rebuild the lean package from run `20260623_222930` so it includes S12-S15 and Figure S13-S14.
+
+## 2026-06-23 21:18 MDT
+- Task: Pre-full ROR/risk output scope and format cleanup before any full render.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd`
+  - `scripts/render_pdf.sh`
+  - `scripts/check_pdf_assets.R`
+  - `WORKLOG.md`
+- Source changes:
+  - Added `RENDER_EXTENDED_EXPLORATORY_SUPPLEMENT <- FALSE` and made `pdf_display == TRUE` the manuscript-facing asset boundary.
+  - Demoted the former prognostic-likelihood-ratio outputs to internal baseline-relative predicted odds diagnostics, with internal registry entries only.
+  - Removed Table S12-S15 and Figure S13-S14 from active manuscript labels/display and from publication-facing PDF parse requirements.
+  - Added explicit run-start cleanup for obsolete PLR/Table S12-S15/Figure S13-S14 generated files.
+  - Compact-formatted offset-scan Tables S8/S11 and the internal baseline-relative odds offset table with a single `Flags` column; PDFs show selected offsets only while CSVs retain full 0-10 scans.
+  - Made baseline-relative odds baseline construction fail if either ABG or VBG weighted target baseline risk/variance is missing or nonfinite.
+  - Extended reproducible PDF checks in `scripts/render_pdf.sh` and `scripts/check_pdf_assets.R` to read active labels from the manifest and fail on demoted LR labels/wording.
+  - Added `README_CURRENT_RENDER.md` generation distinguishing manuscript-facing ROR/RD outputs from internal/debug baseline-relative odds diagnostics.
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `git diff --check -- "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" WORKLOG.md scripts/render_pdf.sh scripts/check_pdf_assets.R`
+  - Verification render: `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" -P run_mode:pilot -P pilot_frac:0.01`
+  - Post-render PDF checker rerun after making `pdf_parse_table_figure_check.csv` manifest-derived: `Rscript --vanilla scripts/check_pdf_assets.R --pdf-path "Code Drafts/ABG-VBG-analysis-2026-06-23-stacked-ror.pdf" --results-dir Results --min-pages 40 --min-images 0`
+  - Targeted post-render R/PDF checks of active labels, forbidden wording, ROR/RD/internal baseline-relative odds validation status, fit diagnostics, Table 2 validation, table visual QC, publication-quality audit, full offset-scan CSV coverage, compact S8/S11 PDF text, and obsolete artifact cleanup.
+- Outcomes:
+  - Static checks passed; final purl/parse produced `parsed_expressions=2764`.
+  - Final pilot render `20260623_205805` completed with wrapper status `0`.
+  - Final PDF created: `Code Drafts/ABG-VBG-analysis-2026-06-23-stacked-ror.pdf` with 318 pages.
+  - Render log: `Results/render_logs/render_20260623_205805.log`.
+  - Clean output bundle: `Results/exports/abg_vbg_clean_1pct_outputs_20260623_205805.zip`.
+  - `Results/manuscript_asset_manifest.csv` active labels are Figure 1, Figure 2, Table 1, Table 2, Figure S1-S12, and Table S1-S11; demoted Table S12-S15/Figure S13-S14 are absent from active labels.
+  - `Results/internal_debug_asset_registry.csv` contains 6 internal baseline-relative predicted odds assets, all with `pdf_display == FALSE`.
+  - `Results/pdf_parse_table_figure_check.csv` was regenerated from the manifest and final PDF text with 27/27 `PASS` rows and no demoted S12-S15/S13-S14 rows.
+  - PDF text checks passed and found no `prognostic likelihood ratio`, `prognostic LR`, Table S12-S15, or Figure S13-S14 manuscript-facing text.
+  - Obsolete PLR/Table S12-S15/Figure S13-S14 generated files were removed from the live `Results/` tree by the render-start cleanup.
+  - Table S8 and Table S11 CSVs retain all offsets 0-10 for all four outcomes; their PDFs are compact, include `Flags`, and show row identifiers beside estimates.
+  - Internal baseline-relative odds validation passed:
+    - `Results/baseline_relative_predicted_odds_validation_status.csv`: all `PASS`.
+    - `Results/baseline_relative_predicted_odds_audit.csv`: all `PASS`, including finite two-modality baseline components.
+  - Existing gates remained clean:
+    - `Results/stacked_ror_fit_diagnostics.csv`: 160 fits, all converged, `warning_n == 0`.
+    - `Results/stacked_ror_vs_table2_validation.csv`: no `FAIL`/`WARN`.
+    - `Results/stacked_ror_cluster_strategy.csv`: patient-level clustering selected with source-row fallback strategy, all `PASS`, final missing cluster IDs = 0, paired dual-tested rows clustered.
+    - `Results/stacked_ror_validation_status.csv`, `Results/risk_difference_validation_status.csv`, `Results/table_visual_qc.csv`, `Results/publication_quality_asset_audit.csv`, `Results/pdf_asset_presence_scan.csv`, and `Results/publication_quality_pdf_text_scan.csv`: no blocking failures.
+  - Manual spot checks of rendered Figure S9/S10/S11/S12 and compact Table S8/S11 pages showed nonblank, readable, unclipped outputs.
+- Next steps:
+  - Ready for review of the 1% output scope before any larger render.
+
+## 2026-06-23 19:29 MDT
+- Task: Build a lean reviewer package for the successful 1% prognostic-LR render.
+- Files changed:
+  - `WORKLOG.md`
+  - Created `Code Drafts/abg_vbg_stacked_ror_1pct_reviewer_outputs_lean_20260623_190211.zip`
+  - Created `Code Drafts/abg_vbg_stacked_ror_1pct_reviewer_outputs_lean_20260623_190211.zip.sha256`
+- Package contents:
+  - Final PDF/TEX/QMD and `WORKLOG.md`.
+  - Render log, postmortem, RSS trace, and run-status JSON for wrapper run `20260623_190211`.
+  - Manifest-registered manuscript table/figure outputs through Table S15 and Figure S14, including PNG/PDF/SVG sidecars where available.
+  - Poster assets and poster QC.
+  - ROR, risk-difference, prognostic-LR, table visual QC, publication-quality audit, PDF parse, manifest/registry, and probability-standardization audit files.
+  - `README_REVIEWER_PACKAGE.md`, `PACKAGE_MANIFEST.txt`, `PACKAGE_FILE_INDEX.csv`, and `PACKAGE_VALIDATION.csv` inside the zip.
+- Deliberate exclusions:
+  - `Results/archive/**`, `Results/mi_batch_checkpoints/**`, `Results/exports/**`, render backups, `.rds` checkpoint/model state, and large raw offset-scan by-imputation/support-grid CSVs.
+- Validation:
+  - `unzip -t "Code Drafts/abg_vbg_stacked_ror_1pct_reviewer_outputs_lean_20260623_190211.zip"` reported no errors.
+  - `PACKAGE_VALIDATION.csv` inside the zip has all `PASS`.
+  - Forbidden-member scan found no `.rds`, `Results/archive`, `mi_batch_checkpoints`, `Results/exports`, or `output_backup` paths.
+  - Final size: about `11M`.
+  - SHA-256: `12a43c85ee12c509f3a676e433c6a6d428efc29717159ed8abefc194d0f0b623`.
+
+## 2026-06-23 19:22 MDT
+- Task: Add prognostic likelihood-ratio supplemental outputs to the stacked-ROR notebook and verify with a 1% pilot.
+- Files changed:
+  - `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd`
+  - `WORKLOG.md`
+- Source changes:
+  - Added a self-contained prognostic likelihood-ratio section after standardized risk-difference outputs.
+  - Defined baseline odds as the equal-weighted average of ABG and VBG MI-logistic IPSW weighted target risks within imputation, pooled on the logit scale.
+  - Computed prognostic LR as `logit(P_conditioned) - logit(P0_target)` and VBG/ABG LR ratio as `logit(P_VBG) - logit(P_ABG)`.
+  - Added manuscript-facing Table S12-S15 and Figure S13-S14, plus LR audit/validation/table-QC/figure-QC outputs.
+  - Registered the new LR assets in the manuscript manifest, expected active labels, publication-quality audit, table visual QC semantics, figure interpretability QC, diagnostics completeness, and manuscript display.
+  - Relaxed the Table S15 semantic table-QC rule after the first pilot showed PDF text extraction split `mean absolute log LR ratio` across header fragments despite correct rendered table content.
+- Commands run:
+  - `bash -n scripts/render_pdf.sh`
+  - `Rscript --vanilla -e "tmp <- tempfile(fileext = '.R'); invisible(knitr::purl('Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd', output = tmp, quiet = TRUE)); expr <- parse(tmp); cat('parsed_expressions=', length(expr), '\n', sep = '')"`
+  - `Rscript --vanilla -e "source('scripts/check_env.R')"`
+  - `Rscript --vanilla scripts/check_dependencies.R`
+  - `git diff --check -- "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" WORKLOG.md`
+  - Failed first pilot: `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" -P run_mode:pilot -P pilot_frac:0.01`
+  - Successful second pilot: `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" -P run_mode:pilot -P pilot_frac:0.01`
+  - Post-render targeted R checks of LR validation/status files, table/figure QC, publication-quality audit, Table 2 validation, RD validation, expected label detection, and LR-specific PDF text detection.
+- Outcomes:
+  - Static checks passed; purl/parse produced `parsed_expressions=2749`.
+  - First pilot `20260623_184814` failed only at publication-quality Table S15 semantic QC because the detached-column checker required contiguous `mean absolute` wording on every split panel page.
+  - Second pilot `20260623_190211` completed with wrapper status `0`.
+  - Final PDF created: `Code Drafts/ABG-VBG-analysis-2026-06-23-stacked-ror.pdf` with 344 pages.
+  - Render log: `Results/render_logs/render_20260623_190211.log`.
+  - Clean output bundle: `Results/exports/abg_vbg_clean_1pct_outputs_20260623_190211.zip`.
+  - New manuscript-facing outputs were generated:
+    - `Results/table_s12_baseline_outcome_rates_and_odds.csv/.pdf`
+    - `Results/table_s13_categorical_prognostic_likelihood_ratios.csv/.pdf`
+    - `Results/table_s14_spline_prognostic_likelihood_ratios_5mm.csv/.pdf`
+    - `Results/figs/figure_s13_spline_prognostic_likelihood_ratios.png/.pdf`
+    - `Results/table_s15_offset_scan_prognostic_likelihood_ratio.csv/.pdf`
+    - `Results/figs/figure_s14_offset_scan_prognostic_likelihood_ratio.png/.pdf`
+  - LR validation passed:
+    - `Results/prognostic_likelihood_ratio_validation_status.csv`: 8/8 `PASS`.
+    - `Results/prognostic_likelihood_ratio_audit.csv`: 8/8 `PASS`.
+    - `Results/prognostic_likelihood_ratio_table_qc.csv`: Table S12-S15 all `PASS`.
+    - `Results/prognostic_likelihood_ratio_figure_qc.csv`: Figure S13/S14 all `PASS`.
+    - Formula recomputation error reported as `0.0000000000`.
+  - Existing gates remained clean:
+    - `Results/risk_difference_validation_status.csv`: all `PASS`.
+    - `Results/stacked_ror_vs_table2_validation.csv`: all `PASS`.
+    - `Results/stacked_ror_fit_diagnostics.csv`: all converged with `warning_n == 0`.
+    - `Results/publication_quality_asset_audit.csv`: LR assets Table S12-S15 and Figure S13-S14 all `Pass`.
+    - `Results/table_visual_qc.csv`: no non-PASS rows for Table S12-S15.
+  - Refreshed `Results/pdf_parse_table_figure_check.csv` from the final PDF text: 33/33 expected labels detected, including Figure S13-S14 and Table S12-S15.
+  - Added `Results/prognostic_likelihood_ratio_pdf_parse_check.csv`: 10/10 LR-specific PDF text checks passed.
+  - Manual visual inspection of `figure_s13_spline_prognostic_likelihood_ratios.png` and `figure_s14_offset_scan_prognostic_likelihood_ratio.png` found nonblank panels, readable axes/facets, visible reference lines/highlighted points, and no apparent clipping.
+- Next steps:
+  - Generated `Results/`, PDF/TEX, zip files, archives, and render side effects remain unstaged unless explicitly requested.
+  - No 10%, 25%, or full render was attempted.
+
+## 2026-06-23 17:58 MDT
+- Task: Implement standardized predicted-risk difference outputs and verify with one successful 1% pilot render.
+- Files changed:
+  - Updated `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd`.
+  - Updated `WORKLOG.md`.
+  - Regenerated pilot artifacts under `Results/` plus `Code Drafts/ABG-VBG-analysis-2026-06-23-stacked-ror.pdf` and `.tex`; these remain untracked render artifacts unless explicitly requested.
+- Commands run:
+  - Static checks before render: `bash -n scripts/render_pdf.sh`; QMD purl/parse check (`parsed_expressions=2673`); `Rscript --vanilla -e "source('scripts/check_env.R')"`; `Rscript --vanilla scripts/check_dependencies.R`; `git diff --check -- "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" WORKLOG.md`.
+  - First 1% render attempt: `Results/render_logs/render_20260623_171154.log`; failed in the new risk-difference execution helper because the offset-scan pair grid already contained imputation/outcome identifiers and the join path expected an identifier-free readout grid.
+  - Second 1% render attempt: `Results/render_logs/render_20260623_172335.log`; completed RD calculations but failed the publication-quality gate because manuscript-facing S9-S11 table CSVs exposed internal `run_id`/`run_ts` columns.
+  - Final 1% render: `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" -P run_mode:pilot -P pilot_frac:0.01`.
+  - Final render log: `Results/render_logs/render_20260623_173829.log`; wrapper status `0`; PDF asset validation passed; postmortem written to `Results/render_logs/postmortem_20260623_173829.md`.
+  - Regenerated `Results/pdf_parse_table_figure_check.csv` and `Results/stacked_ror_pdf_parse_check.csv` from the final PDF for run `20260623_173829`.
+  - Visual spot checks reviewed `Results/figs/figure_s11_spline_risk_difference_dual_axis.png` and `Results/figs/figure_s12_offset_scan_risk_difference_trend.png`.
+- Outcomes:
+  - Added standardized predicted-risk-difference outputs using the existing common-source marginal standardized probability estimand. Direction is `VBG predicted risk - ABG predicted risk`, reported in percentage points.
+  - Table S9 renders categorical standardized predicted-risk differences by outcome and pCO2 category; its source probabilities match the existing Table 2 standardized probabilities exactly in the 1% pilot (`risk_difference_cat3_table2_validation.csv`: 24/24 PASS, max absolute probability difference 0).
+  - Table S10 and Figure S11 render spline standardized predicted-risk differences at paired 5 mmHg readouts with `VBG = ABG + 5`. Figure S11 has finite estimates for all displayed points and zero zero-width CI rows.
+  - Table S11 and Figure S12 render the exploratory offset scan across candidate VBG-minus-ABG offsets 0-10 mmHg. Each outcome has 11 offsets, positive support weights, one signed-mean best offset, and one primary mean-absolute-RD best offset.
+  - `Results/risk_difference_validation_status.csv`, `Results/risk_difference_standardization_audit.csv`, `Results/risk_difference_spline_figure_qc.csv`, `Results/risk_difference_offset_scan_validation.csv`, and `Results/risk_difference_offset_scan_display_qc.csv` all passed.
+  - `Results/pdf_parse_table_figure_check.csv` detected Figure 1, Figure 2, Table 1, Table 2, Figure S1-S12, and Table S1-S11 with 27/27 PASS rows. `Results/stacked_ror_pdf_parse_check.csv` had 14/14 PASS rows.
+  - Existing gates remained clean: `Results/stacked_ror_fit_diagnostics.csv` had 160 rows with all fits converged and `warning_n == 0`; `Results/stacked_ror_vs_table2_validation.csv` had 16/16 PASS rows; `Results/table_visual_qc.csv` had 53/53 PASS rows; publication-quality audit had zero Fatal/Major/Minor findings.
+  - Manuscript-facing S9-S11 table CSVs now use the publication table writer and no longer expose internal run metadata columns.
+- Next steps:
+  - Review the 1% PDF and new Table S9-S11/Figure S11-S12 outputs before authorizing any 10%, 25%, or full render.
+  - If committing, stage only `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd` and `WORKLOG.md` unless generated artifacts are explicitly requested.
+
+## 2026-06-23 16:58 MDT
+- Task: Implement pre-full traceability fixes, verify on a corrected 1% pilot render, and rebuild a registry-consistent lean reviewer package.
+- Files changed:
+  - Updated `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd`.
+  - Updated `WORKLOG.md`.
+  - Regenerated pilot artifacts under `Results/` plus `Code Drafts/ABG-VBG-analysis-2026-06-23-stacked-ror.pdf` and `.tex`; these remain untracked render artifacts unless explicitly requested.
+  - Created `Code Drafts/abg_vbg_stacked_ror_1pct_reviewer_outputs_lean_20260623_163410.zip` and SHA-256 sidecar.
+- Commands run:
+  - Static checks before render: `bash -n scripts/render_pdf.sh`; QMD purl/parse (`parsed_expressions=2600`); `Rscript --vanilla -e "source('scripts/check_env.R')"`; `Rscript --vanilla scripts/check_dependencies.R`; targeted visible-stacked-ROR source check; `git diff --check -- "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" WORKLOG.md`.
+  - First 1% render attempt: `Results/render_logs/render_20260623_161703.log`; completed, but post-render review found that row-aligned `patient_id` was detected in `subset_data` but not carried into stacked rows because the helper checked only the local function frame.
+  - Corrected 1% render: `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" -P run_mode:pilot -P pilot_frac:0.01`.
+  - Final render log: `Results/render_logs/render_20260623_163410.log`; wrapper status `0`; PDF asset validation passed; postmortem written to `Results/render_logs/postmortem_20260623_163410.md`.
+  - Regenerated `Results/pdf_parse_table_figure_check.csv` and `Results/stacked_ror_pdf_parse_check.csv` for run `20260623_163410`.
+  - Built the lean reviewer package from a temporary staging directory; verified with `unzip -t`, package validation CSV, forbidden-member scan, and SHA-256 sidecar.
+- Outcomes:
+  - The stacked-ROR analysis is split into visible executable scientific chunks for data/clustering, model/covariance contrasts, spline/offset contrasts, Rubin pooling helpers, and the imputation execution loop. Cleanup/export/QC wrappers remain hidden.
+  - `Results/stacked_ror_code_visibility_audit.csv` has 13/13 PASS rows, and the final PDF parse check detects visible core stacked-ROR functions and stacked execution tokens.
+  - `Results/stacked_ror_id_availability_audit.csv` documents row-aligned `patient_id` and `encounter_id` availability in `subset_data` and `subset_data_raw` without exporting raw ID values.
+  - The corrected run carries `patient_id` from `subset_data` into the stacked ROR dataset. `Results/stacked_ror_cluster_strategy.csv` now uses `patient_id_with_source_row_fallback` with `strategy_status = PASS`, no missing cluster IDs, no unclustered duplicated source rows, and maximum cluster size 2.
+  - `Results/stacked_ror_validation_status.csv` has all PASS rows, including the new `id_carry_validation` component.
+  - `Results/stacked_ror_fit_diagnostics.csv` has all fits converged and total `warning_n == 0`; `Results/stacked_ror_vs_table2_validation.csv` has 16/16 PASS rows.
+  - `Results/table_visual_qc.csv` has 38/38 PASS rows; `Results/publication_quality_asset_audit.csv` has 22/22 Pass rows; S9 local-interval CI QC and S10 highlight QC passed.
+  - `Results/README_CURRENT_RENDER.md` now includes a probability-standardization section, and the lean package includes both probability-standardization audit markdown files.
+  - The lean package includes registry-referenced canonical figure PNGs plus PDF sidecars, Figure 1/2 and Figure S1-S10 PNG/PDF aliases, poster PNG/PDF/SVG assets, manuscript-facing table CSV/PDF outputs through S8, render logs/postmortem, run metadata, manifests, and QC files. It excludes archives, checkpoints, `.rds`, render backups, full export zips, `Code Drafts/Results`, and report-preview PNG duplicates.
+- Next steps:
+  - Review/upload the lean package for external review. Do not run a 10%, 25%, or full render until the reviewer-facing 1% outputs are accepted.
+
+## 2026-06-23 15:15 MDT
+- Task: Create a lean upload package for the latest successful 1% stacked-ROR verification run.
+- Files changed:
+  - Updated `WORKLOG.md`.
+  - Created `Code Drafts/abg_vbg_stacked_ror_1pct_reviewer_outputs_lean_20260623_144702.zip`.
+- Commands run:
+  - Built the package from a temporary staging directory for run `20260623_144702`.
+  - Excluded local archives, MI checkpoints, RDS/model state, raw backup exports, and duplicate PNG previews where PDF/SVG equivalents were included.
+  - Verified the archive with `unzip -t`.
+  - Verified required package members with `unzip -l`.
+  - Wrote a SHA-256 sidecar next to the zip.
+- Outcomes:
+  - Package contents include the final PDF/QMD/TEX, this `WORKLOG.md`, render log/postmortem/run metadata, manuscript-facing table CSV/PDF outputs through Table S8, figure sidecar PDFs through Figure S10, compact poster PDF/SVG assets, validation/QC CSVs, artifact manifests, and package README/manifest files.
+  - The package is intended for external review of successful 1% execution and output inspection, not for resuming MI checkpoints or reproducing model state from cached RDS files.
+- Next steps:
+  - Upload the lean package for review; keep the larger clean-output zip local unless an exhaustive archive is explicitly needed.
+
+## 2026-06-23 15:08 MDT
+- Task: Implement final ROR interpretability fixes and verify with one 1% pilot render only.
+- Files changed:
+  - Updated `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd`.
+  - Updated `WORKLOG.md`.
+  - Regenerated pilot artifacts under `Results/` plus `Code Drafts/ABG-VBG-analysis-2026-06-23-stacked-ror.pdf` and `.tex`; these remain unstaged render artifacts unless explicitly requested.
+- Commands run:
+  - Static checks before render: `bash -n scripts/render_pdf.sh`; purl/parse check (`parsed_expressions=2575`); `Rscript --vanilla -e "source('scripts/check_env.R')"`; `Rscript --vanilla scripts/check_dependencies.R`; `git diff --check -- "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" WORKLOG.md`.
+  - Confirmation render: `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" -P run_mode:pilot -P pilot_frac:0.01`.
+  - Final render log: `Results/render_logs/render_20260623_144702.log`; wrapper status `0`; PDF asset validation passed; postmortem written to `Results/render_logs/postmortem_20260623_144702.md`.
+  - Post-render checks regenerated `Results/pdf_parse_table_figure_check.csv` and `Results/stacked_ror_pdf_parse_check.csv`; ran structured S7/S8/S9/S10 checks for outcome coverage, offset coverage, positive support, best-flag uniqueness, and nonzero S9 local-interval CI widths.
+  - Manual visual spot checks reviewed `Results/figs/figure_s9_spline_ror_dual_axis.png`, `Results/figs/figure_s10_offset_scan_ror_trend.png`, Table S7 pages 1 and 4, and Table S8 pages 1 and 4.
+- Outcomes:
+  - Figure S9 now uses local 5-mmHg interval RORs rather than reference-anchored RORs: ABG `x + 5` versus `x` is compared with VBG `x + 10` versus `x + 5`, pooled with stacked-model covariance and Rubin rules. The 1% run wrote `Results/stacked_ror_spline_local_interval_5mm.csv` with 44 rows and zero zero-width CI rows.
+  - Table S7 remains the reference-anchored 5-mmHg paired readout table and now explicitly states that ABG 40/VBG 45 is the constructed reference with OR/ROR = 1 by construction.
+  - Figure S10 now has two rows: weighted geometric mean ROR by offset and the primary support-weighted mean absolute log ROR criterion by offset. Highlights match the displayed metric in each row.
+  - Table S8 now includes both `Best by geometric mean closest to 1` and `Best by mean absolute log ROR`, and renames the signed geometric-distance column to `Abs log distance of geometric mean ROR from 1`.
+  - `Results/stacked_ror_offset_scan_display_qc.csv`, `Results/stacked_ror_offset_scan_validation.csv`, and `Results/ror_figure_interpretability_qc.csv` passed. IMV and NIV now visibly show different geometric-best versus primary-best offsets where applicable.
+  - PDF parse checks detected Figure 1, Figure 2, Table 1, Table 2, Figure S1-S10, and Table S1-S8; stacked-ROR PDF checks detected Table S6-S8, Figure S9/S10, VBG/ABG direction, Table S7 reference-anchor language, Figure S9 local-interval language, Figure S10 criterion language, and visible core stacked-ROR scientific code. Deprecated independent-CI wording was absent.
+  - `Results/table_visual_qc.csv` had 38/38 PASS rows. `Results/publication_quality_asset_audit.csv` had 22/22 Pass rows. `Results/stacked_ror_fit_diagnostics.csv` had all fits converged and total `warning_n == 0`. `Results/stacked_ror_vs_table2_validation.csv` had 16/16 PASS rows.
+  - Cluster strategy remains the documented source-row fallback `WARN` because no patient or encounter ID columns were available in the stacked inputs; final cluster IDs were nonmissing, dual-tested duplicated rows remained clustered together, and max cluster size was 2.
+  - Poster QC had no FAIL rows; it retains the existing WARN rows for poster axis-truncation disclosure and manual final-placement review.
+  - Final pilot PDF has 259 pages.
+- Next steps:
+  - Review the 1% PDF and S9/S10 interpretability changes before authorizing any 10%, 25%, or full render.
+  - If committing, stage only `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd` and `WORKLOG.md` unless generated artifacts are explicitly requested.
+
+## 2026-06-23 13:33 MDT
+- Task: Add manuscript-facing 5-mmHg spline ROR Table S7, dual-axis spline ROR Figure S9, exploratory offset-scan Table S8, and offset-scan Figure S10; verify with one 1% pilot render only.
+- Files changed:
+  - Updated `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd`.
+  - Updated `WORKLOG.md`.
+  - Regenerated pilot artifacts under `Results/` plus `Code Drafts/ABG-VBG-analysis-2026-06-23-stacked-ror.pdf` and `.tex`; these remain unstaged render artifacts unless explicitly requested.
+- Commands run:
+  - Static checks: `bash -n scripts/render_pdf.sh`; purl/parse check (`parsed_expressions=2557`); `Rscript --vanilla -e "source('scripts/check_env.R')"`; `Rscript --vanilla scripts/check_dependencies.R`; `git diff --check`.
+  - First 1% render attempt: `Results/render_logs/render_20260623_123153.log`; failed at `supplement-artifact-manifest` because the first Table S8 semantic check was too strict for wrapped header text.
+  - Second 1% render attempt: `Results/render_logs/render_20260623_124502.log`; failed at the same semantic check because `candidate offset` was split by PDF extraction.
+  - Third 1% render attempt: `Results/render_logs/render_20260623_125644.log`; Quarto execution completed, but LaTeX failed with `Dimension too large` in the echoed stacked-ROR code block.
+  - Final 1% render: `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" -P run_mode:pilot -P pilot_frac:0.01`.
+  - Final render log: `Results/render_logs/render_20260623_131316.log`; wrapper status `0`; PDF asset validation passed.
+  - Post-render checks regenerated `Results/pdf_parse_table_figure_check.csv` and `Results/stacked_ror_pdf_parse_check.csv`, then read back S7/S8 row counts, offset coverage, fit diagnostics, table visual QC, PDF parse QC, and Table 2 validation status.
+  - Manual visual spot checks reviewed Figure S9, Figure S10, Table S7 pages 1 and 4, and Table S8 pages 1 and 4.
+  - After the render, cleaned inherited trailing whitespace in the untracked notebook copy only; re-ran the notebook purl/parse check (`parsed_expressions=2557`), direct untracked-notebook whitespace check, and tracked `git diff --check`.
+- Outcomes:
+  - Table S7 now renders the 5-mmHg spline ROR readouts in the PDF and sidecar files: `Results/table_s7_stacked_ror_spline_readouts_5mm.csv` and `.pdf`. The pilot output has 48 rows across IMV, NIV, Death (60d), and Hypercapnic RF.
+  - Figure S9 now renders a dual-axis VBG/ABG spline ROR display with bottom ABG pCO2, top VBG pCO2 = ABG + 5, 95% CI ribbons, and an ROR = 1 reference line.
+  - The exploratory offset scan reuses the fitted stacked spline models, evaluates offsets 0-10 mmHg, writes `Results/table_s8_offset_scan_summary.csv` and `.pdf`, and marks exactly one best primary offset for each of the four outcomes.
+  - Figure S10 now renders the exploratory offset-scan trend with outcome facets, log-scale weighted geometric mean ROR, ROR = 1 reference line, and highlighted best-offset points.
+  - ROR footnotes and PDF parse checks preserve the `VBG/ABG` direction and descriptive association-strength framing; deprecated independent-CI wording and positive agreement/equivalence/noninferiority claims were absent.
+  - `Results/table_visual_qc.csv`, `Results/pdf_parse_table_figure_check.csv`, `Results/stacked_ror_pdf_parse_check.csv`, and `Results/stacked_ror_vs_table2_validation.csv` had no failures. Table S7/S8 pages showed row identifiers beside estimate columns and no obvious clipping.
+  - `Results/stacked_ror_fit_diagnostics.csv` had all fits converged and total `warning_n == 0`. `Results/stacked_ror_validation_status.csv` had no `FAIL`; the only non-PASS status was the planned source-row cluster fallback `WARN` with `final_missing_cluster_id_n == 0`, `dual_tested_unclustered_n == 0`, and maximum cluster size `2`.
+  - Final pilot PDF has 258 pages. The clean pilot bundle was written to `Results/exports/abg_vbg_clean_1pct_outputs_20260623_131316.zip`.
+- Next steps:
+  - Review the 1% PDF and new S7/S8/S9/S10 outputs before authorizing any 10%, 25%, or full render.
+  - If committing, stage only `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd` and `WORKLOG.md` unless generated artifacts are explicitly requested.
+
+## 2026-06-23 11:36 MDT
+- Task: Implement pre-full-run stacked ROR fixes, remove manuscript-facing full Table S7, improve Table S1/S6 QC, and validate with a 1% pilot only.
+- Files changed:
+  - Updated `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd`.
+  - Updated `WORKLOG.md`.
+  - Regenerated pilot artifacts under `Results/` plus `Code Drafts/ABG-VBG-analysis-2026-06-23-stacked-ror.pdf` and `.tex`; these remain unstaged render artifacts unless explicitly requested.
+- Commands run:
+  - Static checks: `bash -n scripts/render_pdf.sh`; purl/parse check; `Rscript --vanilla -e "source('scripts/check_env.R')"`; `Rscript --vanilla scripts/check_dependencies.R`; `git diff --check`.
+  - First 1% render: `Results/render_logs/render_20260623_111132.log`; failed at `supplement-artifact-manifest` because Table S1 text extraction exposed visible `allowbreak` artifacts from the first line-break implementation.
+  - Final 1% render: `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" -P run_mode:pilot -P pilot_frac:0.01`.
+  - Final render log: `Results/render_logs/render_20260623_112152.log`; wrapper status `0`; PDF asset validation passed.
+  - Post-render checks wrote `Results/pdf_parse_table_figure_check.csv`, `Results/stacked_ror_pdf_parse_check.csv`, `Results/pre_full_run_acceptance_check.csv`, and `Results/latex_artifact_text_check.csv`.
+  - Manual visual spot checks reviewed rendered Table S1 pages, Table S6, Figure S1, Figure S6, and both poster PNGs.
+- Outcomes:
+  - Table S1 is now rendered as three definition-list style supplement panels using the existing CSV source. The sidecar table PDF has no clipping failures, no visible `allowbreak` text, and all text-completeness checks pass.
+  - Table S6 is rendered as one coherent five-column table with Outcome and pCO2 contrast beside ABG OR, VBG OR, and `VBG/ABG ROR`; the table includes the requested ROR interpretation footnote.
+  - Full Table S7 manuscript rendering was removed from the active manifest, expected labels, diagnostics completeness, and manuscript-facing display. The 5-mmHg spline ROR readouts remain in `Results/stacked_ror_spline_readouts_5mm.csv` as internal/debug output.
+  - Cluster strategy validation now records patient/encounter availability, strategy status, fallback counts, paired-row clustering counts, missing cluster IDs, cluster counts, and maximum cluster size in `Results/stacked_ror_cluster_strategy.csv`. The 1% pilot used source-row fallback with planned `WARN` status, `final_missing_cluster_id_n == 0`, and `dual_tested_unclustered_n == 0`.
+  - `Results/stacked_ror_fit_diagnostics.csv` had all fits converged and `warning_n == 0`; `Results/stacked_ror_vs_table2_validation.csv` had no `FAIL` or `WARN`.
+  - `Results/table_visual_qc.csv`, `Results/pdf_parse_table_figure_check.csv`, `Results/stacked_ror_pdf_parse_check.csv`, `Results/pre_full_run_acceptance_check.csv`, and `Results/latex_artifact_text_check.csv` all passed.
+  - Poster bundle checks passed with PNG/PDF/SVG sidecars present for both poster figures and no `FAIL` rows in `Results/poster_visual_qc.md`.
+  - Final pilot PDF has 272 pages.
+- Next steps:
+  - Review the successful 1% PDF and generated tables before authorizing any 10%, 25%, or full render.
+  - If committing, stage only `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd` and `WORKLOG.md` unless generated artifacts are explicitly requested.
+
+## 2026-06-23 10:46 MDT
+- Task: Harmonize dense and sparse balance figure styling, fix stacked-ROR review issues, and validate with a clean 1% confirmation render only.
+- Files changed:
+  - Updated `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd`.
+  - Updated `WORKLOG.md`.
+  - Regenerated pilot artifacts under `Results/` plus `Code Drafts/ABG-VBG-analysis-2026-06-23-stacked-ror.pdf` and `.tex`; these remain unstaged render artifacts unless explicitly requested.
+- Commands run:
+  - Static checks before render: `bash -n scripts/render_pdf.sh`; purl/parse check (`parsed_expressions=2512`); `Rscript --vanilla -e "source('scripts/check_env.R')"`; `Rscript --vanilla scripts/check_dependencies.R`; `git diff --check`.
+  - Confirmation render: `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" -P run_mode:pilot -P pilot_frac:0.01`.
+  - Final render log: `Results/render_logs/render_20260623_102916.log`; wrapper status `0`; PDF asset validation passed.
+  - Post-render checks regenerated `Results/pdf_parse_table_figure_check.csv` and `Results/stacked_ror_pdf_parse_check.csv`.
+  - Final checks: original source checksum `4db0e2da533b703088b1a233fab60207`; final PDF `pdfinfo`; `git diff --check`.
+- Outcomes:
+  - Figure S1 now uses dense balance settings: base size `10.5`, label width `28`, and export size `9.5 x 7.25`.
+  - Figure S6 now uses sparse balance settings: base size `11.5`, label width `30`, `top_n = 15`, and export size `9.5 x 8.75`.
+  - Shared balance styling now uses segment linewidth `0.75`, reference-line linewidth `0.50`, and point sizes `3.30` for overall rows and `2.35` otherwise; `Results/figure_style_update_audit.csv` records these values.
+  - Stacked survey models now use a materialized `stacked_cluster_id` with patient, encounter, then source-row fallback priority and prefixed fallback IDs; `stacked_ror_cluster_strategy.csv` reported `final_missing_cluster_id_n == 0` and no `ids_one_fallback`.
+  - Fit validation is now warning-aware: `fit_diagnostics` is PASS only when all fits converge and total captured warnings are zero. The 1% pilot had zero nonconverged fits and zero captured warnings.
+  - `stacked_ror_validation_status.csv`, `stacked_ror_vs_table2_validation.csv`, `pdf_parse_table_figure_check.csv`, and `stacked_ror_pdf_parse_check.csv` all passed.
+  - Final PDF has 274 pages. Figure S1 and Figure S6 PNG outputs were nonblank, visually reviewed as readable, and showed no obvious clipping.
+- Next steps:
+  - Review the pilot PDF and balance figure appearance before authorizing any larger pilot or full render.
+  - No 10%, 25%, or full render was attempted.
+
+## 2026-06-23 09:28 MDT
+- Task: Implement covariance-aware stacked RORs and manuscript figure styling in a dated notebook copy, then validate on a 1% pilot.
+- Files changed:
+  - Added `Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd` as a guarded copy of `Code Drafts/ABG-VBG analysis 2026-6-23 ratio-of-odds-ratios.qmd`.
+  - Updated `WORKLOG.md`.
+  - Generated final pilot artifacts under `Results/` plus `Code Drafts/ABG-VBG-analysis-2026-06-23-stacked-ror.pdf` and `.tex`; these remain unstaged render artifacts unless explicitly requested.
+- Commands run:
+  - Static checks: `bash -n scripts/render_pdf.sh`; purl/parse check (`parsed_expressions=2500`); `Rscript --vanilla -e "source('scripts/check_env.R')"`; `Rscript --vanilla scripts/check_dependencies.R`; `git diff --check`.
+  - Final pilot render: `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-06-23 stacked-ror.qmd" -P run_mode:pilot -P pilot_frac:0.01`.
+  - Final render log: `Results/render_logs/render_20260623_091516.log`; wrapper status `0`; PDF asset validation passed.
+  - Post-render checks wrote `Results/pdf_parse_table_figure_check.csv` and `Results/stacked_ror_pdf_parse_check.csv`.
+  - Visual/nonblank checks reviewed Figure 2, Figure S4, Figure S5, and Figure S6 PNG outputs.
+- Outcomes:
+  - Source-copy guard passed: original source checksum stayed `4db0e2da533b703088b1a233fab60207`; audit written to `Results/stacked_ror_notebook_copy_audit.csv`.
+  - Centralized manuscript figure style constants now drive Figure 2, S4, S5, and S6: base size `12`, spline linewidth `0.95`, categorical interval linewidth `0.80`, categorical point size `2.40`, balance segment linewidth `0.60`, and darker grid/axis/reference lines.
+  - Old separate-variance categorical ROR code is quarantined; replacement stacked weighted interaction models generate covariance-aware `VBG/ABG` categorical RORs.
+  - New spline ROR readouts generated every 5 mmHg over common corrected support with `VBG pCO2 = ABG pCO2 + 5`; final pilot had 48 spline readout rows.
+  - Required stacked outputs exist, including `stacked_ror_input_inventory.csv`, `stacked_ror_dataset_summary.csv`, `stacked_ror_cluster_strategy.csv`, `stacked_ror_fit_diagnostics.csv`, `stacked_ror_by_imputation.csv`, `stacked_ror_pooled.csv`, `stacked_ror_vs_table2_validation.csv`, `stacked_ror_validation_status.csv`, `table_s6_stacked_ror_cat3.csv/.pdf`, and `table_s7_stacked_ror_spline_values.csv/.pdf`.
+  - `stacked_ror_validation_status.csv` had all PASS statuses; `stacked_ror_vs_table2_validation.csv` had 16/16 PASS rows; fit diagnostics had zero warning rows.
+  - PDF parse checks detected Figure 1, Figure 2, Table 1, Table 2, Figure S1-S8, Table S1-S7, Table S6/S7, and `VBG/ABG` direction; deprecated independent-CI/SE wording was absent.
+  - Final PDF has 272 pages. Figure 2, S4, S5, and S6 were nonblank/readable with larger labels and thicker geoms and no obvious clipping.
+- Next steps:
+  - Review Table S6/S7 point estimates and the updated figure styling before any larger pilot or full render.
+  - No 10-25% or full render was attempted; 1% pilot is the current execution gate.
+
 ## 2026-06-23 00:15 MDT
 - Task: Commit approved cleanup after pulling `origin/main`.
 - Files changed:
@@ -33,6 +1048,38 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
   - No R or Quarto render was run because this is artifact cleanup and draft-document addition, not analysis-code or report-generation logic.
 - Next steps:
   - Treat `Results/` artifacts as regenerated outputs unless a future task explicitly restores specific tracked deliverables.
+
+## 2026-06-23 02:29 MDT
+- Task: Add and verify ratio-of-odds-ratios analysis in a new dated Quarto notebook.
+- Files changed:
+  - Added `Code Drafts/ABG-VBG analysis 2026-6-23 ratio-of-odds-ratios.qmd` as a copy of the latest source notebook with a new ROR section.
+  - Updated `WORKLOG.md`.
+  - Generated validation outputs under `Results/` plus `Code Drafts/ABG-VBG-analysis-2026-6-23-ratio-of-odds-ratios.pdf` and `.tex`; these are render artifacts and remain unstaged.
+- Commands run:
+  - `Rscript --vanilla` purl/parse check for the new QMD (`parsed_expressions=2442`).
+  - Targeted synthetic R check of the new ROR chunk, producing 8 rows and zero warnings.
+  - `./scripts/render_pdf.sh "Code Drafts/ABG-VBG analysis 2026-6-23 ratio-of-odds-ratios.qmd" -P run_mode:pilot -P pilot_frac:0.01`
+  - Interrupted exploratory full render after discovering full mode uses `M_IMP <- 80L` in batches of 2 and had reached only the early MI batches after more than one hour: `Results/render_logs/render_20260623_005253.log`.
+  - Final clean pilot rerun: `Results/render_logs/render_20260623_021712.log`.
+  - Post-render `Rscript --vanilla` validation of `Results/ratio_of_odds_ratios_mi_ipw_cat3.csv` and `Results/ratio_of_odds_ratios_status.csv`.
+  - `pdfinfo "Code Drafts/ABG-VBG-analysis-2026-6-23-ratio-of-odds-ratios.pdf"`.
+  - `pdftotext "Code Drafts/ABG-VBG-analysis-2026-6-23-ratio-of-odds-ratios.pdf" - | rg "Ratio of odds ratios|ABG/VBG ratio of odds ratios|Independent pooled log-OR|independent"`.
+- Outcomes:
+  - Added a `ratio-of-odds-ratios-mi-ipw-cat3` section that compares ABG versus VBG MI-logistic IPSW categorical ORs for four outcomes and low/high contrasts.
+  - ROR confidence intervals use pooled log-OR standard errors and explicitly document the independent pooled log-OR assumption because cross-model ABG/VBG covariance is not estimated.
+  - New required artifacts are included in diagnostics completeness:
+    - `Results/ratio_of_odds_ratios_mi_ipw_cat3.csv`
+    - `Results/ratio_of_odds_ratios_status.csv`
+    - `Results/ratio_of_odds_ratios_mi_ipw_cat3_display.csv`
+    - `Results/figs/or-plot-ratio-of-odds-ratios-mi-ipw-cat3.png`
+  - Final pilot render passed with wrapper status `0`, render-path validation passed, PDF asset validation passed, and `diagnostics-completeness` accepted the new ROR artifacts.
+  - ROR CSV validation passed: 8 rows, 4 completed status rows, finite positive estimates/limits, and pilot ROR range `0.773-1.856`.
+  - Final pilot PDF has 258 pages and includes the ROR section/table and plot text.
+  - The interrupted full-run archive created by the failed full attempt was deleted, reducing `Results/` from about `475M` to about `96M`.
+  - Tracked inline diagnostic images refreshed by rendering under `Code Drafts/Results/figs` were restored to avoid committing render-side-effect churn.
+- Next steps:
+  - If committing, stage only the new dated QMD and `WORKLOG.md` unless generated PDF/Results artifacts are explicitly requested.
+  - Do not retry full mode casually: full `M_IMP = 80` batching projects to a multi-hour run and should be launched only when that runtime is acceptable.
 
 ## 2026-05-26 15:46 MDT
 - Task: Implement final manuscript comment cleanup in the dated rough draft.
