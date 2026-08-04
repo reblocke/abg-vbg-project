@@ -88,4 +88,4 @@ Private material includes raw data, the codebook, manuscript and cover-letter dr
 - Code license: MIT (`LICENSE`)
 - Data and generated-output boundaries: `OUTPUT_LICENSE.md`
 - Contribution guidance: `CONTRIBUTING.md`
-- Support: `SUPPORT.md`
+- Contact and support: `SUPPORT.md`
