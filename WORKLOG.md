@@ -10,6 +10,21 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Outcomes:
 - Next steps:
 
+## 2026-08-04 12:50 MDT
+- Task: Make the public repository contact path explicit for automated repository-readiness checks.
+- Files changed:
+  - `README.md`
+  - `WORKLOG.md`
+- Commands run:
+  - `git diff --check`
+  - `python3 scripts/audit_llm_readiness.py --manifest research-repositories.csv --repos reblocke/abg-vbg-project --ref abg-vbg-project=agent/readme-contact` from the academic-site repository
+- Outcomes:
+  - Relabeled the existing `SUPPORT.md` link as the repository's contact and support path.
+  - The targeted public-repository readiness audit passed with zero findings.
+  - No analysis code, data, dependency, or generated artifact changed.
+- Next steps:
+  - Review and merge the documentation-only pull request after its repository checks pass.
+
 ## 2026-07-12 14:12 MDT
 - Task: Sanitize the public repository boundary, establish one canonical self-contained analysis, validate the initial-submission snapshot, and prepare the lean `v0.1.0` release.
 - Files changed:
