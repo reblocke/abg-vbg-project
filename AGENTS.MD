@@ -158,8 +158,11 @@ is “fast enough” without compromising clarity.
 - Include basic diagnostics when proposing models (residual plots, checks for convergence, etc.).
 
 ## Tests and checks
-- Use `testthat` for unit tests under `tests/testthat`.
-- When creating or modifying R functions, propose new or updated tests and indicate the command to run them (for example, `devtools::test()`).
+- Never write unit tests after you write code.
+- Highly prefer E2E tests as the sole testing mechanism. Use them to verify complex features work. At the end of E2E tests, produce a verifiable and repeatable artifact.
+- If you must test a system in isolation, first write down all the ways it could fail, then write the code.
+- An isolated test must catch a concrete failure that the E2E checks miss; document that coverage gap before writing the test.
+- For analysis changes, use the canonical pilot render (`./scripts/render_pdf.sh -P run_mode:pilot -P pilot_frac:0.01`) and its postflight checks. Retain the generated PDF, validation reports, run identifiers, and exact command as verification evidence under the existing private-output policy.
 
 ## Standard operating procedures
 - Keep a persistent handoff log at the repo-root `WORKLOG.md`.

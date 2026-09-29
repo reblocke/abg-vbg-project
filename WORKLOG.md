@@ -10,6 +10,34 @@ Persistent handoff record for analysis and notebook work in this repository (`WO
 - Outcomes:
 - Next steps:
 
+## 2026-09-24 21:39 MDT
+- Task: Audit low-signal unit tests with parallel reviewers and adopt the requested E2E-first testing policy.
+- Files changed:
+  - `AGENTS.MD`
+  - `WORKLOG.md`
+- Audit scope and findings:
+  - Reviewed the current checkout at `d8f21579f97098788a2cc0db00579f06e0693654` (`agent/readme-contact`), containing 40 tracked files and no untracked source files.
+  - Three parallel subagents reviewed notebook lines 1-17499, notebook lines 17500-33976, and the eight scripts plus test/CI configuration and contributor documentation.
+  - Found no standalone unit-test suite, isolated test fixtures, or embedded unit tests to delete. No tracked `tests/` directory or CI workflow exists; `DESCRIPTION` does not declare a unit-test framework. Testing metadata in `renv.lock` belongs to third-party package records.
+  - Preserved runtime and E2E checks on real analysis outputs: MICE preflight, model-cache roundtrip equivalence, ABG/VBG diagnostic-summary agreement, artifact completeness, current run IDs, and rendered PDF content. These checks are part of the existing pipeline validation, not redundant isolated tests.
+  - The canonical pilot wrapper already produces the PDF, validation reports, source/parameter records, and, when `zip` is available and postflight succeeds, a bundle with a manifest and SHA-256 checksums.
+- Policy changes:
+  - Added the three requested rules verbatim and removed the blanket instruction to propose unit tests whenever R functions change.
+  - Required a concrete E2E coverage gap for an isolated test and named the canonical pilot command and retained verification artifacts.
+- Commands run:
+  - `git ls-files` and `git ls-files --others --exclude-standard`
+  - `git ls-files 'tests/*' 'test/*' '*test*.R' '*spec*.R' '*e2e*' '.github/*'`
+  - Targeted `git grep`/`rg` searches and static inspection of notebook checks and render/postflight scripts.
+  - `git diff --check`
+  - `git diff --quiet -- . ':(exclude)AGENTS.MD' ':(exclude)WORKLOG.md'`
+  - `shasum -a 256 'Code Drafts/ABG-VBG-analysis.qmd'`
+- Outcomes:
+  - Zero tests deleted; both notebook reviewers and the script reviewer found no qualifying deletion candidates.
+  - Diff validation passed; only the two documentation files changed. The notebook SHA-256 remains `e26ed760228e37480e91a4c02a36faef768302a06d6731007f18999129ee619c`.
+  - No R code, dependency, render script, private data, or generated output changed. No analysis or E2E render was run for this documentation-only change.
+- Next steps:
+  - No further unit-test cleanup applies to this checkout. For subsequent analysis changes, follow the updated policy and retain the canonical pilot's verification artifacts.
+
 ## 2026-08-04 12:50 MDT
 - Task: Make the public repository contact path explicit for automated repository-readiness checks.
 - Files changed:
